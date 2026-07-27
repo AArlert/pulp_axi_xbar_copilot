@@ -2,6 +2,27 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.1.0] 2026-07-27 M0 里程碑签核 PASS：基建+sanity+spec v0 收官，转入 M1
+
+**Done**
+- rev 全新实例（非本里程碑任何 review/fix 当事人）执行 M0 里程碑签核：机器条件 3×PASS 自跑复核 + 3 项人工抽查（抽查 4 覆盖闭合 N/A 但按精神等价核验目标机制命中；抽查 5 守卫证伪——一次性废弃分支 revert BUG-0006 修复、`make compile` 复现原 6×NCE 签名、清理分支；抽查 6 spec 债务清零核对 REV-001 §5 逐条裁决）
+- 签核记录 `doc/evidence/v0.0.2/signoff-M0.md`：总体裁决 **PASS**，2 项非阻塞残留风险（R1 证据摘要窗口未捕获非 UVM 记分板判决行；R2 末拍在飞断言，良性）
+- R1 回流 `doc/fw-feedback.md` FB-6（kernel/evidence.py，annoyance）
+- `make signoff-check` 全绿（含 signoff 文件识别）；`make bump-minor` 0.0.2→0.1.0
+
+**Not done**
+- M1（UVM env + smoke，评估 v0.39.10 升级）未开始
+- FB-1~FB-6 回流框架仓库（iverif-workflow）未做——里程碑边界批量回流的约定时点已到，尚待执行
+- R1（evidence.py 摘要窗口）本身未修——按框架红线本仓库不改 scripts/，需上游修复
+
+**Next**
+- FB-1~FB-6 批量回流 iverif-workflow（里程碑边界回流仪式，见 CLAUDE.md §5）
+- 派 arch 设计输入卡：M1 UVM env 骨架（tb_top + 多 master/slave agent + 地址路由参考模型记分板）+ 评估 v0.39.10 升级影响
+- `git tag v0.1.0`
+
+**How verified**
+- `make signoff-check` 全绿（机器条件 3×PASS + signoff 文件 `[yes]`）；`make docs-check` / `make fw-check` 全绿；签核记录见 `doc/evidence/v0.0.2/signoff-M0.md` §5 裁决
+
 ## [0.0.2] 2026-07-27 DV 复验闭环：M0-01 ✅ + BUG-0001/0006 CLOSED
 
 **Done**
@@ -43,18 +64,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
 **How verified**
 - make docs-check / fw-check 全绿（本块提交前复跑）；make compile 结论见 BUG-0006 root_cause 实证（out/simv 生成、comp.log 0×NCE）；spec pin=2637206e…（提交 cbd2b09）
-
-## [0.0.0] 2026-07-27 scaffolded
-
-**Done**
-- fwsync --init (framework snapshot + doc seeds)
-
-**Not done**
-- everything else
-
-**Next**
-- M0 bring-up: vendor/flists/sim Makefile, spec v0
-
-**How verified**
-- make docs-check
 
