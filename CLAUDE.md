@@ -54,6 +54,15 @@ Failures: never registered as evidence. Triage with
 `workflow/dispatch/*.md`, file in `doc/bugs.md`
 (contract: `workflow/schema/failure_record.md`).
 
+**Registration is unconditional**: any anomaly matching one of the five
+`workflow/taxonomy/failure_taxonomy.md` classes gets a `doc/bugs.md` row —
+regardless of who hit it, whether it blocked a scenario, or whether it was
+fixed within the same card. "worked around it inline" is not an exemption;
+the taxonomy's value is that the next person greps `doc/bugs/` instead of
+rediscovering the same trap (lesson: the M1-01 VCS-2018 `bind`→direct-
+instantiation workaround initially landed only in code comments + review
+records, not `doc/bugs.md`).
+
 **Execution discipline** (orch and every dispatched role):
 - *Think before coding*: surface assumptions instead of guessing; name
   competing readings rather than silently picking one; ask only when
