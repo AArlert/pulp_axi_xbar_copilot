@@ -85,6 +85,9 @@ Failures: never registered as evidence. Triage with
   `test -x $XVERIF_ROOT/tools/xcov`, never `command -v`.
 - This repo is developed on the host and cloned into the VM; line endings
   are pinned by `.gitattributes` — do not fight it.
+- VCS-2018.09-SP2 rejects `bind <interface> <module>`（`Error-[IIM]`）——挂接
+  协议/时序 SVA 一律走宿主模块（`tb_top` 等）generate 循环内直接例化，见
+  `doc/design-prompt/sva_bind.md` C1.1、`doc/review/REV-003.md`。
 
 ## §5 Git
 

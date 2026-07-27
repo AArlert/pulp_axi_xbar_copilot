@@ -7,10 +7,20 @@ include ../scripts/make/vcs-2018.mk
 TEST ?= upstream_sanity
 SEED ?= 1
 
-# M0：vendor 依赖 + axi 全库 + 上游 sanity tb。M1+ 追加 -f flist/tb.f 并
-# 切换 TOP 至 UVM tb_top、run 规则加 +UVM_TESTNAME=$(TEST)。
+# M0：vendor 依赖 + axi 全库 + 上游 sanity tb（非 UVM，以 $stop 结束）。
+# M1+：追加 flist/tb.f、切换 TOP 至 UVM tb_top、run 规则加
+# +UVM_TESTNAME=$(TEST)。用 TEST 名字挑选：TEST=upstream_sanity 走 M0 上游
+# tb（M0-01 repro `make run TEST=upstream_sanity SEED=1` 保持不变），其余
+# TEST 名字一律视为 M1+ UVM 测试名。
+ifeq ($(TEST),upstream_sanity)
 FLISTS := -f flist/vendor.f -f flist/dut.f -f flist/tb_upstream.f
 TOP    := tb_axi_xbar
+IS_UVM := 0
+else
+FLISTS := -f flist/vendor.f -f flist/dut.f -f flist/tb.f
+TOP    := tb_top
+IS_UVM := 1
+endif
 
 .PHONY: compile run sanity smoke regress cov lint verdi clean
 
@@ -19,15 +29,23 @@ compile:
 	$(VCS) $(VCS_FLAGS_2018) $(if $(filter 1,$(COV)),$(CM)) $(FLISTS) \
 	  -top $(TOP) -o $(OUT)/simv -l $(OUT)/comp.log
 
-# 上游 tb 以 $stop 结束 → ucli 脚本驱动批处理。SIM_OPTS_2018（-assert
-# verbose）不可省：sva_enforce 下 evidence.py/regress.py 依赖其原生
-# "Summary: N assertions" 行，缺行即 fail-closed（拒收证据）。
-# M0 阶段 $(TEST) 仅命名日志（非 UVM）；+ntb_random_seed 仍为 SV RNG 种子。
+# 上游 tb 以 $stop 结束 → ucli 脚本驱动批处理；UVM tb_top 以 run_test()
+# 内部 $finish 自然结束，不需要 ucli。SIM_OPTS_2018（-assert verbose）
+# 不可省：sva_enforce 下 evidence.py/regress.py 依赖其原生 "Summary: N
+# assertions" 行，缺行即 fail-closed（拒收证据）。+ntb_random_seed 为 SV
+# RNG 种子（M0/M1 通用）。
 run: compile
+ifeq ($(IS_UVM),1)
+	$(OUT)/simv $(SIM_OPTS_2018) +UVM_TESTNAME=$(TEST) \
+	  +ntb_random_seed=$(SEED) \
+	  $(if $(filter 1,$(COV)),$(CM) -cm_name $(TEST)_$(SEED)) \
+	  -l $(OUT)/$(TEST)_$(SEED).log
+else
 	echo "run; exit" > $(OUT)/run.ucli
 	$(OUT)/simv $(SIM_OPTS_2018) +ntb_random_seed=$(SEED) \
 	  $(if $(filter 1,$(COV)),$(CM) -cm_name $(TEST)_$(SEED)) \
 	  -ucli -i $(OUT)/run.ucli -l $(OUT)/$(TEST)_$(SEED).log
+endif
 
 sanity: run
 smoke: run
