@@ -62,7 +62,9 @@ import cf_math_pkg::idx_width;
   /// ```
   parameter type rule_t                                               = axi_pkg::xbar_rule_64_t,
   localparam int unsigned MstPortsIdxWidth =
-      (Cfg.NoMstPorts == 32'd1) ? 32'd1 : unsigned'($clog2(Cfg.NoMstPorts))
+      (Cfg.NoMstPorts == 32'd1) ? 32'd1 : unsigned'($clog2(Cfg.NoMstPorts)),
+  // P-002: VCS-2018 struct-member-in-port-width NCE workaround（见 vendor/VENDOR.md）
+  localparam int unsigned AddrMapMsb = Cfg.NoAddrRules - 1
 ) (
   /// Clock, positive edge triggered.
   input  logic                                                          clk_i,
@@ -81,7 +83,7 @@ import cf_math_pkg::idx_width;
   /// Address map array input for the crossbar. This map is global for the whole module.
   /// It is used for routing the transactions to the respective master ports.
   /// Each master port can have multiple different rules.
-  input  rule_t     [Cfg.NoAddrRules-1:0]                               addr_map_i,
+  input  rule_t     [AddrMapMsb:0]                                      addr_map_i,  // P-002 (见 vendor/VENDOR.md)
   /// Enable default master port.
   input  logic      [Cfg.NoSlvPorts-1:0]                                en_default_mst_port_i,
   /// Enables a default master port for each slave port. When this is enabled unmapped
@@ -180,14 +182,16 @@ import cf_math_pkg::idx_width;
   parameter bit [Cfg.NoSlvPorts-1:0][Cfg.NoMstPorts-1:0] CONNECTIVITY = '1,
   parameter type rule_t                 = axi_pkg::xbar_rule_64_t,
   localparam int unsigned MstPortsIdxWidth =
-        (Cfg.NoMstPorts == 32'd1) ? 32'd1 : unsigned'($clog2(Cfg.NoMstPorts))
+        (Cfg.NoMstPorts == 32'd1) ? 32'd1 : unsigned'($clog2(Cfg.NoMstPorts)),
+  // P-002: VCS-2018 struct-member-in-port-width NCE workaround（见 vendor/VENDOR.md）
+  localparam int unsigned AddrMapMsb = Cfg.NoAddrRules - 1
 ) (
   input  logic                                                      clk_i,
   input  logic                                                      rst_ni,
   input  logic                                                      test_i,
   AXI_BUS.Slave                                                     slv_ports [Cfg.NoSlvPorts-1:0],
   AXI_BUS.Master                                                    mst_ports [Cfg.NoMstPorts-1:0],
-  input  rule_t [Cfg.NoAddrRules-1:0]                               addr_map_i,
+  input  rule_t [AddrMapMsb:0]                                      addr_map_i,  // P-002 (见 vendor/VENDOR.md)
   input  logic  [Cfg.NoSlvPorts-1:0]                                en_default_mst_port_i,
   input  logic  [Cfg.NoSlvPorts-1:0][MstPortsIdxWidth-1:0]          default_mst_port_i
 );

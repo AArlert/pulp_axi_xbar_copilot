@@ -28,7 +28,9 @@ package tb_axi_xbar_pkg;
     parameter int unsigned NoSlaves,
     parameter int unsigned NoAddrRules,
     parameter type         rule_t,
-    parameter rule_t [NoAddrRules-1:0] AddrMap,
+    // P-002: VCS-2018 struct-member-in-port-width NCE workaround（见 vendor/VENDOR.md）
+    localparam int unsigned AddrMapMsb = NoAddrRules - 1,
+    parameter rule_t [AddrMapMsb:0] AddrMap,
       // Stimuli application and test time
     parameter time  TimeTest
   );
