@@ -1,11 +1,330 @@
-# pulp_axi_xbar_copilot specification
+# axi_xbar DUT 行为规格（单一事实源）
 
-Single source of expected behavior. Checkers and assertions derive from THIS document, never from the RTL under test. Editing it requires a change-record row, then re-pin: python3 scripts/docs.py --pin-spec
+> v0：初稿经 REV-001 评审（条件通过）并按其 C1~C5 修订后应用，
+> sha256 pin 于 `doc/spec.sha256`（`docs.py --pin-spec` 维护）。
 
-SPEC-0.1 TODO — distill from the upstream sources.
+本文从上游材料机械提炼（pulp-platform/axi **v0.39.9**，SHA
+`a256a3b86394fedf19e361047fccfdd7f6ef83e4`，pin 记录见 `vendor/VENDOR.md`）：
+
+- `vendor/axi/doc/axi_xbar.md`（主文档；下文简称 *xbar.md*）
+- `vendor/axi/doc/axi_demux.md`、`vendor/axi/doc/axi_mux.md`（下层部件行为佐证；简称 *demux.md* / *mux.md*）
+- `vendor/axi/src/axi_pkg.sv`（`xbar_cfg_t` / `xbar_latency_e` / `xbar_rule_64_t` / `xbar_rule_32_t` 定义段；简称 *axi_pkg*）
+- `vendor/axi/src/axi_xbar.sv` 头注释与参数/端口声明段（module 声明部分，不含实现体；简称 *xbar.sv 声明*）
+
+**checker/SVA 的期望值只准从本文推导**；本文有缺口/歧义时走 CLAUDE.md §2 的
+失败/歧义登记流程（`doc/bugs.md` → rev 仲裁补 spec），禁止直接照抄 RTL 行为。
+仅有 RTL 来源、上游文档未载的条款均已标注 **（来源：RTL——上游文档未载）**。
+
+## 0. 本项目验证适配表 ★
+
+| # | 适配项 | 约定 |
+| --- | --- | --- |
+| 1 | 验证对象 | 单实例 `axi_xbar`（struct 参数化 API：`slv_req_t/slv_resp_t/mst_req_t/mst_resp_t` 数组端口）。上游 tb 经 `axi_xbar_intf`（AXI_BUS interface 包装，xbar.sv 声明 L174-193）驱动，M0 sanity 沿用；M1+ 自研 UVM env 直接驱动 struct 端口。TB 侧扮演 NoSlvPorts 个 AXI master 与 NoMstPorts 个 AXI slave |
+| 2 | 基线配置（M1/M2） | 上游 tb 默认值（orch 卡片钉定；数值经 REV-001（§4 C1 / §3.3）核对 `tb_axi_xbar.sv:66–79`，**标注来源：上游 tb 默认（REV-001 核对）**；本 arch 实例不读 tb 本体）。**`Cfg` 全 13 字段**：`NoSlvPorts=6`、`NoMstPorts=8`（= 6 外部 master × 8 外部 slave）、`MaxMstTrans=10`、`MaxSlvTrans=6`、`FallThrough=1'b0`、`LatencyMode=CUT_ALL_AX`（AW/AR 各 2 拍，§7.2）、`PipelineStages=1`、`AxiIdWidthSlvPorts=5`（⇒ mst 侧 ID 宽 = 5+⌈log₂6⌉ = 8，§5.1）、`AxiIdUsedSlvPorts=3`（< 5 ⇒ **基线即存在假冲突 stall**，§5.2.2）、`UniqueIds=1'b0`、`AxiAddrWidth=32`（rule 用 `xbar_rule_32_t`）、`AxiDataWidth=64`、`NoAddrRules=8`。**模块参数**：`ATOPs=1'b1`（§6）、`Connectivity='1`（全连接，§8）。checker 期望值以上述钉定值为唯一输入推导（尤 `LatencyMode`/`AxiIdUsedSlvPorts`/`FallThrough`/`MaxMstTrans`/`MaxSlvTrans`/`UniqueIds` 决定 stall/latency/保序期望值） |
+| 3 | 配置矩阵（M3/M4） | 端口拓扑 {1×N, N×1, 4×4} × `LatencyMode` {NO_LATENCY, CUT_ALL_AX, CUT_ALL_PORTS} × `UniqueIds` {0,1} × `ATOPs` {0,1} × 稀疏 `Connectivity`（非全 '1 矩阵，§8） |
+| 4 | 覆盖率口径 | 六类 line+cond+fsm+tgl+branch+assert，≥90% 合格；DUT 范围 = `axi_xbar` 及其**全部强制内部子模块实例**：`axi_xbar_unmuxed`（`axi_xbar` 恒例化 1 个）及其内部的 `addr_decode`、每 slave 端口的 `axi_demux` 与 `axi_err_slv`、每 master 端口的 `axi_mux` 等——以上均为强制内部核心子模块，全部计入 ≥90% 覆盖率层次 |
+| 5 | 范围外 | 上游库**旁系**模块不在本项目范围：`axi_lite_xbar`、`axi_interleaved_xbar`（二者**从不被 `axi_xbar` 例化**，与 #4 的强制内部子模块性质不同）及其余不被 `axi_xbar` 例化的 `vendor/axi/src/` 模块（仅当作为 `axi_xbar` 子模块被间接例化时才计入 #4 口径）；`axi_xbar_intf` 仅为 tb 包装、不单独验证。**注：`axi_xbar_unmuxed` 与 `addr_decode` 是强制内部核心子模块（见 #4），不属本行"范围外"清单**（C2 修正，REV-001 §3.3） |
+| 6 | spec 歧义处理 | 本 spec 未覆盖/两可的行为 → 登记 `doc/bugs.md` → rev 裁决补 spec（走修改记录），不得由 checker 现场解释；疑似 DUT 行为错误走 DUT_BUG 记录 + 上游 issue，绝不本地改行为（CLAUDE.md §6） |
+
+## 1. 概述
+
+`axi_xbar` 是全连接（fully-connected）AXI4+ATOP crossbar：实现完整 AXI4 协议
+外加 AXI5 的原子操作（ATOPs）（xbar.md §开篇；xbar.sv 头注释）。
+
+- 端口方向约定（xbar.md §Design Overview）：crossbar 的 **slave 端口** 挂接外部
+  master 模块，**master 端口** 挂接外部 slave 模块；slave/master 端口数均可配。
+- 拓扑（xbar.md §Design Overview 框图；CLAUDE.md §6 同述）：每个 slave 端口一个
+  `axi_demux` × 每个 master 端口一个 `axi_mux`，任一 slave 端口到全部 master
+  端口有直连线（全连接）。
+- master 端口的 ID 宽度大于 slave 端口：多出的高位为内部 multiplexer 用于响应
+  路由的 slave 端口索引前缀，见 §5（xbar.md §Design Overview）。
+- 地址译码在每个 slave 端口独立进行（共享同一张全局地址表），按地址把事务路由
+  到目标 master 端口；无匹配时进入每 slave 端口独立的 decode error slave 或
+  default master port，见 §3/§4（xbar.md §Address Map、§Decode Errors）。
+
+## 2. 参数与端口
+
+### 2.1 `Cfg`（`axi_pkg::xbar_cfg_t`）字段
+
+依据：xbar.md §Configuration 表 + axi_pkg L482-522 注释。
+
+| 字段 | 类型 | 语义与合法域 |
+| --- | --- | --- |
+| `NoSlvPorts` | `int unsigned` | crossbar 的 AXI slave 端口数（可挂接的外部 master 模块数） |
+| `NoMstPorts` | `int unsigned` | crossbar 的 AXI master 端口数（可挂接的外部 slave 模块数） |
+| `MaxMstTrans` | `int unsigned` | 每个 slave 端口最多同时 in-flight 的事务数上限 |
+| `MaxSlvTrans` | `int unsigned` | 每个 master 端口**每 ID** 最多同时 in-flight 的事务数上限（"每 ID" 限定见 xbar.md 表；axi_pkg 注释仅述"每挂接 slave 的上限"） |
+| `FallThrough` | `bit` | AW 通道的路由决策直通（fall through）到 W 通道：=1 时允许 W beat 与对应 AW beat 同拍被接受，代价是 W 通道组合路径叠加 AW 逻辑；=0 无直通 |
+| `LatencyMode` | `bit [9:0]`（doc 记 `enum logic [9:0]`） | 各端口各通道的 spill register 配置，详见 §7；`xbar_latency_e` 提供常用配置 |
+| `PipelineStages` | `int unsigned` | 内部连线交叉（line cross）上例化的 `axi_multicut` 级数；多级会显著增加 FF 数（axi_pkg L503-505 注释）。**延迟不敏感插桩（BUG-0004 裁决，REV-001 §5）**：在 demux–mux 间 line-cross 上插入 `PipelineStages` 级 `axi_multicut`，增加流水延迟但**不改变功能响应、不损吞吐**（与 §7.1.2 spill register 同类）；**精确每通路（端到端）周期数许可来源未定义，详见 §7.4** **（来源：RTL——上游文档未载：xbar.md §Configuration 表无此字段）** |
+| `AxiIdWidthSlvPorts` | `int unsigned` | slave 端口 AXI ID 宽度；master 端口 ID 宽度由此自动导出（§5） |
+| `AxiIdUsedSlvPorts` | `int unsigned` | 判定 ID 唯一性时实际比较的低位位数（§5）；合法域：≤ `AxiIdWidthSlvPorts` |
+| `UniqueIds` | `bit` | 环境保证在飞事务 ID 唯一时可置 1 以简化硬件，语义与前置条件见 §5.3 |
+| `AxiAddrWidth` | `int unsigned` | AXI 地址宽度 |
+| `AxiDataWidth` | `int unsigned` | AXI 数据宽度 |
+| `NoAddrRules` | `int unsigned` | 地址表 rule 条数；合法域：**全表 ≥1 条**（BUG-0005 裁决，REV-001 §5：采信主文档 xbar.md §Address Map"至少一条"口径；axi_pkg L518-520 注释"每 master 端口……应至少一条"中的 "should" 为**非规范性指引**，主文档优先于源码注释，故无"每 master 端口至少一条"硬性要求）。**无任何 rule 指向的 master 端口为合法配置**（不可达，或仅经 default master port 可达），见 §3.1 |
+
+### 2.2 模块参数（xbar.sv 声明 L18-65）
+
+| 参数 | 默认值 | 语义 |
+| --- | --- | --- |
+| `Cfg` | `'0` | `axi_pkg::xbar_cfg_t` 配置结构体（§2.1）**（默认值来源：RTL——上游文档未载）** |
+| `ATOPs` | `1'b1` | 原子操作（ATOP）支持使能，语义见 §6 **（来源：RTL——上游文档未载：xbar.md 未列此参数）** |
+| `Connectivity` | `'1` | `bit [Cfg.NoSlvPorts-1:0][Cfg.NoMstPorts-1:0]` 连通矩阵，语义见 §8 **（来源：RTL——上游文档未载）** |
+| `slv_aw_chan_t` … `mst_r_chan_t` | `logic` | 五通道 struct 类型（slave/master 侧各一套，W 通道共用一个 `w_chan_t`）；须用 `axi/typedef.svh` 的 `AXI_TYPEDEF` 宏按 `Cfg` 一致绑定（xbar.md §Configuration 末段） |
+| `slv_req_t/slv_resp_t/mst_req_t/mst_resp_t` | `logic` | slave/master 端口的 req/resp struct 类型，绑定要求同上 |
+| `rule_t` | `axi_pkg::xbar_rule_64_t` | 地址译码 rule 类型；必须与 `Cfg.AxiAddrWidth` 同地址宽度；须含字段 `{int unsigned idx; axi_addr_t start_addr; axi_addr_t end_addr;}`（xbar.sv 声明 L53-62 注释；xbar.md §Configuration 末段）**（默认值取 64 位规则：来源 RTL——上游文档未载）** |
+| `MstPortsIdxWidth`（localparam） | — | `= (Cfg.NoMstPorts == 1) ? 1 : $clog2(Cfg.NoMstPorts)`，即 `default_mst_port_i` 每 slave 端口的索引位宽 **（公式来源：RTL——上游文档未载）** |
+
+预定义 rule 类型（axi_pkg L524-536）：`xbar_rule_64_t`/`xbar_rule_32_t` =
+`{int unsigned idx; logic [63:0]/[31:0] start_addr; …end_addr;}`
+**（字段级定义来源：RTL——xbar.md 仅述"axi_pkg 含 64/32 位地址定义"，未列字段）**。
+
+### 2.3 端口
+
+依据：xbar.md §Ports 表 + xbar.sv 声明 L66-91（方向/位宽取自声明段）。
+
+| 端口 | 方向 | 语义 |
+| --- | --- | --- |
+| `clk_i` | in | 时钟，上升沿有效；除 `rst_ni` 外所有信号与其同步 |
+| `rst_ni` | in | 复位，异步、低有效 |
+| `test_i` | in | 测试模式使能，高有效（功能验证恒 0） |
+| `slv_ports_req_i` / `slv_ports_resp_o` | in/out | `slv_req_t/slv_resp_t [Cfg.NoSlvPorts-1:0]` slave 端口阵列；数组下标 = slave 端口索引，该索引会被前缀进 master 端口侧的事务 ID（§5） |
+| `mst_ports_req_o` / `mst_ports_resp_i` | out/in | `mst_req_t/mst_resp_t [Cfg.NoMstPorts-1:0]` master 端口阵列；数组下标 = master 端口索引（= 地址 rule 的 `idx` 目标） |
+| `addr_map_i` | in | `rule_t [Cfg.NoAddrRules-1:0]` 全局地址表，全模块共享（§3） |
+| `en_default_mst_port_i` | in | `logic [Cfg.NoSlvPorts-1:0]`，每 slave 端口一位：该 slave 端口的 default master port 使能（§3.3） |
+| `default_mst_port_i` | in | `logic [Cfg.NoSlvPorts-1:0][MstPortsIdxWidth-1:0]`，每 slave 端口一个 master 端口索引：使能时未匹配事务发往该 master 端口；不用时接 `'0`（xbar.sv 声明 L87-89 注释） |
+
+## 3. 地址译码与路由
+
+依据：xbar.md §Address Map（除注明外）。
+
+### 3.1 地址表结构
+
+1. 全部 slave 端口共享**一张**地址表（xbar.sv 声明 L81-83 注释同述"map is
+   global for the whole module"）。
+2. 表含任意条 rule，但**全表至少一条**；每条 rule 把一个地址区间映射到一个
+   master 端口（`idx`）；多条 rule 可以映射到同一 master 端口。
+   **无任何 rule 指向的 master 端口为合法配置**（BUG-0005 裁决，REV-001 §5：
+   无"每 master 端口至少一条 rule"的硬性要求——xbar.md 的 default master port
+   与 decode-error 机制正为覆盖未匹配地址；axi_pkg 的 "should" 为软性建议）；
+   故 M3/M4 含不可达 master 端口的拓扑（如 1×N 单 rule、稀疏 map）合法。
+3. 两条 rule 的地址区间**允许重叠**：重叠时，位于地址表**更高（更显著）位置**
+   的 rule 胜出。
+
+### 3.2 匹配语义
+
+1. 区间含起址、**不含**终址：地址 `addr` 匹配某 rule 当且仅当
+   `addr >= start_addr && addr < end_addr`。
+2. 约束：`start_addr <= end_addr`。
+
+### 3.3 default master port
+
+1. 每个 slave 端口可独立配置一个 default master port
+   （`en_default_mst_port_i` 位使能 + `default_mst_port_i` 给索引）。
+2. 使能时：该 slave 端口上**不匹配任何 rule** 的地址被路由到 default master
+   port，而不是 decode error slave（§4）。
+
+### 3.4 运行时可变性
+
+1. 地址表是输入信号，可在运行时定义与更改；但**任一 slave 端口的 AW 或 AR
+   通道 valid 期间不得更改**。
+2. default master port（使能位与索引）同样运行时可变，且受与地址表相同的
+   更改限制。
+
+## 4. 错误处理（decode error）
+
+依据：xbar.md §Decode Errors and Default Slave Port。
+
+1. 每个 slave 端口有**各自的**内部 decode error slave（`axi_err_slv`）。
+2. 事务地址不匹配任何 rule 且该 slave 端口未使能 default master port 时，
+   事务被路由到本端口的 decode error slave。
+3. decode error slave 吞下（absorb）整个事务，并以 decode error 应答
+   （响应码 `axi_pkg::RESP_DECERR`，axi_pkg L518-520 注释同述），且响应
+   **beat 数正确**（xbar.md "proper number of beats" 涵盖读/写两路，C5
+   补写路措辞，REV-001 §3.4）：**读**事务按请求 burst 长度出齐 `AxLEN+1` 个
+   R beats（末拍 `RLAST=1`）；**写**事务在收齐整个 W burst 后返回**单拍 B**
+   （DECERR）。
+4. 读响应每个 beat 的数据为 `32'hBADCAB1E`，按数据宽度零扩展或截断。
+5. 响应 ID/握手遵循 AXI4 协议一般规则（本模块声明实现完整 AXI4，xbar.md
+   §开篇；协议本身为基线，不在此复述）。
+
+## 5. ID 与保序
+
+### 5.1 ID 前缀机制
+
+1. master 端口 ID 宽度 **必须** 为
+   `AxiIdWidthSlvPorts + $clog2(NoSlvPorts)`（xbar.md §Design Overview）。
+2. 事务从 slave 端口 `i` 发往任一 master 端口时，`i` 被前缀（prepend）到事务
+   ID 的高位（xbar.md §Ports 表）；内部 multiplexer 用 ID 的高
+   `$clog2(NoSlvPorts)` 位把响应路由回来源 slave 端口（mux.md：高位不符将把
+   响应送错来源，故设计上以端口索引作前缀保证唯一）。
+3. 由此，master 端口上可观测的事务 ID 满足：`id[高 $clog2(NoSlvPorts) 位] =
+   来源 slave 端口索引`，低 `AxiIdWidthSlvPorts` 位 = 原始 slave 侧 ID。
+4. ID 前缀使不同 slave 端口在 master 端口侧拥有互不相交的 ID 空间
+   （mux.md：解耦不同 master 模块的事务、允许 slave 模块交织不同 ID 的响应）。
+
+### 5.2 同 ID 保序与 stall
+
+依据：xbar.md §Ordering and Stalls。
+
+1. 同一 slave 端口收到**两个同 ID、同方向**（同读或同写）、但目标为**不同
+   master 端口**的事务时，第二个事务在第一个完成前不被接受；期间该 slave
+   端口的 AW（写）或 AR（读）通道被 stall。
+2. "同 ID" 的判定只比较 ID 的低 `AxiIdUsedSlvPorts` 位：取满
+   `AxiIdWidthSlvPorts` 可消除假冲突；取小则以更多假冲突（假 stall）换取
+   面积/延迟收益。假冲突只影响性能，不影响正确性。
+3. 依据（协议动机）：AXI 要求同 ID 同方向事务的响应保序；本 crossbar **无
+   reorder buffer**，故以 stall 方式防止跨 master 端口乱序返回。
+4. 同 ID、同方向、目标**相同** master 端口的事务不受此 stall 约束（保序由
+   下游及 AXI 协议本身维持）**（派生条款：由 §5.2.1"目标为不同 master 端口"
+   约束的逻辑逆否推导得出，非直接 RTL/文档来源——C5，REV-001 §3.4）**。
+
+### 5.3 UniqueIds
+
+依据：xbar.md §Configuration 表（转引 demux.md §Ordering and Stalls）。
+
+1. `UniqueIds = 1'b1` 的**前置条件**（demux.md）——以下至少一条恒成立：
+   - 每个事务的 ID 在同方向所有在飞事务中唯一；
+   - 或对任意 ID：持该 ID 的事务与所有同 ID 同方向在飞事务目标同一
+     master 端口；
+   - 或两者皆是。
+2. 满足前置条件时置 1 可简化硬件（demux.md：ID 追踪复杂度由 `O(2^I)` 降为
+   `O(I)`，`I` 为 ID 位宽）。
+3. **前置条件不满足时置 1 → 行为未定义（undefined behavior）**（demux.md）。
+   验证侧：UniqueIds=1 配置下激励必须构造性满足前置条件。
+
+### 5.4 事务数上限
+
+1. 每 slave 端口 in-flight 事务数 ≤ `MaxMstTrans`（§2.1）。
+2. 每 master 端口每 ID in-flight 事务数 ≤ `MaxSlvTrans`（§2.1）。
+3. 达到上限时对应端口不再接受新事务（由"至多 in flight"语义推导；上游未
+   规定超限时的具体通道行为细节，按 AXI 握手反压理解）。
+
+### 5.5 W 通道次序（下层部件佐证）
+
+1. W beats 按对应 AW 的次序路由：依赖 AXI 性质——W burst 必须按 AW 次序
+   发出、不同 W burst 的 beats 不得交织（demux.md §Design Overview）。
+2. master 端口上，来自不同 slave 端口的 AW/AR 请求经 round-robin 仲裁合并；
+   W burst 与其 AW 保持同序、burst 内不与他源交织（mux.md）。
+3. slave 端口上，来自不同 master 端口的 B/R 响应经 round-robin 仲裁合并
+   （demux.md §Design Overview）。
+4. **checker 期望值告诫（C4，REV-001 §3.2）**：§5.5.2/§5.5.3 的
+   "round-robin 仲裁合并" 仅为下层部件佐证；round-robin 的**具体仲裁发生序**
+   是实现细节（其优先级推进方式在 xbar.md §Design Rationale 中即作为死锁分析
+   对象出现），**非可锁定的外部行为**。checker 的期望值只准从以下**性质**推导：
+   同 ID 同向保序（§5.2）、W-burst 随其 AW 保持同序且 burst 内不与他源交织
+   （§5.5.1）、无饿死（每个持续 valid 的请求终将被授予）；**不得断言任何一条
+   特定的 round-robin 发生序、也不得断言某一拍的具体被授权端口**。
+
+## 6. ATOP 支持
+
+1. `axi_xbar` 实现完整 AXI4 加 **AXI5 原子操作（ATOPs）**（xbar.md §开篇；
+   xbar.sv 头注释）。ATOP 事务由 `aw.atop != '0` 的 AW 发起（demux.md
+   §Atomic Transactions）。
+2. `ATOPs` 参数（默认 `1'b1`）控制原子操作支持的使能
+   **（来源：RTL——上游文档未载）**；`ATOPs=1'b0` 时收到 `aw.atop != '0` 的
+   ATOP 事务的行为在许可来源中**未定义**（xbar.md 未列 ATOPs 参数；禁读实现
+   体定义之）。**环境约束（BUG-0003 裁决，REV-001 §5）**：`ATOPs=1'b0` 时
+   环境保证**不发起任何 ATOP 事务**（所有 AW 恒 `aw.atop ≡ '0`），违反即未
+   定义；M4 配置矩阵的 `ATOPs{0}` 维度在此"无-ATOP 激励"约束下验证（等价于
+   验证 ATOP 硬件被裁剪后的普通读写数据通路），该约束使未定义情形不可达、
+   不阻塞 M4。
+3. 原子读（atomic load，ATOP 带读响应）要求 **B 与 R 两个通道都返回响应**
+   （demux.md §Atomic Transactions）。
+4. 环境约束（AXI5 协议要求，mux.md/demux.md 同述）：master 必须保证 ATOP
+   事务的 ID 与当前**所有**（读+写）在飞事务的 ID 不同；ATOP 亦因此在读写
+   通道间引入 AXI4 中不存在的依赖。验证侧激励必须满足此约束。
+
+## 7. Latency 模式（`LatencyMode` / `xbar_latency_e`）
+
+### 7.1 spill register 位置语义
+
+依据：xbar.md §Pipelining and Latency。
+
+1. `LatencyMode` 的每一位控制一处 spill register：
+   - **master 端口侧（mux）**：每个 master 端口的每条通道（AW/W/B/AR/R）
+     **之后**；
+   - **slave 端口侧（demux）**：每个 slave 端口的每条通道**之前**。
+2. spill register 切断该通道的全部组合路径（payload 与握手），每通道增加
+   一拍延迟，**不损失吞吐**（demux.md §Pipelining and Latency）。
+3. crossbar **内部**（demux 与 mux 之间）不插流水寄存器：上游文档明确此为
+   避免 W 通道循环等待死锁的设计决策（xbar.md §Design Rationale for No
+   Pipelining Inside Crossbar）。因此除 `PipelineStages`（§2.1）外，内部
+   交叉不引入额外延迟档位。
+
+### 7.2 位图与预置档位
+
+`LatencyMode` 为 10 位掩码，位分配（axi_pkg L451-469）
+**（位分配与枚举编码来源：RTL——xbar.md 仅列档位名，未载位图）**：
+
+| bit | 9 | 8 | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 含义 | DemuxAw | DemuxW | DemuxB | DemuxAr | DemuxR | MuxAw | MuxW | MuxB | MuxAr | MuxR |
+
+`xbar_latency_e` 预置档位（axi_pkg L471-479；仅为常用示例，任意 10 位掩码
+均合法——axi_pkg L499-501 注释"Example configurations are provided"）：
+
+| 档位 | 编码 | 含义 |
+| --- | --- | --- |
+| `NO_LATENCY` | `10'b000_00_000_00` | 全组合（配 `FallThrough=1` 可全通路零延迟，xbar.md） |
+| `CUT_SLV_AX` | `DemuxAw \| DemuxAr` | 仅切 slave 端口侧 AW/AR **（档位名来源：RTL——上游文档未载）** |
+| `CUT_MST_AX` | `MuxAw \| MuxAr` | 仅切 master 端口侧 AW/AR **（档位名来源：RTL——上游文档未载）** |
+| `CUT_ALL_AX` | `DemuxAw \| DemuxAr \| MuxAw \| MuxAr` | 两侧 AW/AR 均切：AW/AR 通道延迟 2 拍；**推荐配置**（配 `FallThrough=0`，xbar.md） |
+| `CUT_SLV_PORTS` | 全部 Demux 位 | slave 端口侧五通道全切 |
+| `CUT_MST_PORTS` | 全部 Mux 位 | master 端口侧五通道全切 |
+| `CUT_ALL_PORTS` | `10'b111_11_111_11` | 两侧五通道全切 |
+
+### 7.3 使用约束
+
+依据：xbar.md §Pipelining and Latency。
+
+1. 推荐 `CUT_ALL_AX` + `FallThrough=0`（AW/AR 组合逻辑最重；FallThrough=0
+   防止 AW 逻辑延长 W 组合路径）。
+2. 两个 crossbar 双向互连（各自一个 master 端口接对方一个 slave 端口）时，
+   **两者**的 `LatencyMode` 都必须取 `CUT_SLV_PORTS`、`CUT_MST_PORTS`、
+   `CUT_ALL_PORTS` 之一（两者不必相同），否则未切通道上会形成时序环。
+   本项目单实例验证，此条仅作集成约束记录，不进配置矩阵。
+
+### 7.4 延迟不敏感原则与周期数未定义（BUG-0004 裁决，REV-001 §5）
+
+1. AXI 为**延迟不敏感**（latency-insensitive）握手协议：事务的功能正确性由
+   valid/ready 握手与 payload 决定，不依赖固定拍数。
+2. `LatencyMode` 的 spill register（§7.1）与 `PipelineStages` 的
+   `axi_multicut`（§2.1）均为**延迟不敏感插桩**：改变通路延迟拍数，但**不改变
+   功能响应、不损吞吐**。
+3. **精确每通路（端到端）周期数在许可来源中未定义**：xbar.md §Pipelining 仅述
+   "每 spill 加一拍、不损吞吐"，未给端到端周期数；axi_pkg 对 `PipelineStages`
+   亦无外部周期语义。因此**任何 latency checker 不得断言固定周期数**；功能
+   checker（数据完整性 / 响应正确 / 保序）必须**延迟不敏感**——按 valid/ready
+   握手跟踪事务，不假设固定拍数。
+4. 基线 `PipelineStages=1`、`LatencyMode=CUT_ALL_AX`（§0）因此**不影响** M1
+   smoke 功能 checker 的落地。若将来确需 cycle-accurate 时序核查，须另行**上游
+   确认**后再补 spec（上游确认项，不阻塞里程碑）。
+
+## 8. Connectivity 稀疏连接矩阵语义
+
+**（本节整体来源：RTL——上游文档未载；xbar.md 无 Connectivity 参数的任何
+描述，以下仅为 xbar.sv 声明 L25-26 可支持的最小语义）**
+
+1. `Connectivity` 为 `bit [Cfg.NoSlvPorts-1:0][Cfg.NoMstPorts-1:0]` 连通
+   矩阵，默认 `'1`；按声明注释与默认值推断：`Connectivity[i][j]=1` 表示
+   slave 端口 `i` 与 master 端口 `j` 连通，默认全连接。
+2. `Connectivity[i][j]=0`（稀疏连接）时，"从 slave 端口 `i` 发出、地址译码
+   命中**非连通** master 端口 `j`" 的事务如何应答，**许可来源未定义**
+   （xbar.md 无 Connectivity 任何记载；禁读实现体定义之）。
+3. **环境约束（BUG-0002 裁决，REV-001 §5）**：M3/M4 稀疏 `Connectivity`
+   配置下，地址表（`addr_map_i`）与 default master port 须构造为**不把任一
+   slave 端口 `i` 的任何地址译码到其非连通 master 端口 `j`（`Connectivity[i][j]=0`）**，
+   使上述未定义情形**构造性不可触发**。据此，稀疏 `Connectivity` 维度**不整体
+   降级**，在"地址表与连通矩阵一致"的合法子集上正常写 checker。
+4. "若强行违反 §8.3 约束触发该情形时 DUT 如何应答"仍为许可来源未定义，作为
+   **上游确认项**另行追踪，**不阻塞** M3/M4；未取 DUT_BUG（无任何波形/证据
+   显示行为违规）。
 
 ## Change record
 
-| date | section | change |
-| --- | --- | --- |
-| 2026-07-27 | all | initial skeleton |
+| # | 日期 | 版本 | 章节 | 摘要 | 依据 |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 2026-07-27 | 0.0.0 | 全文 | v0 初稿（草稿 spec-draft-v0.md，待 rev 评审后应用至 spec.md 并重 pin） | vendor/axi/doc/{axi_xbar,axi_demux,axi_mux}.md、src/axi_pkg.sv 定义段、src/axi_xbar.sv 声明段 @ v0.39.9（SHA a256a3b8） |
+| 2 | 2026-07-27 | 0.0.1 | §0(item 2/4/5)、§2.1、§3.1、§4、§5.2、§5.5、§6、§7.4、§8 | v0 修订（依据 REV-001）：C1 补齐 §0 基线全 13 Cfg 字段 + ATOPs/Connectivity 钉定值；C2 修正 §0 item 4/5 子模块层次（axi_xbar_unmuxed/addr_decode 列为强制内部核心子模块，移出范围外清单）；C3 应用 BUG-0002~0005 四条裁决（§8 构造性环境约束 / §6 无-ATOP 环境约束 / §2.1·§7.4 延迟不敏感+周期数未定义 / §2.1·§3.1 采信 xbar.md NoAddrRules 口径）；C4 §5.5 加固 round-robin 措辞；C5 §4 补写路 B(DECERR)、§5.2.4 标注派生条款 | REV-001（doc/review/REV-001.md）；基线数值来源：上游 tb 默认（REV-001 核对） |
