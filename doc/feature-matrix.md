@@ -4,3 +4,4 @@ feature → deliverable → testplan scenarios. Delivery/verification are comput
 
 | id | milestone | feature | module | scenes |
 | --- | --- | --- | --- | --- |
+| F-M0-01 | M0 | 仿真基建：vendored DUT + 依赖库在 VCS-2018 下编译/弹性/运行 | (infra) | M0-01 |

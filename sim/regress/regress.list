@@ -1,1 +1,2 @@
 # one "<TEST> <SEED>" per line; every closed bug's failing seed joins permanently
+upstream_sanity 1

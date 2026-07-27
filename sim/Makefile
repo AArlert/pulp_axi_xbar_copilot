@@ -1,9 +1,56 @@
-# pulp_axi_xbar_copilot sim entry — fill flists/top, then: make smoke
+# pulp_axi_xbar_copilot sim entry — VCS-MX O-2018 + Verdi（workaround 见
+# ../scripts/make/vcs-2018.mk 头注释）。
+# 本 VM 实测 license 端点与 fragment 回退值不同（FB-2），include 前覆盖：
+export LM_LICENSE_FILE := 27000@icarray-virtual-machine
 include ../scripts/make/vcs-2018.mk
 
-TEST ?= smoke_test
+TEST ?= upstream_sanity
 SEED ?= 1
 
-# TODO: FLISTS := -f flist/vendor.f -f flist/dut.f -f flist/tb.f
-# TODO: TOP := <tb_top>
-# Rule patterns: see the tail of scripts/make/vcs-2018.mk
+# M0：vendor 依赖 + axi 全库 + 上游 sanity tb。M1+ 追加 -f flist/tb.f 并
+# 切换 TOP 至 UVM tb_top、run 规则加 +UVM_TESTNAME=$(TEST)。
+FLISTS := -f flist/vendor.f -f flist/dut.f -f flist/tb_upstream.f
+TOP    := tb_axi_xbar
+
+.PHONY: compile run sanity smoke regress cov lint verdi clean
+
+compile:
+	@mkdir -p $(OUT)
+	$(VCS) $(VCS_FLAGS_2018) $(if $(filter 1,$(COV)),$(CM)) $(FLISTS) \
+	  -top $(TOP) -o $(OUT)/simv -l $(OUT)/comp.log
+
+# 上游 tb 以 $stop 结束 → ucli 脚本驱动批处理。SIM_OPTS_2018（-assert
+# verbose）不可省：sva_enforce 下 evidence.py/regress.py 依赖其原生
+# "Summary: N assertions" 行，缺行即 fail-closed（拒收证据）。
+# M0 阶段 $(TEST) 仅命名日志（非 UVM）；+ntb_random_seed 仍为 SV RNG 种子。
+run: compile
+	echo "run; exit" > $(OUT)/run.ucli
+	$(OUT)/simv $(SIM_OPTS_2018) +ntb_random_seed=$(SEED) \
+	  $(if $(filter 1,$(COV)),$(CM) -cm_name $(TEST)_$(SEED)) \
+	  -ucli -i $(OUT)/run.ucli -l $(OUT)/$(TEST)_$(SEED).log
+
+sanity: run
+smoke: run
+
+regress:
+	@python3 ../scripts/regress.py $(if $(filter 1,$(COV)),COV=1)
+
+cov:
+	urg -full64 -dir $(OUT)/cov.vdb -report $(OUT)/urgReport
+
+# lint 判定范围 = ../tb/（本仓库交付物；vendor 与 UVM 库告警不计入）。
+lint:
+	@mkdir -p $(OUT)
+	$(VCS) -full64 -sverilog -timescale=1ns/1ps -ntb_opts uvm-1.2 \
+	  +vcs+lic+wait $(LD_FIX) +lint=all,noVCDE $(FLISTS) \
+	  -o $(OUT)/simv_lint -l $(OUT)/lint.log
+	@if grep -A1 '^Lint-\[' $(OUT)/lint.log | grep -qE '^\.\./tb/'; then \
+	  grep -A1 '^Lint-\[' $(OUT)/lint.log | grep -B1 -E '^\.\./tb/'; exit 1; \
+	else echo "lint clean within ../tb/ scope"; fi
+
+verdi:
+	verdi -ssf $(OUT)/wave.fsdb &
+
+clean:
+	rm -rf $(OUT) csrc simv* *.daidir ucli.key vc_hdrs.h novas.* verdiLog \
+	  nWaveLog DVEfiles axi_log
