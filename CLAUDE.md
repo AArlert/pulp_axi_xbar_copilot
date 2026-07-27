@@ -8,6 +8,15 @@ Profile: **copilot** (see `workflow/profiles.md`). The workflow rules
 live in the `workflow/` snapshot — read them there (offline-safe); do not
 restate or fork them here.
 
+> **Read first, every session: `workflow/discipline.md`** — execution
+> discipline (think before coding · simplicity first · surgical changes ·
+> goal-driven execution · small closed loops). It binds orch and every
+> dispatched role, and it outranks convenience: prefer it over the faster
+> path. It sits below the core invariants and the isolation rules in §0 —
+> those are hard gates, discipline is how you behave between them. Every
+> role file repeats the pointer; the text itself lives only in the
+> snapshot, so it can never drift here.
+
 ## §0 Roles and isolation (hard rules)
 
 - **orch (main session, you)**: pure dispatcher — assembles cards
@@ -62,18 +71,11 @@ hard way: the M1-01 VCS-2018 `bind`→direct-instantiation workaround
 initially landed only in code comments + review records, not `doc/bugs.md`
 (retro-registered as BUG-0007; this repo's FB-7 to the framework).
 
-**Execution discipline** (orch and every dispatched role):
-- *Think before coding*: surface assumptions instead of guessing; name
-  competing readings rather than silently picking one; ask only when
-  genuinely blocked.
-- *Surgical changes*: touch only what the task requires; don't refactor or
-  reformat adjacent code; remove orphans your own change created, just flag
-  pre-existing dead code rather than deleting it.
-- *小步快跑 — small closed loops, then stop*: cut long work into the
-  smallest chunk that reaches a clean stopping point on its own. Once it
-  lands (gates green, `/closeout` done), `git push` and wait for the next
-  instruction — don't cascade unprompted. A card already in flight runs to
-  its own completion first.
+**Execution discipline**: `workflow/discipline.md` (framework 0.3.0) — the
+five rules bind orch and every dispatched role. This repo's 小步快跑 became
+its rule 5; the rest arrived with it. Local ritual only: a chunk "lands"
+here when the gates are green **and** `/closeout` is done — then `git push`
+and wait for the next instruction.
 
 ## §3 Gate order (dispatch preconditions)
 

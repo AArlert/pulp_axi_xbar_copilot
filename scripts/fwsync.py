@@ -111,9 +111,10 @@ def vendor_pairs(fw, profile=None):
     for d in VENDOR_REF_DIRS:
         for f in sorted((fw / d).rglob("*.md")):
             pairs.append((f, Path("workflow") / f.relative_to(fw)))
-    prof = fw / "docs" / "profiles.md"
-    if prof.exists():
-        pairs.append((prof, Path("workflow") / "profiles.md"))
+    for name in ("profiles", "discipline"):
+        f = fw / "docs" / ("%s.md" % name)
+        if f.exists():
+            pairs.append((f, Path("workflow") / ("%s.md" % name)))
     skills = SKILLS_COMMON + (SKILLS_COPILOT
                               if profile in ("all", "copilot") else ())
     for name in skills:

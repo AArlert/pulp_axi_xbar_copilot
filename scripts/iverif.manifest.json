@@ -7,13 +7,14 @@
     "scripts/bump.py": "cd2a2172f5b46ebbdbc2907d3f5098d647249148b3e4721ba470580ee94aa581",
     "scripts/docs.py": "277a804c88eddd376658a4587fff16a517034ba27fd0557bb681a7765c9ac8cd",
     "scripts/evidence.py": "3ec4a564cf72017c54d0a863c6f3f52099f56d3401b332457a79d39a5491473b",
-    "scripts/fwsync.py": "c30364357d9466f6897c05699c0b0d12d9c5728300ab78deb5cf5cc96fe3be9e",
+    "scripts/fwsync.py": "ae721cd005988a38275657fca36aa971a8b4867acfaf63c534a9de44021c9127",
     "scripts/iverif_config.py": "a3fa8a13288e023d37da3441b48969af209e0fa0de138ba055e1faef9d13e436",
     "scripts/make/core.mk": "c27186abdbc00cb874999391e74ca87ef740691b02db4c07f77d1ab9da479653",
     "scripts/make/evidence.mk": "9115bb3d073f49f566e9f2e1ff4d42bc3efb99e903ace3c403000240464563be",
     "scripts/make/vcs-2018.mk": "dba5c3424ae13ff8f950017c2be762fd9aeab3c74bbe4bb177019749adab0fe2",
     "scripts/regress.py": "cd9b1ebfca6a848e85358d1e7dc6cdd27648f2972fd5235279c1d6cd4a187673",
     "scripts/svacheck.py": "4bb3644417f577c28e7d0318d81bd248c72266efbc08abaeeaa902c8c3535b30",
+    "workflow/discipline.md": "cf531d9f398462fda0e6ce4410868cff199c1c6305280ff3067201dc0378eeeb",
     "workflow/dispatch/assertion_failure.md": "ecf5b8b393b1c4f5472809f60ebfbf435d03d493d8a39183b5dbceb527381ef5",
     "workflow/dispatch/coverage_hole.md": "675a7a331fa060471e7dbac6af69977fddca52145c8df2ebea5b4151160e43fb",
     "workflow/dispatch/regression_failure.md": "614101c4481f8ab2c9b1640f81e8672256a8adffffa535e887cb87a625ac06bd",
@@ -26,5 +27,5 @@
     "workflow/taxonomy/failure_taxonomy.md": "c94e5340a19e2afcae0eeffb322a1f2d03d631a7799abefc3d763230fa2d5be6",
     "workflow/taxonomy/rca_template.md": "58ea28f44f6777197131983afbb4065ec43788df0c0a0aaa509681711ada0a88"
   },
-  "framework": "0.2.1"
+  "framework": "0.3.0"
 }
