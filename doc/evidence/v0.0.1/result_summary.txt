@@ -1,0 +1,2 @@
+pulp_axi_xbar_copilot regression  date=2026-07-27  passed=1/1
+PASS   upstream_sanity SEED=1
