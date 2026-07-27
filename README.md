@@ -55,3 +55,56 @@ axi_xbar (vendor/axi/src/axi_xbar.sv)
       │  └─ 叶子：纯组合逻辑，不再例化子模块
       └─ (common_cells/tech_cells_generic 基础单元，如 rr_arb_tree ×2、fifo_v3 ×1、spill_register ×6)
 ```
+
+### 数据流概览
+
+`axi_xbar` 对外是 `NoSlvPorts`（基线 6）个 slave 端口进、`NoMstPorts`（基线 8）个
+master 端口出的全连接交叉开关：外部 AXI master 挂在 slave 端口上发起请求，外部
+AXI slave 挂在 master 端口上接收请求；一笔事务从某个 slave 端口进来，查地址表决
+定该走哪个 master 端口，穿过交叉矩阵后送出，响应原路返回。下图示意该数据流（省
+略了逐格展开的连接矩阵与部分同构端口，仅体现路径与分支逻辑）：
+
+![axi_xbar 请求/响应数据流](doc/attach/axi_xbar_dataflow.svg)
+
+### 请求路径
+
+1. **`addr_decode` 查地址表**：每个 slave 端口进来的 AW/AR 各查一次
+   （`×NoSlvPorts×2`），得到目标 master 端口编号，或判为地址不匹配的错误。
+2. **`axi_demux` 按端口分流**：每个 slave 端口一个，把这个端口的请求摆渡到对应
+   出口方向；地址查不到就摆渡去 `axi_err_slv` 报错窗口。内部还管理"同 ID 事务未
+   应答完前不能被同向抢先"（`axi_demux_id_counters`，仅 `UniqueIds` 关闭时需
+   要），并插几级 `spill_register` 流水线改善时序。
+3. **交叉连接矩阵**：`NoSlvPorts × NoMstPorts` 个格子，每格对应一条唯一路径。
+   `Connectivity[i][j]` 规划为连通则走 `axi_multicut`（按 `LatencyMode` 插几级流
+   水线切割，只加延迟不改数据）；矩阵里没修这条路（稀疏连接，M3 里会测）则走另
+   一个 `axi_err_slv`，直接判错，不碰真实下游 slave。
+4. **`axi_mux` 出口合流**：一个 master 端口可能同时收到好几个 slave 端口方向汇
+   过来的车流，`axi_mux` 负责：① 用轮询仲裁器（`rr_arb_tree`）决定这一拍谁先
+   走；② 把"这笔事务从哪个 slave 端口来"前缀进事务 ID（`axi_id_prepend`）——响应
+   要靠这个前缀才能找到回家的路；③ 合并成一条 AXI 接口，驱动外部下游 slave。
+
+### 响应路径
+
+B/R 响应从 master 端口回来，`axi_mux` 用前缀进 ID 里的信息知道该分流回哪条来
+路，一路走回对应 slave 端口的 `axi_demux`，最后从原来进来的那个 slave 端口把
+B/R 吐给外部 master——全程原路返回，不重新查地址表。
+
+### `axi_err_slv` 与 ATOP
+
+两处 `axi_err_slv`（一处接"地址查不到"的车流，一处接"矩阵里没修这条路"的车
+流）行为上是一回事，只是触发条件不同。若判错的事务恰好是 ATOP（读写合一的原子
+操作），会产生两个响应（B 和 R），错误从机也得把两个都伪造出来，所以内部还带一
+个 `axi_atop_filter` + 几个 `fifo_v3`。属实现细节，行为规格角度不需要深挖，只要
+知道"ATOP 打开时，decode error 的错误从机也能正确生成双响应"这条行为在 spec §6
+有描述，DV 记分板要覆盖到。
+
+### 设计动机
+
+- **先分后合**：slave 端口各自独立分流（`demux`），master 端口各自独立合流
+  （`mux`），中间用交叉矩阵解耦，因此 `NoSlvPorts`/`NoMstPorts` 可独立配置、连
+  接关系（`Connectivity`）也可稀疏。
+- **ID 前缀是找路的钥匙**：进去时不记路，回来时全靠 ID 里前缀的"来源端口号"找
+  到回家的路，这也是 spec §5（ID 与保序）重要的原因，直接决定 scoreboard 该怎
+  么判断响应有没有走错端口。
+- **两处"报错窗口"**：`axi_err_slv` 一处接"地址查不到"的车流，一处接"矩阵里没
+  修这条路"的车流，行为上是一回事，只是触发条件不同。
