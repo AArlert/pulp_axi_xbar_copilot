@@ -45,17 +45,46 @@ class xbar_scoreboard extends uvm_scoreboard;
     xbar_types_pkg::strb_t  wstrb[$];
   } pend_rec_t;
 
-  // Keyed by the *expected* master-side id — unique per outstanding
-  // transaction since (a) ID prefixing makes different slv ports' ID
-  // spaces disjoint (spec §5.1.4) and (b) this env never has two
-  // outstanding requests on the same slv port at once (single pending
-  // record per source id is always sufficient).
-  local pend_rec_t pending_by_id[bit [xbar_types_pkg::ID_W_MST-1:0]];
+  // Keyed by {direction, expected master-side id} — unique per outstanding
+  // transaction since (a) ID prefixing makes different slv ports' ID spaces
+  // disjoint (spec §5.1.4), (b) read and write are independent AXI channels
+  // so the direction bit keeps a same-id write and read from aliasing (M1-02
+  // deliberately reuses one slv-side id for both a write and a read on the
+  // same port), and (c) this env never has two outstanding same-direction
+  // requests on one slv port at once (single pending record per key suffices).
+  local pend_rec_t pending_by_id[bit [xbar_types_pkg::ID_W_MST:0]];
+
+  // {direction, mst-side id} key builder for pending_by_id.
+  local function bit [xbar_types_pkg::ID_W_MST:0] pend_key(
+      input bit is_write, input bit [xbar_types_pkg::ID_W_MST-1:0] mst_id);
+    return {is_write, mst_id};
+  endfunction
+
+  // ---- C3.2 source-port response-routing (spec §5.1.2/§5.1.3) -----------
+  // Independent of the payload/resp-code judgement in write_resp: every B/R
+  // observed at slv port p must trace to a request p *itself* issued with
+  // that (direction, slv-side id). A response landing on a port that has no
+  // matching outstanding request is a cross-port misdelivery — the ID-prefix
+  // high $clog2(NoSlvPorts) bits routed the response to the wrong source
+  // slave port. Works for writes too (B carries no payload, so the read-data
+  // check cannot catch a write-B misroute). Count-based because the same
+  // (port,dir,slv-id) recurs across the test; the slvport driver is
+  // single-outstanding-per-port-per-direction, so any live count is 0/1.
+  local int unsigned resp_expect[int unsigned];
+  int unsigned resp_route_match_cnt;
+  int unsigned resp_route_mismatch_cnt;
 
   int unsigned route_match_cnt;
   int unsigned route_mismatch_cnt;
   int unsigned resp_match_cnt;
   int unsigned resp_mismatch_cnt;
+
+  // key = {port, direction, slv-side id}; slv id is 5 bits (< 32), dir 1 bit.
+  local function int unsigned resp_key(input int unsigned port,
+                                       input bit is_write,
+                                       input xbar_types_pkg::id_slv_t sid);
+    return (port << 6) | (int'(is_write) << 5) | int'(sid);
+  endfunction
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -96,7 +125,12 @@ class xbar_scoreboard extends uvm_scoreboard;
       rec.wstrb = ro.wstrb;
     end
     exp_id = build_exp_id(ro.port_idx, ro.id[xbar_types_pkg::ID_W_SLV-1:0]);
-    pending_by_id[exp_id] = rec;
+    pending_by_id[pend_key(ro.is_write, exp_id)] = rec;
+
+    // C3.2: record that source port ro.port_idx now expects a response for
+    // this (direction, slv-side id) back on its own port (spec §5.1.2/§5.1.3).
+    resp_expect[resp_key(ro.port_idx, ro.is_write,
+                         ro.id[xbar_types_pkg::ID_W_SLV-1:0])]++;
   endfunction
 
   // ---- request-side, mst-port stream: check the expectation (§3.1/§3.2,
@@ -104,8 +138,8 @@ class xbar_scoreboard extends uvm_scoreboard;
   virtual function void write_mst_req(axi_req_obs ro);
     pend_rec_t rec;
     bit found;
-    bit [xbar_types_pkg::ID_W_MST-1:0] key;
-    key = ro.id[xbar_types_pkg::ID_W_MST-1:0];
+    bit [xbar_types_pkg::ID_W_MST:0] key;
+    key = pend_key(ro.is_write, ro.id[xbar_types_pkg::ID_W_MST-1:0]);
     found = pending_by_id.exists(key);
     if (!found) begin
       route_mismatch_cnt++;
@@ -151,6 +185,26 @@ class xbar_scoreboard extends uvm_scoreboard;
   // ---- response-side (slv port round trip only): payload/resp-code
   // judgement (§1, C4.2) --------------------------------------------------
   virtual function void write_resp(axi_resp_obs ro);
+    // C3.2 source-port response-routing check (spec §5.1.2/§5.1.3): this B/R
+    // landed on slv port ro.port_idx — verify that port actually has an
+    // outstanding request with this (direction, slv-side id). A miss means
+    // the response was routed back to the wrong source port (ID-prefix
+    // high-bit routing error) or is otherwise spurious. Runs independently of
+    // the payload/resp-code judgement below (which continues regardless).
+    begin
+      int unsigned rk;
+      rk = resp_key(ro.port_idx, ro.is_write, ro.id);
+      if (!resp_expect.exists(rk) || resp_expect[rk] == 0) begin
+        resp_route_mismatch_cnt++;
+        `uvm_error("SB_RESP_ROUTE",
+          $sformatf("slv port %0d observed a %s response id 'h%0h it never issued — cross-port misdelivery: response id-prefix routed to the wrong source slave port (spec §5.1.2/§5.1.3)",
+                     ro.port_idx, ro.is_write ? "B(write)" : "R(read)", ro.id))
+      end else begin
+        resp_expect[rk]--;
+        resp_route_match_cnt++;
+      end
+    end
+
     if (ro.is_write) begin
       if (ro.resp[0] !== axi_pkg::RESP_OKAY) begin
         resp_mismatch_cnt++;
@@ -188,14 +242,25 @@ class xbar_scoreboard extends uvm_scoreboard;
   virtual function void report_phase(uvm_phase phase);
     super.report_phase(phase);
     `uvm_info("SB_SUMMARY",
-      $sformatf("route: match=%0d mismatch=%0d | resp: match=%0d mismatch=%0d | pending(unmatched at end)=%0d",
+      $sformatf("route: match=%0d mismatch=%0d | resp: match=%0d mismatch=%0d | resp-route(C3.2): match=%0d mismatch=%0d | pending(unmatched at end)=%0d",
                  route_match_cnt, route_mismatch_cnt, resp_match_cnt,
-                 resp_mismatch_cnt, pending_by_id.num()),
+                 resp_mismatch_cnt, resp_route_match_cnt,
+                 resp_route_mismatch_cnt, pending_by_id.num()),
       UVM_LOW)
     if (pending_by_id.num() != 0) begin
       `uvm_error("SB_DANGLING",
         $sformatf("%0d slv-side request(s) never observed a matching mst-side request — routing incomplete at end of test",
                    pending_by_id.num()))
+    end
+    // C3.2: any source port still expecting a response never received back
+    // on its own port means a B/R was dropped or misrouted (spec §5.1.2).
+    foreach (resp_expect[k]) begin
+      if (resp_expect[k] != 0) begin
+        `uvm_error("SB_RESP_DANGLING",
+          $sformatf("source port %0d still expects %0d %s response(s) never observed on its own port — response routing incomplete/misrouted (spec §5.1.2/§5.1.3)",
+                     (k >> 6), resp_expect[k],
+                     ((k >> 5) & 1) ? "B(write)" : "R(read)"))
+      end
     end
   endfunction
 endclass

@@ -2,6 +2,58 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.2.0] 2026-07-27 M1 里程碑签核 PASS：M1-02 落地 + BUG-0008/0009 终态 + regress 覆盖补全，转入 M2
+
+**Done**
+- DV 卡：M1-02（ID 前缀响应路由 smoke）落地——`tb/seq_lib.sv`/`test_lib.sv`
+  新增 `m1_02_id_prefix_{seq,vseq,test}`（多 slave 端口共享低位 ID、各指
+  不同 master 端口，规避 §5.2.1 假冲突 stall）；`tb/scoreboard_refmodel.sv`
+  新增 C3.2 源端口响应路由判据（`resp_expect[]`，独立于既有 payload/resp-
+  code 判据，可捕获 B 通道无 payload 的跨端口错送）；evidence
+  `doc/evidence/v0.1.2/M1-02.log`（96/96/96 match），testplan M1-02 🔲→✅
+- 落地期发现并修复 **BUG-0009**（TB_BUG，CLOSED）：`mstport_monitor` 单槽
+  AW/W 配对方案在 master 端口 AW-W 解耦/多写 burst 汇聚时错配（第二个 AW
+  覆盖首个未收尾 burst 的元数据）；改 AW FIFO 队列配对（`aw_q[$]`，镜像
+  `mstport_responder` 既有写法）；同轮修复 scoreboard `pending_by_id` 键加
+  方向位（读写独立通道，同 id 不再别名）。DUT 全程功能正确（resp-route
+  C3.2 96/0）。detail page `doc/bugs/BUG-0009.md` 补齐（orch 发现该行初始
+  漏建详情页 + taxonomy 标签误用非正典的 "DV_ISSUE"，均已订正为 TB_BUG）
+- rev 卡 REV-004：仲裁 BUG-0008（M0 三条存量证据 `## Key check lines` 段
+  为空）处置——赞同不追溯重写、不改 signoff-M0，并纠正终态应由 OPEN 转
+  **WONTFIX**（已应用）；独立核验 CLAUDE.md 两处"本地重述→指针"收成
+  （taxonomy 登记无条件、执行纪律→discipline.md）语义无损，本地仪式
+  （`/closeout`+`git push`+等待指令）确认仍落在保留句里，未悄悄消失
+- 补全 `sim/regress/regress.list`：M0 期只有 `upstream_sanity`，M1 落地后
+  一直未跟进；补入 `m1_01_smoke_test`/`m1_02_id_prefix_test`（恰对应
+  BUG-0007/0009 的 min_repro，满足清单自身"每个已闭合 bug 失败 seed 永久
+  入列"的约定），`make regress` 3/3 PASS，`doc/evidence/v0.1.2/
+  result_summary.txt` 登记，`make signoff-check` 机器条件三项转全绿
+- rev 卡：M1 里程碑签核 `doc/evidence/v0.1.2/signoff-M1.md`——**PASS**（带
+  2 项非阻塞残留风险：R1 已登记的 `v0.1.0/M1-01.log` 字节滞后于 BUG-0009
+  后的当前树，功能面由回归摘要+详情页+签核三路独立复跑覆盖；R2 本轮改动
+  提交前 `fix_commit` 为占位，随本次 closeout 提交回填）。人工抽查 5 对
+  BUG-0009 做了真实的一次性废弃分支守卫证伪：回退 monitor 单槽版本后
+  确定性复现"4 route 失配+7 dangling"登记签名，逐字节复原后丢弃分支
+
+**Not done**
+- M2（功能场景 + SVA + 功能覆盖）未开始
+- BUG-0008 存量三条 M0 证据仍未重生成（REV-004 裁决为不重写，非待办）
+- signoff-M1 R1：`doc/evidence/v0.1.0/M1-01.log` 未随 BUG-0009 修复重生
+  （非阻塞，功能面已三路复验覆盖，留给后续视需要处理）
+
+**Next**
+- 派 arch 设计输入卡：M2 功能场景清单（保序/stall/decode error/ATOP 等，
+  design-prompt C2/C5 已成文待激活）+ SVA 覆盖点规划
+- M2 功能覆盖率采集基建（六类覆盖率路线图见 CLAUDE.md §6）
+
+**How verified**
+- 独立重跑 `make run TEST=m1_02_id_prefix_test SEED=1`（96/96/96 match，
+  UVM_ERROR 0，SVA 0 failures）与 `make run TEST=m1_01_smoke_test SEED=1`
+  回归（48/48/48，0 错误，新判据无回归）；`make regress` 3/3 PASS；
+  `make signoff-check` 全绿（含 `[yes] signoff file`）；`make docs-check`/
+  `make fw-check` 全绿；REV-004/signoff-M1 见 `doc/review/`、
+  `doc/evidence/v0.1.2/`
+
 ## [0.1.2] 2026-07-27 框架 0.2.0 → 0.3.0 两轮回流闭环 + BUG-0008 补登
 
 **Done**
@@ -66,25 +118,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
 **How verified**
 - 独立重跑 `make compile`（0 error/0×NCE）+ `make run TEST=m1_01_smoke_test SEED=1`（scoreboard 48/48 match、SVA 0 failures、UVM_ERROR 0，与 DV 交付报告一致）+ `make run TEST=upstream_sanity SEED=1`（M0-01 回归不变，Tests Failed 0）；`make docs-check`/`make fw-check` 全绿；`REV-002`/`REV-003` 见 `doc/review/`
-
-## [0.1.0] 2026-07-27 M0 里程碑签核 PASS：基建+sanity+spec v0 收官，转入 M1
-
-**Done**
-- rev 全新实例（非本里程碑任何 review/fix 当事人）执行 M0 里程碑签核：机器条件 3×PASS 自跑复核 + 3 项人工抽查（抽查 4 覆盖闭合 N/A 但按精神等价核验目标机制命中；抽查 5 守卫证伪——一次性废弃分支 revert BUG-0006 修复、`make compile` 复现原 6×NCE 签名、清理分支；抽查 6 spec 债务清零核对 REV-001 §5 逐条裁决）
-- 签核记录 `doc/evidence/v0.0.2/signoff-M0.md`：总体裁决 **PASS**，2 项非阻塞残留风险（R1 证据摘要窗口未捕获非 UVM 记分板判决行；R2 末拍在飞断言，良性）
-- R1 回流 `doc/fw-feedback.md` FB-6（kernel/evidence.py，annoyance）
-- `make signoff-check` 全绿（含 signoff 文件识别）；`make bump-minor` 0.0.2→0.1.0
-
-**Not done**
-- M1（UVM env + smoke，评估 v0.39.10 升级）未开始
-- FB-1~FB-6 回流框架仓库（iverif-workflow）未做——里程碑边界批量回流的约定时点已到，尚待执行
-- R1（evidence.py 摘要窗口）本身未修——按框架红线本仓库不改 scripts/，需上游修复
-
-**Next**
-- FB-1~FB-6 批量回流 iverif-workflow（里程碑边界回流仪式，见 CLAUDE.md §5）
-- 派 arch 设计输入卡：M1 UVM env 骨架（tb_top + 多 master/slave agent + 地址路由参考模型记分板）+ 评估 v0.39.10 升级影响
-- `git tag v0.1.0`
-
-**How verified**
-- `make signoff-check` 全绿（机器条件 3×PASS + signoff 文件 `[yes]`）；`make docs-check` / `make fw-check` 全绿；签核记录见 `doc/evidence/v0.0.2/signoff-M0.md` §5 裁决
 

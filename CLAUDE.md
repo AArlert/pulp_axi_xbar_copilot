@@ -1,5 +1,5 @@
 <!-- Rendered by fwsync from iverif-workflow/templates/CLAUDE.project.copilot.md
-     (framework 0.2.0). Project-specific sections are marked
+     (framework 0.3.0). Project-specific sections are marked
      TODO; the framework-owned sections should not be edited here. -->
 
 # pulp_axi_xbar_copilot — CLAUDE.md

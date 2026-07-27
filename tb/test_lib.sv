@@ -31,3 +31,21 @@ class m1_01_smoke_test extends base_test;
     phase.drop_objection(this, "m1_01_smoke_vseq done");
   endtask
 endclass
+
+// M1-02 ID-prefix response-routing smoke (testplan.md M1-02).
+class m1_02_id_prefix_test extends base_test;
+  `uvm_component_utils(m1_02_id_prefix_test)
+
+  function new(string name = "m1_02_id_prefix_test",
+               uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m1_02_id_prefix_vseq vseq;
+    phase.raise_objection(this, "m1_02_id_prefix_vseq running");
+    vseq = m1_02_id_prefix_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m1_02_id_prefix_vseq done");
+  endtask
+endclass

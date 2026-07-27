@@ -154,12 +154,25 @@ class mstport_monitor extends uvm_monitor;
   int unsigned         port_idx;
   uvm_analysis_port #(axi_req_obs) req_ap;
 
+  // AW→W burst pairing. At a master port the mux may accept an AW ahead of
+  // (or decoupled from) its W burst, and write bursts from several slave
+  // ports converge here; W bursts stay non-interleaved and in AW-acceptance
+  // order (spec §5.5.2), so a FIFO of accepted AWs — popped as each W burst
+  // starts and completed at its w_last — pairs them correctly. (An earlier
+  // single-slot "capture AW / collect until w_last" scheme mis-paired beats
+  // whenever a second AW was accepted before the first burst's W finished,
+  // BUG-0009.)
+  typedef struct {
+    xbar_types_pkg::id_mst_t id;
+    xbar_types_pkg::addr_t   addr;
+    axi_pkg::len_t           len;
+    axi_pkg::size_t          size;
+    axi_pkg::burst_t         burst;
+  } aw_rec_t;
+
+  local aw_rec_t                 aw_q[$];
   local bit                      w_busy;
-  local xbar_types_pkg::id_mst_t w_id;
-  local xbar_types_pkg::addr_t   w_addr;
-  local axi_pkg::len_t           w_len;
-  local axi_pkg::size_t          w_size;
-  local axi_pkg::burst_t         w_burst;
+  local aw_rec_t                 w_cur;
   local xbar_types_pkg::data_t   w_data_q[$];
   local xbar_types_pkg::strb_t   w_strb_q[$];
 
@@ -178,32 +191,41 @@ class mstport_monitor extends uvm_monitor;
 
   virtual task run_phase(uvm_phase phase);
     w_busy = 1'b0;
+    aw_q.delete();
     forever begin
       @(posedge vif.clk_i);
       if (!vif.rst_ni) continue;
 
       if (vif.aw_valid && vif.aw_ready) begin
-        w_id    = vif.aw_id;
-        w_addr  = vif.aw_addr;
-        w_len   = vif.aw_len;
-        w_size  = vif.aw_size;
-        w_burst = vif.aw_burst;
-        w_data_q.delete();
-        w_strb_q.delete();
-        w_busy = 1'b1;
+        aw_rec_t a;
+        a.id = vif.aw_id; a.addr = vif.aw_addr; a.len = vif.aw_len;
+        a.size = vif.aw_size; a.burst = vif.aw_burst;
+        aw_q.push_back(a);
       end
-      if (w_busy && vif.w_valid && vif.w_ready) begin
+      if (vif.w_valid && vif.w_ready) begin
+        if (!w_busy) begin
+          // Start of a new W burst: pair with the head of the accepted-AW
+          // FIFO (W bursts are in AW order, non-interleaved — spec §5.5.2).
+          if (aw_q.size() == 0)
+            `uvm_error("MON_WNOAW",
+              "mst monitor saw a W beat with no accepted AW queued (AW/W pairing violated at master port)")
+          else
+            w_cur = aw_q.pop_front();
+          w_data_q.delete();
+          w_strb_q.delete();
+          w_busy = 1'b1;
+        end
         w_data_q.push_back(vif.w_data);
         w_strb_q.push_back(vif.w_strb);
         if (vif.w_last) begin
           axi_req_obs ro = axi_req_obs::type_id::create("mst_wreq_obs");
           ro.port_idx = port_idx;
           ro.is_write = 1'b1;
-          ro.id       = w_id;
-          ro.addr     = w_addr;
-          ro.len      = w_len;
-          ro.size     = w_size;
-          ro.burst    = w_burst;
+          ro.id       = w_cur.id;
+          ro.addr     = w_cur.addr;
+          ro.len      = w_cur.len;
+          ro.size     = w_cur.size;
+          ro.burst    = w_cur.burst;
           ro.wdata    = w_data_q;
           ro.wstrb    = w_strb_q;
           req_ap.write(ro);
