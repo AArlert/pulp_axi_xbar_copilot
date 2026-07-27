@@ -54,6 +54,19 @@ Failures: never registered as evidence. Triage with
 `workflow/dispatch/*.md`, file in `doc/bugs.md`
 (contract: `workflow/schema/failure_record.md`).
 
+**Execution discipline** (orch and every dispatched role):
+- *Think before coding*: surface assumptions instead of guessing; name
+  competing readings rather than silently picking one; ask only when
+  genuinely blocked.
+- *Surgical changes*: touch only what the task requires; don't refactor or
+  reformat adjacent code; remove orphans your own change created, just flag
+  pre-existing dead code rather than deleting it.
+- *小步快跑 — small closed loops, then stop*: cut long work into the
+  smallest chunk that reaches a clean stopping point on its own. Once it
+  lands (gates green, `/closeout` done), `git push` and wait for the next
+  instruction — don't cascade unprompted. A card already in flight runs to
+  its own completion first.
+
 ## §3 Gate order (dispatch preconditions)
 
 - No DE new-feature card before its design-prompt passed the rev gate
