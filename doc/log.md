@@ -2,6 +2,49 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.1.2] 2026-07-27 框架 0.2.0 → 0.3.0 两轮回流闭环 + BUG-0008 补登
+
+**Done**
+- FB 首轮回流闭环：FB-1~FB-7 全部落入框架 0.2.1，本仓库 `fwsync --pull`
+  两次（0.2.1 → 0.3.0），`doc/fw-feedback.md` 七行 `open` → `fixed@0.2.1`
+  并加头注。实质拿回来的变化：`evidence.py` 非 UVM tb 摘要窗口 2 → 20 行
+  + 关键行正则增补（FB-6）；`.claude/agents/de.md` 修复交付改置 FIXING，
+  fix_commit 与 FIX_READY 归 orch 提交后回填（FB-5，绕行作废）；四角色
+  交付报告新增强制字段"本卡是否命中 taxonomy 异常（含已绕过的）"
+  + taxonomy 正典补"登记无条件"段（FB-7）；`vcs-2018.mk` 的
+  `LM_LICENSE_FILE` 注释挑明是必须覆盖的占位值（FB-2）。
+- 框架 0.3.0 带来 `workflow/discipline.md`（执行纪律五条，优先级高于便利、
+  低于核心不变量与角色隔离），CLAUDE.md 与四个角色文件都指向它。本仓库
+  自产的"小步快跑"被上收为正典 rule 5。
+- 反漂移清理两处本地重述：CLAUDE.md §2 的 taxonomy 登记表述、以及那段
+  自产"执行纪律"三条，都收成指向正典的指针，只保留本仓库特有的内容
+  （M1-01 案例、落地判据含 `/closeout` 的本地仪式）。
+- **BUG-0008 补登**（TOOL_ENV，OPEN）：`doc/evidence/v0.0.1/` 三条 M0 证据
+  的 `## Key check lines` 段为空。此事 signoff-M0 抽检 R1 就发现了，却只
+  进了 `doc/fw-feedback.md` FB-6 和评审记录，`doc/bugs.md` 一直没有行——
+  与 BUG-0007 同一形状的可追溯性缺口，按"登记无条件"补上。
+
+**Not done**
+- 存量三条 M0 证据未重新生成。`doc/evidence/v0.0.1/` 是 signoff-M0 已签核
+  指向的产物，用新抽取器覆写会改动被签核对象而签核记录无法同步重签；
+  权衡后判定"摘要不全"轻于"签核指向的证据在签核后被改过"。是否重生成
+  属 rev 裁决，orch 不自行 WONTFIX（路径写在 BUG-0008 的 `## rerun`）。
+- M1-02 未动（scoreboard_refmodel / sva_bind 两行仍非 ✅）。
+
+**Next**
+- 派 rev 卡：① 裁决 BUG-0008 存量是否重生成；② 复核本轮两处本地重述收编
+  是否有语义丢失。
+- 派 DV 卡推进 M1-02。
+
+**How verified**
+- 每轮 pull 后 `make fw-check` + `make docs-check` 双绿（当前
+  framework 0.3.0，26 个 pin 文件）；BUG-0008 行与详情页加入后 docs-check
+  仍绿（FL 详情页非终态可部分填写，本页已按 schema 八段写全）。
+- 框架侧 48 例自测全过（新增一例钉住 discipline.md 到位且两种 profile 下
+  每个角色文件都指向它），framework master 与两个标签已推送。
+- FB-6 的修复在框架侧有保险丝：还原窗口与正则后 48 例中恰好只有
+  `test_plain_nonuvm_verdict_line_captured` 失败。
+
 ## [0.1.1] 2026-07-27 M1 首个场景：UVM env 骨架落地 + M1-01 smoke ✅
 
 **Done**
@@ -44,24 +87,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
 **How verified**
 - `make signoff-check` 全绿（机器条件 3×PASS + signoff 文件 `[yes]`）；`make docs-check` / `make fw-check` 全绿；签核记录见 `doc/evidence/v0.0.2/signoff-M0.md` §5 裁决
-
-## [0.0.2] 2026-07-27 DV 复验闭环：M0-01 ✅ + BUG-0001/0006 CLOSED
-
-**Done**
-- DV 复验卡（全新实例，closer≠fixer）：`make compile`（clean rebuild）0×Error-[NCE]、`make smoke TEST=upstream_sanity SEED=1` 自然终止零 mismatch（178296/178296，SVA 3198 assertions 0 failures）、`make regress` 1/1 PASS
-- 三条 evidence 经 `make evidence` 机械登记：BUG-0001、BUG-0006、M0-01（均落 `doc/evidence/v0.0.1/`，line 1 replay + 生成戳）
-- BUG-0001 FIX_READY → CLOSED；BUG-0006 FIX_READY → CLOSED；testplan M0-01 ❌ → ✅（状态格由 evidence.py 回填，非手改）
-- `sim/result_summary.txt` 拷入 `doc/evidence/v0.0.1/`，`make signoff-check` 机器条件 1~3 全 PASS
-- CLAUDE.md §2 新增原则"小步快跑"（Small closed loops, then stop）：长任务切小块闭环，完成即推送并等待用户指令
-
-**Not done**
-- M0 里程碑未收官：rev signoff 卡未派（`signoff-M0*.md` 缺失，`make signoff-check` 卡在人工抽检 4~6 项）
-- FB-1~FB5 回流框架仓库未做
-
-**Next**
-- 派 rev 里程碑签核卡（覆盖闭合抽检 + guard falsification + SPEC_ISSUE 清单）→ signoff-M0 记录 → `make bump-minor` → tag v0.1.0
-- FB 批量回流 iverif-workflow
-
-**How verified**
-- `make docs-check` / `make fw-check` 全绿；`make signoff-check` 机器条件 1~3 PASS（4~6 待 rev）；见 `doc/evidence/v0.0.1/{BUG-0001,BUG-0006,M0-01,result_summary}`
 
