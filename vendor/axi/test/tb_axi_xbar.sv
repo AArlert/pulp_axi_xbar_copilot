@@ -298,7 +298,8 @@ module tb_axi_xbar #(
   for (genvar i = 0; i < TbNumMasters; i++) begin : gen_master_logger
     axi_chan_logger #(
       .TestTime  ( TestTime      ), // Time after clock, where sampling happens
-      .LoggerName( $sformatf("axi_logger_master_%0d", i)),
+      // P-001: VCS-2018 NCE workaround（见 vendor/VENDOR.md）
+      .LoggerName( {"axi_logger_master_", 8'(8'h30 + i)} ),
       .aw_chan_t ( aw_chan_mst_t ), // axi AW type
       .w_chan_t  (  w_chan_t     ), // axi  W type
       .b_chan_t  (  b_chan_mst_t ), // axi  B type
@@ -334,7 +335,8 @@ module tb_axi_xbar #(
   for (genvar i = 0; i < TbNumSlaves; i++) begin : gen_slave_logger
     axi_chan_logger #(
       .TestTime  ( TestTime      ), // Time after clock, where sampling happens
-      .LoggerName( $sformatf("axi_logger_slave_%0d",i)),
+      // P-001: VCS-2018 NCE workaround（见 vendor/VENDOR.md）
+      .LoggerName( {"axi_logger_slave_", 8'(8'h30 + i)} ),
       .aw_chan_t ( aw_chan_slv_t ), // axi AW type
       .w_chan_t  (  w_chan_t     ), // axi  W type
       .b_chan_t  (  b_chan_slv_t ), // axi  B type

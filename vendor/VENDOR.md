@@ -35,6 +35,7 @@ unless the linked bug record says otherwise.
 
 | ID | File(s) | Reason | Behavior impact | Bug/FL ref | rev review |
 | --- | --- | --- | --- | --- | --- |
+| P-001 | axi/test/tb_axi_xbar.sv (行 301/337) | VCS-MX O-2018.09-SP2 无法在 elaboration 常量求值中处理含 genvar 的 `$sformatf`（Error-[NCE]，最小探针复现：$sformatf(genvar) 直用/经 localparam 中转/`string'()` 强转均失败）。将 `axi_chan_logger` 的 `LoggerName` 参数覆盖从 `$sformatf("axi_logger_{master,slave}_%0d", i)` 改写为可常量折叠的拼接 `{"axi_logger_{master,slave}_", 8'(8'h30 + i)}` | equivalent — LoggerName 仅用于日志目录/文件名 `./axi_log/<LoggerName>/`（axi_test.sv 内 axi_chan_logger 仅在 $sformatf 路径串里引用，不参与激励/驱动/监测/记分/判决）；tb 实例化配置 TbNumMasters=6、TbNumSlaves=8（下标 ≤7，单十进制位）下拼接结果与原 %0d 逐字节相同（"axi_logger_master_0".."_5" / "axi_logger_slave_0".."_7"，simv 实跑已核对）。仅当下标 ≥10 时后缀字符会偏离十进制（本配置不触及，且只影响日志目录名，不改判决） | BUG-0001 |  |
 
 Flow: patch → register the row here → request rev review → **main session
 backfills the review column** (rev has no write access to this file). An
