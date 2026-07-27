@@ -1,0 +1,17 @@
+# CI hard gate: doc structure + evidence chain + framework-snapshot
+# integrity. Simulation gating stays in the local VM (no EDA licenses here).
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docs-check
+        run: python3 scripts/docs.py --check
+      - name: handover smoke (guard scripts parse all paths without crashing)
+        run: python3 scripts/docs.py --handover
+      - name: fw-check (vendored framework files must be unmodified)
+        run: python3 scripts/fwsync.py --check

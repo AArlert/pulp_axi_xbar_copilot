@@ -1,0 +1,40 @@
+# VCS / Verdi build+sim products (big files stay out; evidence lives as
+# excerpts under doc/evidence/)
+sim/out/
+csrc/
+simv
+simv.*
+*.daidir/
+ucli.key
+vc_hdrs.h
+novas.*
+verdiLog/
+nWaveLog/
+urgReport/
+*.vdb/
+DVEfiles/
+*.fsdb
+*.vpd
+*.vcd
+*.wlf
+*.key
+
+# Logs: only evidence excerpts under doc/evidence/ may enter git
+*.log
+!doc/evidence/**/*.log
+
+# Editor droppings (docs-check also fails if any get tracked)
+*.swp
+*.swo
+.*.swp
+*~
+*.orig
+
+# axi_test chan_logger runtime droppings (upstream tb writes ./axi_log/ under sim/)
+axi_log/
+
+# Misc
+__pycache__/
+*.pyc
+.DS_Store
+.claude/settings.local.json

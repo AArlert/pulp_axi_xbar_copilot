@@ -1,0 +1,7 @@
+#!/bin/sh
+# Local soft gate (bypassable with --no-verify; project CI still hard-fails).
+python3 scripts/docs.py --check || exit 1
+# Drift check is warn-only here so an emergency local fix can still commit —
+# but CI keeps failing until the fix flows back to the framework repo.
+python3 scripts/fwsync.py --check || \
+  echo "[warn] vendored framework files modified locally — improve the framework repo and re-pull"

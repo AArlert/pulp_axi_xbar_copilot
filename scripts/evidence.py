@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+# Mechanical evidence generation: extract an excerpt from a simulation log
+# into doc/evidence/, then backfill testplan/bugs status. Evidence files are
+# never hand-written (prevents transcription errors and hallucinated
+# excerpts); the only semantic decision left to the operator is *which*
+# scenario/bug id this run belongs to. The anti-forgery anchor remains "the
+# simulation really ran here".
+#
+# Usage (inside the VM, after the run):
+#   python3 scripts/evidence.py --scen M1-01 --test smoke_test --seed 42
+#   python3 scripts/evidence.py --bug BUG-003 --test err_test --seed 7
+#   optional: --log <path> (default from iverif.json sim_log pattern)
+#             --spec-ref SPEC-4.2.1[,SPEC-4.2.3]
+import argparse
+import json
+import re
+import subprocess
+import sys
+from datetime import date
+from pathlib import Path
+
+import svacheck
+from iverif_config import load_config
+
+CFG = None
+
+SUMMARY_MARK = "UVM Report Summary"
+PLAIN_MARK = "V C S   S i m u l a t i o n"
+# Key-line extraction. `running test` (the UVM `[RNTST] Running test <name>`
+# line) is included as an identity anchor: checks that print only at
+# UVM_HIGH verbosity leave the key-line section empty at default verbosity,
+# and the RNTST line at least pins the excerpt to a concrete test — together
+# with the SVA summary and the report summary it stays re-judgeable
+# (ppa-lite-copilot BUG-017 R7).
+KEY_LINE_RE = re.compile(r"(?i)\b(pass|match|compare ok|check ok"
+                         r"|running test)\b")
+KEY_LINES_MAX = 30
+
+
+def read_version():
+    return json.loads(
+        CFG.version_json.read_text(encoding="utf-8"))["version"]
+
+
+def extract(log_path, rid):
+    """Mechanical extraction: UVM Report Summary section (or the VCS
+    completion banner for non-UVM TBs) + SVA assertion summary + key
+    PASS/compare lines + lines mentioning the scenario id. FAIL logs are
+    rejected — failures are filed in bugs.md, never registered as evidence.
+
+    The verdict is two-legged (svacheck.judge): assertion failures do not
+    increment UVM_ERROR, so a log can read `UVM_ERROR : 0` while assertions
+    failed or were silenced — leg 2 judges them independently."""
+    text = log_path.read_text(encoding="utf-8", errors="replace")
+    verdict, reason, sva = svacheck.judge(
+        text, CFG, baseline=svacheck.load_baseline(CFG))
+    if verdict == "NOSUMMARY":
+        sys.exit("log has neither a UVM summary nor a VCS completion banner "
+                 "— cannot judge the result: %s" % log_path)
+    if verdict == "FAIL":
+        detail = "\n".join(sva.detail_lines()) if sva and sva.failed else ""
+        sys.exit("log judged FAIL (%s) — FAIL logs are never evidence; file "
+                 "the failure in bugs.md (source: %s)%s"
+                 % (reason, log_path,
+                    "\nfailing assertions:\n%s" % detail if detail else ""))
+    lines = text.splitlines()
+    idx = next((i for i, l in enumerate(lines) if SUMMARY_MARK in l), None)
+    if idx is not None:
+        summary = lines[max(0, idx - 1):idx + 14]
+    else:
+        idx = next(i for i, l in enumerate(lines) if PLAIN_MARK in l)
+        summary = lines[max(0, idx - 2):idx + 8]
+    # Archive the native assertion-count lines with the excerpt so the
+    # evidence itself stays independently re-judgeable by svacheck.py.
+    sva_lines = [l for l in lines if svacheck.SUMMARY_RE.match(l)]
+    keys = [l for l in lines if KEY_LINE_RE.search(l) or rid in l]
+    return summary, sva_lines, keys[:KEY_LINES_MAX]
+
+
+def update_row(path, id_col, id_val, updates):
+    """Locate a markdown table row by its id column and update the given
+    columns (supports \\| escapes)."""
+    esc = "\x00"
+    out, header, found = [], None, False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if not s.startswith("|"):
+            header = None
+            out.append(line)
+            continue
+        cells = [c.strip().replace(esc, "|")
+                 for c in s.replace("\\|", esc).strip("|").split("|")]
+        if header is None:
+            header = cells
+        elif not all(set(c) <= set("-: ") for c in cells) and not found \
+                and dict(zip(header, cells)).get(id_col, "") == id_val:
+            found = True
+            row = dict(zip(header, cells))
+            row.update(updates)
+            out.append("| " + " | ".join(
+                row.get(h, "").replace("|", "\\|") for h in header) + " |")
+            continue
+        out.append(line)
+    if not found:
+        sys.exit("no row with id %s in %s" % (id_val, path.name))
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def main():
+    global CFG
+    ap = argparse.ArgumentParser(
+        description="mechanical evidence generation + status backfill")
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--scen", help="testplan scenario id (marks ✅)")
+    g.add_argument("--bug", help="bugs.md id (re-verify + close)")
+    ap.add_argument("--test", required=True, help="test name")
+    ap.add_argument("--seed", required=True, help="simulation seed")
+    ap.add_argument("--log", help="sim log path (default from iverif.json)")
+    ap.add_argument("--spec-ref", help="spec clause id(s) this run "
+                                       "evidences, e.g. SPEC-4.2.1")
+    args = ap.parse_args()
+    CFG = load_config()
+
+    rid = args.scen or args.bug
+    log_path = (Path(args.log).resolve() if args.log
+                else CFG.sim_log_path(args.test, args.seed))
+    if not log_path.exists():
+        sys.exit("sim log not found: %s (no log, no evidence)" % log_path)
+
+    summary, sva_lines, keys = extract(log_path, rid)
+    cmd = "make run TEST=%s SEED=%s" % (args.test, args.seed)
+    ev_dir = CFG.evidence_dir / ("v%s" % read_version())
+    ev_dir.mkdir(parents=True, exist_ok=True)
+    ev_path = ev_dir / ("%s.log" % rid)
+    src = (log_path.relative_to(CFG.root)
+           if str(log_path).startswith(str(CFG.root)) else log_path)
+    body = [cmd,
+            "# Generated by scripts/evidence.py on %s, source log: %s"
+            % (date.today(), str(src).replace("\\", "/"))]
+    if args.spec_ref:
+        body.append("# spec_ref: %s" % args.spec_ref)
+    body += ["", "## Report Summary", *summary,
+             "", "## SVA assertion summary (VCS -assert verbose native "
+             "counts; zero failures required)",
+             *(sva_lines
+               or ["(no native summary in source log — sva_enforce off)"]),
+             "", "## Key check lines", *keys, ""]
+    ev_path.write_text("\n".join(body), encoding="utf-8")
+    rel = str(ev_path.relative_to(CFG.root)).replace("\\", "/")
+    print("evidence written: %s" % rel)
+
+    if args.scen:
+        update_row(CFG.testplan, CFG.C["tp_id"], args.scen,
+                   {CFG.C["tp_status"]: "✅", CFG.C["tp_evidence"]: rel,
+                    CFG.C["tp_repro"]: "`%s`" % cmd})
+        print("testplan %s backfilled (✅ / evidence / repro)" % args.scen)
+    else:
+        update_row(CFG.bugs, CFG.C["bug_id"], args.bug,
+                   {CFG.C["bug_status"]: "CLOSED", CFG.C["bug_verify"]: rel})
+        print("bugs.md %s backfilled (CLOSED / verify evidence) — remember: "
+              "closer ≠ fixer" % args.bug)
+
+    rc = subprocess.run([sys.executable,
+                         str(Path(__file__).resolve().parent / "docs.py"),
+                         "--check"]).returncode
+    sys.exit(rc)
+
+
+if __name__ == "__main__":
+    main()

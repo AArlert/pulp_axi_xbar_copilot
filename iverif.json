@@ -1,0 +1,12 @@
+{
+  "framework": "0.2.0",
+  "profile": "copilot",
+  "project_name": "pulp_axi_xbar_copilot",
+  "columns_preset": "en",
+  "delivery": {
+    "glob": "tb/{name}.sv"
+  },
+  "sim_log": "sim/out/{test}_{seed}.log",
+  "fl_schema_enforce": true,
+  "sva_enforce": true
+}

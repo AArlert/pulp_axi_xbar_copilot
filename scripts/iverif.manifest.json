@@ -1,0 +1,30 @@
+{
+  "files": {
+    ".claude/skills/closeout/SKILL.md": "2faabd714aff5805c4174033850cba71c9034adb5735ececdb64dd4d145784f0",
+    ".claude/skills/dispatch/SKILL.md": "41133701bd6ef5aa3ae84e87b4a5fc910deb1663932b08cee19d9ca18df1cbde",
+    ".claude/skills/evidence/SKILL.md": "5d1c23d59c4d11385b995fa84d49c9e63c245eefa3efa0bff29d69fcde30df10",
+    ".claude/skills/handover/SKILL.md": "41058e4e80ce0706cd1f4b9eeb139edd064b8840c493b9a3ea1c9b02f6b324c0",
+    "scripts/bump.py": "cd2a2172f5b46ebbdbc2907d3f5098d647249148b3e4721ba470580ee94aa581",
+    "scripts/docs.py": "3b021805da65db54713b35e59f5f25a231badf179936fb9287f839e2244511d7",
+    "scripts/evidence.py": "ead42aa6f48904ab3ba2b90d2161cf9a1e95e6f5baf94f691c40c7bf06e24c71",
+    "scripts/fwsync.py": "c30364357d9466f6897c05699c0b0d12d9c5728300ab78deb5cf5cc96fe3be9e",
+    "scripts/iverif_config.py": "a3fa8a13288e023d37da3441b48969af209e0fa0de138ba055e1faef9d13e436",
+    "scripts/make/core.mk": "c27186abdbc00cb874999391e74ca87ef740691b02db4c07f77d1ab9da479653",
+    "scripts/make/evidence.mk": "9115bb3d073f49f566e9f2e1ff4d42bc3efb99e903ace3c403000240464563be",
+    "scripts/make/vcs-2018.mk": "5916e40e1380d22558243f5679a37fc92e3c61cbbfce0bdc06c4b061e3694128",
+    "scripts/regress.py": "cd9b1ebfca6a848e85358d1e7dc6cdd27648f2972fd5235279c1d6cd4a187673",
+    "scripts/svacheck.py": "4bb3644417f577c28e7d0318d81bd248c72266efbc08abaeeaa902c8c3535b30",
+    "workflow/dispatch/assertion_failure.md": "ecf5b8b393b1c4f5472809f60ebfbf435d03d493d8a39183b5dbceb527381ef5",
+    "workflow/dispatch/coverage_hole.md": "675a7a331fa060471e7dbac6af69977fddca52145c8df2ebea5b4151160e43fb",
+    "workflow/dispatch/regression_failure.md": "614101c4481f8ab2c9b1640f81e8672256a8adffffa535e887cb87a625ac06bd",
+    "workflow/profiles.md": "738127207990c304dac8c817e39ccdcd6c355e554752d955a9d1078f59df2ca9",
+    "workflow/schema/evidence_record.md": "9dc192da57be2b214ccc0b5aef82584d292a2fad6e869e0e2ed510dc5c378573",
+    "workflow/schema/failure_record.md": "708e2fffb98406fde36293a9512cf7bd49907328af85665829d0d2f9997751c5",
+    "workflow/schema/testplan_entry.md": "56a8e3598acfb6214393af6aa55559e2ecced07289ac3c3101708cf961eb87bb",
+    "workflow/signoff/rubric.md": "8b0230bdd21eab5ebf7324438b845a27b18ca62d5dd6612f6c021c9cbbd7d652",
+    "workflow/signoff/six_questions.md": "3dd5df0f48ddd354910c4debe4d5907dabb321d63802943833820ab6642d9865",
+    "workflow/taxonomy/failure_taxonomy.md": "3f98d0d46edbba159dd5220a31d27778e7e4cacb1d3006e82c1917991aae3cf9",
+    "workflow/taxonomy/rca_template.md": "58ea28f44f6777197131983afbb4065ec43788df0c0a0aaa509681711ada0a88"
+  },
+  "framework": "0.2.0"
+}
