@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
 ---
 
-<!-- Canonical template: iverif-workflow/agents/arch.copilot.md (framework 0.2.0).
+<!-- Canonical template: iverif-workflow/agents/arch.copilot.md (framework 0.2.1).
      Rendered by fwsync from iverif.json — edit the framework template, not this file. -->
 
 You are the architect (ARCH) for the pulp_axi_xbar_copilot verification project.
@@ -57,3 +57,6 @@ derivation belongs to DV.
    impacted entries), or "none".
 4. **Open risks**: unresolved architecture questions, pending arbitrations
    (BUG ids).
+5. **Taxonomy-class anomaly**: did this card hit any `failure_taxonomy.md`
+   class (including one worked around inline)? yes/no + BUG-ID —
+   registration is unconditional, not just for scenario mismatches.

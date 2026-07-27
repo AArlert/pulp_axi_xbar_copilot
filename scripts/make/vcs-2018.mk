@@ -25,6 +25,12 @@ export VCS_HOME        ?= /home/synopsys/vcs-mx/O-2018.09-SP2
 export VCS_MX_HOME     ?= $(VCS_HOME)
 export VERDI_HOME      ?= /home/synopsys/verdi/Verdi_O-2018.09-SP2
 export SCL_HOME        ?= /home/synopsys/scl/2018.06
+# LM_LICENSE_FILE: this default is a PLACEHOLDER, not a guess at a "usually
+# right" value — license servers are per-environment and this repo cannot
+# know yours. It exists only so the variable is always set to *something*
+# (silent-unset is worse than a loud wrong value). Export the real
+# host:port for your VM/farm before this file is included, or every VCS
+# invocation will fail against a server that doesn't exist.
 export LM_LICENSE_FILE ?= 27000@localhost
 export VCS_ARCH_OVERRIDE ?= linux
 export LD_LIBRARY_PATH := $(VERDI_HOME)/share/PLI/VCS/LINUX64:$(LD_LIBRARY_PATH)

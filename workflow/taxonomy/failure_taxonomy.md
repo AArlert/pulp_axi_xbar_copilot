@@ -4,6 +4,14 @@ Five classes. Every failure record's `## taxonomy` section names exactly
 one. The class determines the next action (see `dispatch/`) and where the
 lesson is banked.
 
+Registration is unconditional: any anomaly matching one of the five classes
+below gets a `doc/bugs.md` row, regardless of whether it blocked evidence,
+was worked around and fixed within the same card, or looked like "just" a
+tool/implementation quirk (a `TOOL_ENV` hit mid-implementation, before any
+scenario ever ran, still counts). The point of a taxonomy is that the next
+person can grep it — a class that was resolved inline and never logged
+defeats that purpose as surely as one that was ignored.
+
 **Diagnose in cost order** — cheapest hypothesis first, most expensive
 accusation last:
 

@@ -573,8 +573,9 @@ NEXT_PHRASES = {
                          "arbitration card",
         "bug_open": "%(bid)s OPEN → orch triages ownership: RTL suspect → "
                     "DE fix card / TB suspect → DV self-fix",
-        "bug_fixing": "%(bid)s FIXING → awaiting DE root cause + fix commit, "
-                      "then FIX_READY",
+        "bug_fixing": "%(bid)s FIXING → DE delivers the fix + root cause; "
+                      "orch commits it, backfills fix_commit, then sets "
+                      "FIX_READY (DE has no commit hash at delivery time)",
         "bug_fix_ready": "%(bid)s FIX_READY → dispatch DV re-verify card "
                          "(re-run registered TEST+SEED; closer ≠ fixer)",
         "bug_verifying": "%(bid)s VERIFYING → DV closes via evidence.py "

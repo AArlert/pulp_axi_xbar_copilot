@@ -1,5 +1,5 @@
 {
-  "framework": "0.2.0",
+  "framework": "0.2.1",
   "profile": "copilot",
   "project_name": "pulp_axi_xbar_copilot",
   "columns_preset": "en",

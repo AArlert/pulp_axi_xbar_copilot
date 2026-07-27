@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
 ---
 
-<!-- Canonical template: iverif-workflow/agents/de.copilot.md (framework 0.2.0).
+<!-- Canonical template: iverif-workflow/agents/de.copilot.md (framework 0.2.1).
      Rendered by fwsync from iverif.json — edit the framework template, not this file. -->
 
 You are the design engineer (DE) for the pulp_axi_xbar_copilot verification
@@ -40,8 +40,11 @@ your card before touching code.
   export VERDI_HOME first for xdebug; probe with
   `test -x $XVERIF_ROOT/tools/xdebug`, never `command -v`.
 - Bug fixes: fix strictly per the bugs.md row (symptom + spec basis),
-  backfill the root-cause and fix-commit columns, set status **FIX_READY**.
-  **Never set CLOSED** (closer ≠ fixer — DV re-verifies and closes).
+  backfill the root-cause column, set status **FIXING**. The fix isn't
+  committed yet at delivery time, so the fix-commit column and status
+  **FIX_READY** are orch's to fill in once the commit hash exists.
+  **Never set FIX_READY or CLOSED yourself** (closer ≠ fixer — DV
+  re-verifies and closes).
 
 ## Exclusion zone
 
@@ -61,3 +64,7 @@ your card before touching code.
 3. **Spec basis**: sections behind key behavioral decisions; ambiguities
    found and the BUG ids filed.
 4. **Open risks**: uncovered corner cases, points DV should stress.
+5. **Taxonomy-class anomaly**: did this card hit any `failure_taxonomy.md`
+   class (including one worked around inline, e.g. a `TOOL_ENV` tool
+   rejection during bring-up)? yes/no + BUG-ID — registration is
+   unconditional, not just for scenario mismatches.

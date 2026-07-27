@@ -31,9 +31,13 @@ PLAIN_MARK = "V C S   S i m u l a t i o n"
 # UVM_HIGH verbosity leave the key-line section empty at default verbosity,
 # and the RNTST line at least pins the excerpt to a concrete test — together
 # with the SVA summary and the report summary it stays re-judgeable
-# (ppa-lite-copilot BUG-017 R7).
+# (ppa-lite-copilot BUG-017 R7). `tests failed` / `ended` / `mismatch` cover
+# non-UVM tb (ucli `run;exit`-driven `$stop`) scoreboard verdict lines, e.g.
+# upstream `tb_axi_xbar`'s "Simulation has ended!" / "Tests Failed: 0" —
+# these previously matched none of the UVM-shaped patterns above, leaving
+# `## Key check lines` empty despite a sound verdict (pulp_axi_xbar FB-6).
 KEY_LINE_RE = re.compile(r"(?i)\b(pass|match|compare ok|check ok"
-                         r"|running test)\b")
+                         r"|running test|tests failed|ended|mismatch)\b")
 KEY_LINES_MAX = 30
 
 
@@ -69,7 +73,11 @@ def extract(log_path, rid):
         summary = lines[max(0, idx - 1):idx + 14]
     else:
         idx = next(i for i, l in enumerate(lines) if PLAIN_MARK in l)
-        summary = lines[max(0, idx - 2):idx + 8]
+        # Non-UVM tb scoreboard verdict lines ("Simulation has ended!",
+        # "Tests Failed: 0") commonly print a dozen-plus lines before the
+        # completion banner, not immediately above it — widen enough to
+        # catch a typical verdict tail (pulp_axi_xbar FB-6).
+        summary = lines[max(0, idx - 20):idx + 8]
     # Archive the native assertion-count lines with the excerpt so the
     # evidence itself stays independently re-judgeable by svacheck.py.
     sva_lines = [l for l in lines if svacheck.SUMMARY_RE.match(l)]
