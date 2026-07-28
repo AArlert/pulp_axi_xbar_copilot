@@ -1,5 +1,8 @@
 # Failure record contract
 
+<!-- Canonical: iverif-workflow/loop/fail/failure_record.md — pinned snapshot.
+     Axioms: recording. Consumer: docs-check; make guards; dispatch Q1 grep. -->
+
 A failure record (FL) is the project's medical chart for one defect: what
 was observed, where the first anomaly is, what class of failure it was, how
 it was fixed, how it was re-verified, and what now guards against its
@@ -16,7 +19,7 @@ Two carriers, one record:
 
 ## Summary row (doc/bugs.md)
 
-Columns (en preset — zh preset in `config/presets/columns.zh.json`):
+Columns (en preset — zh preset: `COLUMN_PRESETS` in `scripts/iverif_config.py`):
 
 | id | status | suspect | summary | min_repro | root_cause | fix_commit | verify_evidence |
 |---|---|---|---|---|---|---|---|
@@ -54,11 +57,11 @@ how_found: xdebug trace from the scoreboard mismatch backwards
 chart. Locate with xdebug; reference waveform time, not vibes.)
 
 ## taxonomy
-TB_BUG            <- one of the five classes in taxonomy/failure_taxonomy.md
+TB_BUG            <- one of the five classes in workflow/fail/failure_taxonomy.md
 
 ## rca
 Causal chain from first_anomaly to symptom, ≤5 links
-(taxonomy/rca_template.md).
+(workflow/fail/rca_template.md).
 
 ## fix
 commit: <sha | repo@sha | env: change>
@@ -99,5 +102,5 @@ VERIFYING → CLOSED
 - `SPEC_CHANGED` requires a rev arbitration record and triggers the spec
   change flow (change-record entry + re-pin).
 - With a vendored DUT, confirmed DUT bugs are recorded, worked around via
-  a `P-xxx` patch (`templates/VENDOR.md`), optionally reported upstream —
+  a `P-xxx` patch (`harness/templates/VENDOR.md`, canon-only), optionally reported upstream —
   the vendored snapshot itself is read-only.

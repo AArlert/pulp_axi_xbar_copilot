@@ -3,7 +3,8 @@ name: handover
 description: Take over the project — one command for current version, status head, latest log block, testplan/feature-matrix stats and open bugs. Run at session start or when resuming work.
 ---
 
-<!-- Canonical: iverif-workflow/skills/handover/SKILL.md — pinned snapshot. -->
+<!-- Canonical: iverif-workflow/harness/skills/handover/SKILL.md — pinned snapshot.
+     Axioms: recording. Consumer: session start (make handover). -->
 
 # Handover flow
 

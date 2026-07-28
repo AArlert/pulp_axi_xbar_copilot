@@ -295,7 +295,8 @@ def check_fl_page(page, status, errors):
         body = "\n".join(sections.get(name, [])).strip()
         if not body:
             errors.append("%s: section '## %s' missing or empty "
-                          "(schema/failure_record.md)" % (page.name, name))
+                          "(workflow/fail/failure_record.md)"
+                          % (page.name, name))
     tax = "\n".join(sections.get("taxonomy", [])).strip()
     if tax and not any(c in tax for c in FL_CLASSES):
         errors.append("%s: taxonomy %r is not one of %s"
@@ -598,7 +599,7 @@ NEXT_PHRASES = {
     "learning": {
         "bug_open_spec": "%(bid)s OPEN (spec issue) → request rev arbitration",
         "bug_open": "%(bid)s OPEN → triage yourself (dispatch tables in "
-                    "workflow/dispatch/); DUT suspicion needs rev signoff",
+                    "workflow/fail/); DUT suspicion needs rev signoff",
         "bug_fixing": "%(bid)s FIXING → fill root cause + fix commit, then "
                       "set FIX_READY",
         "bug_fix_ready": "%(bid)s FIX_READY → re-run the registered "
@@ -822,7 +823,7 @@ def cmd_pin_spec():
 def cmd_signoff():
     """Read-only milestone signoff pre-check: print each machine condition
     PASS/FAIL with offenders, then the human spot-check list. Writing the
-    signoff file remains rev's job (signoff/rubric.md)."""
+    signoff file remains rev's job (workflow/review/rubric.md)."""
     version, milestone = read_version()
     mnum = milestone.lstrip("M")
     fails = []
@@ -885,7 +886,7 @@ def cmd_signoff():
              mnum))
 
     print("\nHuman spot checks (rev-led, recorded in the signoff file — "
-          "workflow/signoff/rubric.md):")
+          "workflow/review/rubric.md):")
     print("  4. coverage closure ≠ risk closure: verify 2-3 hit bins were "
           "hit by the intended scenario; re-read 1 waived hole")
     print("  5. guards: make guards FILES=<touched> lists the review "

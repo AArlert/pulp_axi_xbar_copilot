@@ -1,4 +1,70 @@
 # Work log archive
+## [0.3.1] 2026-07-28 拉框架 0.6.0（chain-audit 毕业）+ 登记 FB-21/FB-22
+
+**Done**
+- **`make fw-pull` → 框架 0.6.0**，`fw-check`（26 files pinned）/ `docs-check`
+  双绿。0.6.0 的主体是 **`make chain-audit` 从 deferred 毕业**——spec ↔ testplan
+  ↔ feature-matrix ↔ evidence 的断链审计，**其触发器就是本仓库的 signoff-M2**
+  （框架 CHANGELOG 记为"生态首次覆盖驱动签核"）。同时 0.5.4 的 FB-19 例外条款
+  原样落地在 `.claude/skills/dispatch/SKILL.md`，验收无异议
+- **chain-audit 首次运行**（本仓库 M2 文档）：`0 dangling / 1 sourceless(M0-01)
+  / 0 orphans / 5 parent-anchored / 19 uncited / 11-of-11 evidence 缺
+  spec_ref header`。工具本身有价值——**§5.2.6**（REV-011 当天新增的条款）被
+  正确标为"尚无场景引用"，正是该审计存在的意义（M3 缺口）
+- **登记 FB-21**（annoyance）：**chain-audit 没有任何门禁或判据来源消费它**。
+  实测 grep `chain.audit` / `chain_audit` 于 `rubric.md`、`workflow/*.md`、
+  所有 skill = **空集**；`signoff-check` 机器条件 1-3 与人工抽查 4-7 均未提及；
+  `docs-check` 不调用；`make next` 不提示。而 0.6.0 CHANGELOG 自己写明它的
+  触发器是"the first coverage-driven milestone signoff"——**为签核而生的工具，
+  签核却不调用它**。与 FB-11 判例 (a) 逐字同构（`make lint` 从 M0 起就是坏的，
+  正因为它不在任何门禁清单里）。本仓库第三次撞同一家族。建议**明确不做成硬
+  门禁**（`spec_ref` 采纳率 0/23，硬失败会立刻制造豁免压力），诉求是"签核时
+  必须**被看见**"而非"必须绿"
+- **登记 FB-22**（annoyance）：**uncited 行静默截断，且截断方向系统性偏向编号
+  最大的章节**。`docs.py:1023-1025` 是 `uncited[:15]`，无省略号/无 "+N more"；
+  本仓库实测**计数 19、列出 15、静默丢 4**，而同一报告另外四行全量打印 ⇒
+  报告内部自相矛盾。排序用 `sorted()` **字符串序** ⇒ 砍掉的恒是编号最大的
+  一批：本仓库丢的是 **§7.4.3 / §7.4.4 / §8.3 / §8.4**，即延迟不敏感原则与
+  Connectivity 稀疏矩阵，**正好是 M3 的主题地盘**；且 §7.4.4 与 §8.4 恰是
+  spec §5.2.6 第 2.b 条引作"上游确认项、不阻塞里程碑"先例的两节。
+  ⇒ **一个为发现里程碑缺口而生的审计工具，其静默截断优先隐藏下一个里程碑的
+  缺口。**违反框架 0.4.3 为 FB-13/14 立的"可见截断"约定，属本仓库 BUG-0028
+  "分母静默缩水"同族
+- FB-21/22 + 一条附带观察（**`docs-check` 的表格列数校验只覆盖 `doc/bugs.md`**
+  ——写 FB-21 时误打一个字面量 `|` 使该行变 7 列，门禁照样通过）当日送达
+  iverif-workflow 侧
+
+**Not done**
+- 三条反馈均未闭环（不阻塞本仓库任何工作）
+- chain-audit 报出的 gap 一条未处置：1 sourceless（M0-01，上游 tb sanity，
+  本就无 spec 条款可引）、5 parent-anchored、19 uncited、11/11 缺 spec_ref
+  header。**这些是 M3 的输入，不是本 chunk 的欠账**——尤其 §5.2.6 无场景引用，
+  正是 M3 错误路径场景要填的
+- M3 场景清单未设计；四条 `ACCEPTED@M3` 债务未修
+
+**Next**
+- 派 **arch 设计输入卡：M3 场景清单**（错误路径 / decode error / 多配置回归）。
+  输入已齐：spec §5.2.6 三层判据、chain-audit 的 uncited 清单（**含被截断的
+  §7.4.3/§7.4.4/§8.3/§8.4——手工补回，不能只看工具输出**）、四条 ACCEPTED@M3
+  的到期验收形态、REV-011 §4 G4（BUG-0025+0031 同卡修、守卫场景与 M3
+  decode-error 场景同卡注册）
+- M3 大概率需要引入真正的 constrained-random：配置矩阵（spec §0 #3）铺开后
+  纯定向激励组合数会爆炸，而"激励到不了硬情形导致旧绿灯空过"正是本仓库已栽
+  过四次的地方（BUG-0018/0023/0024/0031）。附带效果：`CONSTRAINT_BUG` 这一
+  taxonomy 类目前是**结构上不可能**（全仓无一个 `constraint` 块、无一处
+  `randomize()` 调用，`axi_txn.sv:15-20` 的 `rand` 限定符是死装饰）
+
+**How verified**
+- `make fw-check` 绿（0.6.0，26 files pinned）；`make docs-check` 绿
+- FB-21 的"空集"是**实测**而非印象：grep 两式于三处判据来源载体，无命中；
+  并逐行读 `make signoff-check` 全部输出（机器 1-3 + 人工 4-7）确认未提及
+- FB-22 的 4 条丢失项是**独立复算**得到的，不是从工具输出反推：用与
+  `docs.py` 同构的正则重算 `uncited`，得 19 条、前 15 条与工具输出逐字相同、
+  尾 4 条为 §7.4.3/§7.4.4/§8.3/§8.4
+- 0.6.0 的 pull 范围逐 diff 核对：`docs.py`(+74) / `evidence.mk`(+7，新增
+  `chain-audit` target) / `dispatch/SKILL.md`（FB-19 例外条款）/ manifest /
+  iverif.json + 4 个重新渲染的 agent 文件，无外溢
+
 ## [0.3.0] 2026-07-28 M2 里程碑签核 PASS，收官转入 M3
 
 **Done**

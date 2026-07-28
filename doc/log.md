@@ -2,6 +2,94 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.4] 2026-07-29 pull 框架 0.7.0（结构重排）+ 路径迁移的活/冻二分裁决
+
+**Done**
+- **pull 框架 0.6.1 → 0.7.0**（27 files pinned，较 0.6.1 +1）。**升级前先在
+  临时 worktree 实拉预演**（`git worktree add --detach` → `fwsync --pull` →
+  跑全部门禁 → `worktree remove`），未采信 CHANGELOG 自述；预演证实：
+  fw-check / docs-check / handover / chain-audit 四项全绿，本仓库
+  `scripts/iverif.divergence.json` 为空 ⇒ 无本地改动需 re-key，10 个孤儿
+  文件被 fwsync 自动清扫
+- **实测认定 0.7.0 为纯结构重排、零行为规则变更**。逐字读 diff（13 文件
+  45+/30-）后归为三类且仅此三类：① 路径重命名（`workflow/signoff/` →
+  `workflow/review/`；`workflow/{schema,taxonomy,dispatch}/` → 顶层 +
+  `workflow/fail/`）；② 每份文档新增 provenance 标头（`Axioms:` /
+  `Consumer:`）；③ 一处死指针订正——`discipline.md` 原写"四条核心不变式
+  (README)"，而 README 不在快照内 ⇒ **该指针在每个项目副本里都是死的**，
+  0.7.0 改指新增的 `workflow/constitution.md`。**无一条判据/门禁阈值/角色
+  边界/报告格式变化** ⇒ M2 已签核的 8 条证据与 M3 已交付的设计输入均不受
+  影响，无需重跑任何仿真
+- 新增 `workflow/constitution.md`（4800B 硬上限）：五条公理（自反·独立·
+  落盘·消费·痛点）+ 一张机器循环图 + 四条核心不变式的正式归属地 + 文档→
+  公理→消费者索引表。会话阅读序变为 constitution → discipline → profile
+- **活文件路径迁移（框架不自动改，须手工）**：`CLAUDE.md` 三条框架路径
+  （§1 testplan 契约 / §2 分诊表 + failure_record / §2 failure_taxonomy）
+  + 抬头补 constitution read-first 行 + 渲染来源注释改指
+  `harness/templates/`；`doc/testplan.md:3` 与 `doc/bugs.md:3` 表头契约路径
+  （**核实过**：0.7.0 的 `fwsync.py:340-363` seed 已写新路径，但只在
+  `--init` 生成，既有仓库不会自动更新）；`doc/fw-feedback.md:7` 的
+  `iverif-workflow/docs/adoption.md` → `governance/adoption.md`
+- **三份 design-prompt 的 `workflow/dispatch/coverage_hole.md` 死指针已修**
+  （`sva_bind.md:81`、`functional_coverage.md:127`、`uvm_env.md:99`）——这
+  三份正是 M3 五张执行卡的输入，留着会让 DV 实例按图索骥扑空。**边界声明**：
+  design-prompt 属 arch 制品（CLAUDE.md §0「orch 不写 design-prompt」），
+  orch 此处只做**纯路径 token 替换**，每份净变更 1 行、`git diff
+  --word-diff` 已自证除路径外一字未动；派 arch 卡改三个路径不合比例
+  （公理 4 痛点 / discipline rule 2 简单优先）。若 rev 认为仍越界，回退成本
+  为三行
+- **裁决：冻结记录一律不迁移**——`doc/review/REV-*.md`、
+  `doc/evidence/*/signoff-M*.md`、`doc/bugs/BUG-*.md`、`doc/archive/` 共
+  **16 份文件 39 处**旧路径引用保持原样。理由：它们记录的是"当时那份契约在
+  哪"，回改等于伪造审计线索，与 evidence 不可回改同一条道理。代价是这 39
+  处从此指向不存在的路径，且**没有任何门禁会报**（docs-check/fw-check/
+  chain-audit 都不校验 workflow 路径引用）
+- **登记 FB-23**（annoyance，open）：canon 重排在采纳者冻结记录里留下永久
+  死指针，而 0.7.0 升级须知只覆盖活文件（CLAUDE.md / divergence.json /
+  next_phrases_override），对不得回改的记录只字未提。含一处框架内部真张力
+  （落盘公理 vs evidence 不可回改 ⇒ 指针必然死，非谁做错），故需一条明写
+  约定否则每个采纳者各判一遍；本仓库实证含三份签核书的"判据来源"抬头指向
+  已不存在的 `workflow/signoff/rubric.md`——**签核书声明自己依据的那份判据
+  路径已不存在**。三条建议：① CHANGELOG 明文声明"冻结记录保留旧路径是正确
+  行为"；② 加只追加的 `governance/path-map.md` 供反查（落在消费公理上：
+  这些指针的消费者是未来回溯审计线索的人，今天无机制服务他）；③ 由 fwsync
+  从历次 manifest 差分机械生成该表
+
+**Not done**
+- **本 chunk 不含任何仿真**——纯框架升级 + 文档路径迁移，无新证据登记，
+  testplan 计数不变（M3 仍 ✅0/11）
+- FB-23 状态 `open`，尚未回流框架仓库（框架作者在隔壁 session，可当日闭环）
+- M3 实质工作一步未动：rev 仲裁卡（BUG-0032）与五张执行卡仍全部待派
+- `.claude/agents/` 四份角色文件已由 pull 重新生成，但**本会话未实际派发过
+  任何卡** ⇒ 新版角色文件在真实派发下的行为未经实测（adoption.md 提示
+  agent 类型注册有延迟，首次派发若报 "Agent type not found" 是已知现象，
+  重启会话即可，不要去 debug 卡本身）
+
+**Next**
+- 派 rev 仲裁卡：BUG-0032 状态终判（沿用 BUG-0002/0003 先例是否成立）+
+  是否需要 spec 补条款；顺带评估 §4/§5.3 自引用编辑提案是否值得动 pin。
+  **该卡同时是新版角色文件的首次实测**
+- 按 arch 建议的五块切分派发 M3 执行卡（**严格顺序**，④ 必须先于 ⑤）：
+  ① BUG-0025+0031 同卡修 + M3-DE01/DE02/OR04/CFG02 ② BUG-0024 (b) 路线 +
+  M3-OR05 ③ BUG-0018 修 + 重跑 M2-OR01/WO01 ④ 多配置基建（tb_top
+  C5.1-C5.7 声明式配置点）+ M3-CF01 ⑤ M3-CF02/03/04 + M3-AT02
+- 若 rev 认为 orch 动 design-prompt 越界，回退那三行并改派 arch 卡
+- M3 签核卡需重做"判决活性矩阵"（M2 签核人交办）；BUG-0025/0031 详情页
+  `ref: 待定` 待其修复卡落地时填入具体 cover/assert 名
+
+**How verified**
+- `make fw-check` 绿（framework 0.7.0，27 files pinned）；`make docs-check`
+  绿；`make handover` 正常读出状态
+- `make chain-audit`：dangling **仍为 0**；sourceless 1 / matrix orphans 0 /
+  parent-anchored 15 / uncited 9 / 无 spec_ref 头 11——**逐项与升级前
+  （0.3.3 区块记录）完全一致**，证实升级未改变任何审计判据
+- 升级前预演在 `git worktree` 隔离副本中完成，主工作树全程干净
+  （`git status --short` 空），预演结束 `worktree remove --force` +
+  `worktree prune`
+- design-prompt 三处改动的"纯路径替换"以 `git diff --word-diff=plain` +
+  `--numstat` 双重自证：每份 `1  1`，词级 diff 仅显示路径 token 一对一替换
+- 冻结记录死指针规模以 `grep -rl` / `grep -ro` 双计得出：16 份文件、39 处
+
 ## [0.3.3] 2026-07-29 arch 卡：M3 场景清单落地 + 推翻 orch 的 constrained-random 决定
 
 **Done**
@@ -114,70 +202,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
   - FB-22 —— 同一条 `make chain-audit`，**计数 19、列出 19**，尾部
     §7.4.3/§7.4.4/§8.3/§8.4 已出现，排序为数值序
 - `make fw-check` 绿（0.6.1，26 files pinned）；`make docs-check` 绿
-
-## [0.3.1] 2026-07-28 拉框架 0.6.0（chain-audit 毕业）+ 登记 FB-21/FB-22
-
-**Done**
-- **`make fw-pull` → 框架 0.6.0**，`fw-check`（26 files pinned）/ `docs-check`
-  双绿。0.6.0 的主体是 **`make chain-audit` 从 deferred 毕业**——spec ↔ testplan
-  ↔ feature-matrix ↔ evidence 的断链审计，**其触发器就是本仓库的 signoff-M2**
-  （框架 CHANGELOG 记为"生态首次覆盖驱动签核"）。同时 0.5.4 的 FB-19 例外条款
-  原样落地在 `.claude/skills/dispatch/SKILL.md`，验收无异议
-- **chain-audit 首次运行**（本仓库 M2 文档）：`0 dangling / 1 sourceless(M0-01)
-  / 0 orphans / 5 parent-anchored / 19 uncited / 11-of-11 evidence 缺
-  spec_ref header`。工具本身有价值——**§5.2.6**（REV-011 当天新增的条款）被
-  正确标为"尚无场景引用"，正是该审计存在的意义（M3 缺口）
-- **登记 FB-21**（annoyance）：**chain-audit 没有任何门禁或判据来源消费它**。
-  实测 grep `chain.audit` / `chain_audit` 于 `rubric.md`、`workflow/*.md`、
-  所有 skill = **空集**；`signoff-check` 机器条件 1-3 与人工抽查 4-7 均未提及；
-  `docs-check` 不调用；`make next` 不提示。而 0.6.0 CHANGELOG 自己写明它的
-  触发器是"the first coverage-driven milestone signoff"——**为签核而生的工具，
-  签核却不调用它**。与 FB-11 判例 (a) 逐字同构（`make lint` 从 M0 起就是坏的，
-  正因为它不在任何门禁清单里）。本仓库第三次撞同一家族。建议**明确不做成硬
-  门禁**（`spec_ref` 采纳率 0/23，硬失败会立刻制造豁免压力），诉求是"签核时
-  必须**被看见**"而非"必须绿"
-- **登记 FB-22**（annoyance）：**uncited 行静默截断，且截断方向系统性偏向编号
-  最大的章节**。`docs.py:1023-1025` 是 `uncited[:15]`，无省略号/无 "+N more"；
-  本仓库实测**计数 19、列出 15、静默丢 4**，而同一报告另外四行全量打印 ⇒
-  报告内部自相矛盾。排序用 `sorted()` **字符串序** ⇒ 砍掉的恒是编号最大的
-  一批：本仓库丢的是 **§7.4.3 / §7.4.4 / §8.3 / §8.4**，即延迟不敏感原则与
-  Connectivity 稀疏矩阵，**正好是 M3 的主题地盘**；且 §7.4.4 与 §8.4 恰是
-  spec §5.2.6 第 2.b 条引作"上游确认项、不阻塞里程碑"先例的两节。
-  ⇒ **一个为发现里程碑缺口而生的审计工具，其静默截断优先隐藏下一个里程碑的
-  缺口。**违反框架 0.4.3 为 FB-13/14 立的"可见截断"约定，属本仓库 BUG-0028
-  "分母静默缩水"同族
-- FB-21/22 + 一条附带观察（**`docs-check` 的表格列数校验只覆盖 `doc/bugs.md`**
-  ——写 FB-21 时误打一个字面量 `|` 使该行变 7 列，门禁照样通过）当日送达
-  iverif-workflow 侧
-
-**Not done**
-- 三条反馈均未闭环（不阻塞本仓库任何工作）
-- chain-audit 报出的 gap 一条未处置：1 sourceless（M0-01，上游 tb sanity，
-  本就无 spec 条款可引）、5 parent-anchored、19 uncited、11/11 缺 spec_ref
-  header。**这些是 M3 的输入，不是本 chunk 的欠账**——尤其 §5.2.6 无场景引用，
-  正是 M3 错误路径场景要填的
-- M3 场景清单未设计；四条 `ACCEPTED@M3` 债务未修
-
-**Next**
-- 派 **arch 设计输入卡：M3 场景清单**（错误路径 / decode error / 多配置回归）。
-  输入已齐：spec §5.2.6 三层判据、chain-audit 的 uncited 清单（**含被截断的
-  §7.4.3/§7.4.4/§8.3/§8.4——手工补回，不能只看工具输出**）、四条 ACCEPTED@M3
-  的到期验收形态、REV-011 §4 G4（BUG-0025+0031 同卡修、守卫场景与 M3
-  decode-error 场景同卡注册）
-- M3 大概率需要引入真正的 constrained-random：配置矩阵（spec §0 #3）铺开后
-  纯定向激励组合数会爆炸，而"激励到不了硬情形导致旧绿灯空过"正是本仓库已栽
-  过四次的地方（BUG-0018/0023/0024/0031）。附带效果：`CONSTRAINT_BUG` 这一
-  taxonomy 类目前是**结构上不可能**（全仓无一个 `constraint` 块、无一处
-  `randomize()` 调用，`axi_txn.sv:15-20` 的 `rand` 限定符是死装饰）
-
-**How verified**
-- `make fw-check` 绿（0.6.0，26 files pinned）；`make docs-check` 绿
-- FB-21 的"空集"是**实测**而非印象：grep 两式于三处判据来源载体，无命中；
-  并逐行读 `make signoff-check` 全部输出（机器 1-3 + 人工 4-7）确认未提及
-- FB-22 的 4 条丢失项是**独立复算**得到的，不是从工具输出反推：用与
-  `docs.py` 同构的正则重算 `uncited`，得 19 条、前 15 条与工具输出逐字相同、
-  尾 4 条为 §7.4.3/§7.4.4/§8.3/§8.4
-- 0.6.0 的 pull 范围逐 diff 核对：`docs.py`(+74) / `evidence.mk`(+7，新增
-  `chain-audit` target) / `dispatch/SKILL.md`（FB-19 例外条款）/ manifest /
-  iverif.json + 4 个重新渲染的 agent 文件，无外溢
 

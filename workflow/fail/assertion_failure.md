@@ -1,5 +1,9 @@
 # Dispatch: assertion failure
 
+<!-- Canonical: iverif-workflow/loop/fail/assertion_failure.md — pinned snapshot.
+     Axioms: independence, recording. Consumer: dv/human when an assertion
+     fires. -->
+
 An SVA assertion fired (or a checker flagged a violation). Answer the
 questions **in order**; the first "yes/found" row decides. Do not skip to
 blaming the DUT.
@@ -15,6 +19,6 @@ blaming the DUT.
 Escalation: if no row resolves it, the failure itself is evidence of a
 `SPEC_ISSUE` (two defensible readings) — take it to rev arbitration.
 
-Every path ends in a failure record (`schema/failure_record.md`) with a
+Every path ends in a failure record (`workflow/fail/failure_record.md`) with a
 regression guard. An assertion failure you debugged but did not bank will be
 debugged again.

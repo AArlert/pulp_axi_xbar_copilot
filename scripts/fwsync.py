@@ -11,7 +11,8 @@
 #   python3 scripts/fwsync.py --pull <path-to-framework-clone>
 #
 # The pinned snapshot = scripts/ (kernel + make fragments) + workflow/
-# (reference docs), hash-recorded in scripts/iverif.manifest.json. Hashes are
+# (constitution + loop docs), hash-recorded in scripts/iverif.manifest.json.
+# Hashes are
 # computed over CRLF-normalized bytes so Windows working trees and the Linux
 # VM agree. Projects never edit the snapshot: improve the framework, bump,
 # re-pull. Emergency local fixes are allowed but keep `--check` red until
@@ -31,7 +32,6 @@ from iverif_config import COLUMN_PRESETS
 
 HERE = Path(__file__).resolve().parent
 
-SNAPSHOT_REF_DIRS = ("schema", "taxonomy", "dispatch", "signoff")
 MANIFEST = "iverif.manifest.json"
 
 # Skills pinned into <proj>/.claude/skills/ (hash-pinned like workflow/).
@@ -111,28 +111,32 @@ def snapshot_pairs(fw, profile=None):
         pairs.append((py, Path("scripts") / py.name))
     for mk in sorted((fw / "make").glob("*.mk")):
         pairs.append((mk, Path("scripts") / "make" / mk.name))
-    for d in SNAPSHOT_REF_DIRS:
-        for f in sorted((fw / d).rglob("*.md")):
-            pairs.append((f, Path("workflow") / f.relative_to(fw)))
-    f = fw / "docs" / "discipline.md"
-    if f.exists():
-        pairs.append((f, Path("workflow") / "discipline.md"))
+    # ONE mapping rule: canon loop/<p> ships as workflow/<p> — the canon
+    # directory that defines the machine IS the project's workflow/ tree.
+    # Named exceptions: CONSTITUTION.md pairs to workflow/constitution.md
+    # (unconditional — a checkout without a constitution must fail the
+    # pull, fail-closed), and profile.* is selected per project below.
+    pairs.append((fw / "CONSTITUTION.md",
+                  Path("workflow") / "constitution.md"))
+    for f in sorted((fw / "loop").rglob("*.md")):
+        if not f.name.startswith("profile."):
+            pairs.append((f, Path("workflow") / f.relative_to(fw / "loop")))
     # Profile contract: a project receives only its own profile's file, as
     # workflow/profile.md. "all" (framework-side manifest) lists both
     # sources under their canon names.
     if profile == "all":
         for p in ("learning", "copilot"):
-            f = fw / "docs" / ("profile.%s.md" % p)
+            f = fw / "loop" / ("profile.%s.md" % p)
             if f.exists():
                 pairs.append((f, Path("workflow") / ("profile.%s.md" % p)))
     elif profile in ("learning", "copilot"):
-        f = fw / "docs" / ("profile.%s.md" % profile)
+        f = fw / "loop" / ("profile.%s.md" % profile)
         if f.exists():
             pairs.append((f, Path("workflow") / "profile.md"))
     skills = SKILLS_COMMON + (SKILLS_COPILOT
                               if profile in ("all", "copilot") else ())
     for name in skills:
-        f = fw / "skills" / name / "SKILL.md"
+        f = fw / "harness" / "skills" / name / "SKILL.md"
         if f.exists():
             pairs.append((f, Path(".claude") / "skills" / name / "SKILL.md"))
     return pairs
@@ -181,6 +185,11 @@ def cmd_check():
                   "pinned — the last pull ran a stale fwsync; re-run "
                   "make fw-pull")
             return 1
+    if "workflow/constitution.md" not in manifest["files"]:
+        print("[FAIL] manifest incomplete: workflow/constitution.md not "
+              "pinned — the last pull ran a stale (pre-0.7.0) fwsync; "
+              "re-run make fw-pull")
+        return 1
     dpath = proj / "scripts" / "iverif.divergence.json"
     div = (json.loads(dpath.read_text(encoding="utf-8")).get("files", {})
            if dpath.exists() else {})
@@ -260,6 +269,10 @@ def do_pull(fw, proj):
         if norm_sha(p) == sha:
             p.unlink()
             print("removed orphan (no longer pinned): %s" % rel)
+            try:
+                p.parent.rmdir()  # drop the dir when the sweep emptied it
+            except OSError:
+                pass
         else:
             print("warning: %s no longer pinned but locally modified — "
                   "review and delete by hand" % rel)
@@ -271,7 +284,7 @@ def do_pull(fw, proj):
     # Rendered files are regenerated (and overwritten) on every pull —
     # project-specific rules belong in CLAUDE.md, never in these files.
     for tpl_name, out_name in AGENT_SETS.get(profile, ()):
-        tpl = fw / "agents" / tpl_name
+        tpl = fw / "harness" / "agents" / tpl_name
         if not tpl.exists():
             continue
         out = proj / ".claude" / "agents" / out_name
@@ -327,7 +340,7 @@ def write_doc_seed(proj, columns, project_name, profile):
                C["tp_status"], C["tp_evidence"], C["tp_repro"]]
     (doc / "testplan.md").write_text(
         "# Testplan\n\nScenario truth table — contract: "
-        "workflow/schema/testplan_entry.md. Register rows BEFORE coding; "
+        "workflow/testplan_entry.md. Register rows BEFORE coding; "
         "✅/evidence/repro are script-owned.\n\n" + table(tp_cols),
         encoding="utf-8")
 
@@ -347,7 +360,7 @@ def write_doc_seed(proj, columns, project_name, profile):
         "# Bugs\n\nStates: OPEN/FIXING/FIX_READY/VERIFYING/CLOSED/TB_BUG/"
         "SPEC_CHANGED/WONTFIX. Debug stories longer than one line get a "
         "detail page doc/bugs/<ID>.md — contract: "
-        "workflow/schema/failure_record.md.\n\n" + table(bug_cols),
+        "workflow/fail/failure_record.md.\n\n" + table(bug_cols),
         encoding="utf-8")
 
     wv_cols = [C["wv_id"], X["wv_file"], X["wv_line"], X["wv_rule"],
@@ -412,7 +425,7 @@ def cmd_init(target, profile, columns, project_name):
 
     ctx = {"PROJECT_NAME": name, "FRAMEWORK_VERSION": ver,
            "PROFILE": profile}
-    tpl = fw / "templates"
+    tpl = fw / "harness" / "templates"
     (proj / "Makefile").write_text(
         render((tpl / "Makefile.project").read_text(encoding="utf-8"), ctx),
         encoding="utf-8")
@@ -460,6 +473,7 @@ def cmd_init(target, profile, columns, project_name):
     print("next steps:")
     print("  cd %s" % proj)
     print("  git init && git config core.hooksPath .githooks")
+    print("  read workflow/constitution.md   # the map: axioms, loop, index")
     print("  make docs-check      # should pass on the seed")
     print("  make handover        # see the starting state")
     print("  fill sim/ flists + top, then in the VM: make smoke")

@@ -1,5 +1,8 @@
 # The six review questions
 
+<!-- Canonical: iverif-workflow/loop/review/six_questions.md — pinned snapshot.
+     Axioms: independence. Consumer: rev, in every review. -->
+
 Every rev review — of a component, a passing scenario, or a milestone —
 answers these six questions in writing. They are the framework's definition
 of "this evidence can be trusted". A review that skips one is incomplete.

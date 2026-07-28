@@ -1,5 +1,8 @@
 # RCA template
 
+<!-- Canonical: iverif-workflow/loop/fail/rca_template.md — pinned snapshot.
+     Axioms: recording. Consumer: FL rca authors; rev. -->
+
 Fill the `## rca` section of a failure record with this shape. Keep it
 short; the value is in the chain, not the prose.
 
@@ -26,7 +29,7 @@ guard:      <if this exact defect were re-introduced tomorrow, which check
   somewhere — each link should be verifiable in the waveform or the code.
 - **The guard is the deliverable.** rca without a regression guard is a
   story; with one, it is banked engineering. Guard types in
-  `schema/failure_record.md`.
+  `workflow/fail/failure_record.md`.
 - **Search the chart archive first.** `grep -il "<symptom keyword>"
   doc/bugs/` — the `## similar` section exists so the third occurrence of a
   failure class takes minutes, not hours.

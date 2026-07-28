@@ -37,7 +37,7 @@ PLAIN_MARK = "V C S   S i m u l a t i o n"
 # these previously matched none of the UVM-shaped patterns above, leaving
 # `## Key check lines` empty despite a sound verdict (pulp_axi_xbar FB-6).
 # `[FCOV_SUMMARY]` is the canon convention for functional-coverage summary
-# lines (schema/evidence_record.md: the tb prints one line per covergroup,
+# lines (workflow/evidence_record.md: the tb prints one line per covergroup,
 # `[FCOV_SUMMARY] <cg> samples=<n> inst_cov=<pct>`) so coverage numbers land
 # in the excerpt and signoff never re-opens source logs. Promoted from
 # pulp_axi_xbar's project tag (FB-9) by user ruling 2026-07-28: adopting

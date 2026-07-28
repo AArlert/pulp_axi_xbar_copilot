@@ -3,14 +3,15 @@ name: evidence
 description: Register simulation evidence — evidence.py mechanically extracts from the sim log and auto-backfills testplan/bugs. Run before any scenario goes ✅ or any bug goes CLOSED.
 ---
 
-<!-- Canonical: iverif-workflow/skills/evidence/SKILL.md — pinned snapshot. -->
+<!-- Canonical: iverif-workflow/harness/skills/evidence/SKILL.md — pinned snapshot.
+     Axioms: independence, recording. Consumer: before any ✅ or CLOSED. -->
 
 # Evidence registration (mechanical — hand-written evidence is forbidden)
 
 1. Precondition: the simulation really ran (an environment where
    `command -v vcs` succeeds). FAIL logs are never evidence — set the
    scenario ❌/⚠️ and take suspected defects through `doc/bugs.md`
-   (triage: `workflow/dispatch/*.md`).
+   (triage: `workflow/fail/*.md`).
 2. Scenario evidence:
    `make evidence SCEN=<id> TEST=<t> SEED=<n> [SPEC_REF=SPEC-x.y]`
    — the script judges the log (UVM summary or VCS banner), extracts the

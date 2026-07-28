@@ -5,8 +5,9 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
 ---
 
-<!-- Canonical template: iverif-workflow/agents/dv.copilot.md (framework 0.6.1).
-     Rendered by fwsync from iverif.json — edit the framework template, not this file. -->
+<!-- Canonical: iverif-workflow/harness/agents/dv.copilot.md — rendered on pull
+     (framework 0.7.0); edit the framework template, not this file.
+     Axioms: independence. Consumer: Claude Code role dispatch. -->
 
 **Read `workflow/discipline.md` before your first edit** — execution
 discipline (think before coding · simplicity first · surgical changes ·
@@ -56,12 +57,12 @@ named in your card first.
   per covergroup tagged `[FCOV_SUMMARY]` — e.g.
   `[FCOV_SUMMARY] cg_tx_limit samples=60 inst_cov=80.00` — so evidence.py
   archives the coverage numbers into the excerpt's key-line section
-  (`workflow/schema/evidence_record.md` row 6) and coverage evidence stays
+  (`workflow/evidence_record.md` row 6) and coverage evidence stays
   self-sufficient at signoff.
 - For waveform chasing, log location, and coverage triage prefer the xverif
   toolkit (NOT on PATH — entry paths and probing rules: header of
   `scripts/make/vcs-2018.mk`). Failure triage follows
-  `workflow/dispatch/*.md`.
+  `workflow/fail/*.md`.
 
 ## Exclusion zone
 

@@ -1,5 +1,9 @@
 # Milestone signoff rubric
 
+<!-- Canonical: iverif-workflow/loop/review/rubric.md — pinned snapshot.
+     Axioms: independence, consumption. Consumer: rev at milestone signoff;
+     docs.py --signoff prints it. -->
+
 Signoff is not "the coverage number is high enough". It is the answer to:
 **is the evidence sufficient to support the judgment that this milestone's
 risks are retired?** Two halves: machine-checkable conditions (printed by

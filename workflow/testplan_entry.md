@@ -1,5 +1,8 @@
 # Testplan entry contract
 
+<!-- Canonical: iverif-workflow/loop/testplan_entry.md — pinned snapshot.
+     Axioms: recording. Consumer: docs-check; make next; dv cards. -->
+
 `doc/testplan.md` is the scenario truth table: the single machine-readable
 answer to "what is verified, what is not". `make handover` / `make next`
 derive project state from it live — status is never cached anywhere else.
@@ -27,7 +30,7 @@ derive project state from it live — status is never cached anywhere else.
    description, config, status `🔲`) exists before the test is written.
    This is what makes coverage holes dispatchable: a hole with no scenario
    row is a *planning* gap, not a stimulus gap
-   (`dispatch/coverage_hole.md`).
+   (`workflow/fail/coverage_hole.md`).
 2. **✅ only via `make evidence`.** docs-check fails any ✅ row whose
    evidence file is missing or whose line 1 lacks `TEST=`/`SEED=`.
 3. **❌ rows link a bug.** A scenario observed failing gets a BUG id in the

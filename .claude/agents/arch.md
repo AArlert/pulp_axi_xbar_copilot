@@ -5,8 +5,9 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
 ---
 
-<!-- Canonical template: iverif-workflow/agents/arch.copilot.md (framework 0.6.1).
-     Rendered by fwsync from iverif.json — edit the framework template, not this file. -->
+<!-- Canonical: iverif-workflow/harness/agents/arch.copilot.md — rendered on pull
+     (framework 0.7.0); edit the framework template, not this file.
+     Axioms: independence. Consumer: Claude Code role dispatch. -->
 
 **Read `workflow/discipline.md` before your first edit** — execution
 discipline (think before coding · simplicity first · surgical changes ·

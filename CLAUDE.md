@@ -1,10 +1,10 @@
-<!-- 由 fwsync 从 iverif-workflow/templates/CLAUDE.project.copilot.md 渲染而来（框架 0.3.0）。项目专属章节标有 TODO；框架自有章节不应在此修改。 -->
+<!-- 由 fwsync 从 iverif-workflow/harness/templates/CLAUDE.project.copilot.md 渲染而来（框架 0.3.0 初次渲染；框架 0.7.0 结构重排后手工迁移路径——本文件不由 pull 重新生成）。项目专属章节标有 TODO；框架自有章节不应在此修改。 -->
 
 # pulp_axi_xbar_copilot — CLAUDE.md
 
 Profile：**copilot**（见 `workflow/profile.md`——框架 0.4.0 起每个项目只收到自己那份 profile 契约）。工作流规则存放于 `workflow/` pinned snapshot 中——请在那里阅读（离线可用）；此处不重述、不另行分叉。
 
-> **每次会话优先阅读：`workflow/discipline.md`**——执行纪律（先想清楚再动手 · 简单优先 · 外科手术式改动 · 目标驱动执行 · 小步快跑闭环）。它约束 orch 及每个被派发的角色，其优先级高于图方便：即便有更快的路径，也应优先遵循它。它位于 §0 的核心不变式与隔离规则之下——那些是硬性门禁，纪律是门禁之间的行为准则。每个角色文件都会重复这条指引；正文只存在于框架快照中，因此本文件永远不会与之漂移。
+> **每次会话优先阅读：`workflow/constitution.md`**——一页纸的整个框架（五条公理 · 那一条机器循环 · 四条核心不变式的正式归属地 · 文档→公理→消费者索引），**再读 `workflow/discipline.md`**——执行纪律（先想清楚再动手 · 简单优先 · 外科手术式改动 · 目标驱动执行 · 小步快跑闭环）。纪律约束 orch 及每个被派发的角色，其优先级高于图方便：即便有更快的路径，也应优先遵循它。它位于核心不变式与 §0 隔离规则之下——那些是硬性门禁，纪律是门禁之间的行为准则。每个角色文件都会重复这条指引；正文只存在于框架快照中，因此本文件永远不会与之漂移。
 
 ## §0 角色与隔离（硬性规则）
 
@@ -18,7 +18,7 @@ Profile：**copilot**（见 `workflow/profile.md`——框架 0.4.0 起每个项
 滚动文件，在每次会话开始时通过 `make handover` 读取（绝不从聊天历史重新推导状态）：
 - `doc/status.jsonl`——每次 closeout 一行 JSON，最新的排最前。
 - `doc/log.md`——区块数有上限；每个区块回答：done / not done / next / how verified。
-- `doc/testplan.md`——场景真值表（契约见 `workflow/schema/testplan_entry.md`）。
+- `doc/testplan.md`——场景真值表（契约见 `workflow/testplan_entry.md`）。
 
 归档存放于 `doc/archive/`，默认不读取。
 
@@ -35,9 +35,9 @@ make docs-check          # 关闭任何卡前必做
 <周期结束时通过 /closeout 收尾>
 ```
 
-失败：绝不登记为 evidence。用 `workflow/dispatch/*.md` 做分诊，登记到 `doc/bugs.md`（契约见 `workflow/schema/failure_record.md`）。
+失败：绝不登记为 evidence。用 `workflow/fail/*.md` 做分诊，登记到 `doc/bugs.md`（契约见 `workflow/fail/failure_record.md`）。
 
-**登记是无条件的**——这条规则本身现已进入正典（`workflow/taxonomy/failure_taxonomy.md` 开篇段落，框架 0.2.1）以及每个角色的交付报告格式；请在那里阅读，不要依赖此处可能漂移的本地转述。本仓库为此吃过亏：M1-01 的 VCS-2018 `bind`→直接例化变通方案，最初只落在代码注释和评审记录里，没有进 `doc/bugs.md`（事后补登记为 BUG-0007；本仓库对框架的 FB-7）。
+**登记是无条件的**——这条规则本身现已进入正典（`workflow/fail/failure_taxonomy.md` 开篇段落，框架 0.2.1 落地；0.7.0 起路径由 `workflow/taxonomy/` 迁至此）以及每个角色的交付报告格式；请在那里阅读，不要依赖此处可能漂移的本地转述。本仓库为此吃过亏：M1-01 的 VCS-2018 `bind`→直接例化变通方案，最初只落在代码注释和评审记录里，没有进 `doc/bugs.md`（事后补登记为 BUG-0007；本仓库对框架的 FB-7）。
 
 **执行纪律**：`workflow/discipline.md`（框架 0.3.0）——五条规则约束 orch 及每个被派发的角色。本仓库的"小步快跑"成为了其中第 5 条；其余四条随它一起到来。仅本地的仪式：门禁全绿**且** `/closeout` 完成后，一个 chunk 才算"落地"——然后 `git push`，等待下一条指令。
 

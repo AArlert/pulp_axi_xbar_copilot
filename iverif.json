@@ -1,5 +1,5 @@
 {
-  "framework": "0.6.1",
+  "framework": "0.7.0",
   "framework_repo": "/home/icarray/Desktop/code/iverif-workflow",
   "profile": "copilot",
   "project_name": "pulp_axi_xbar_copilot",

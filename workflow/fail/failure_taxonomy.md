@@ -1,7 +1,11 @@
 # Failure taxonomy
 
+<!-- Canonical: iverif-workflow/loop/fail/failure_taxonomy.md — pinned snapshot.
+     Axioms: recording. Consumer: every FL taxonomy section; the dispatch
+     tables beside this file. -->
+
 Five classes. Every failure record's `## taxonomy` section names exactly
-one. The class determines the next action (see `dispatch/`) and where the
+one. The class determines the next action (see the dispatch tables beside this file) and where the
 lesson is banked.
 
 Registration is unconditional: any anomaly matching one of the five classes
@@ -27,7 +31,7 @@ is earned by eliminating everything else — not reached by default.
 
 | Class | You are here if… (decision cues, check in order) | Typical next step |
 |---|---|---|
-| `TOOL_ENV` | Result changes with seed/machine/build but not stimulus; clean lint yet compile-time weirdness; matches a known tool defect (e.g. VCS O-2018 traits — see `make/vcs-2018.mk` header); stale build artifacts, wrong seed recorded, evidence older than the code it certifies | Clean rebuild + minimal repro; check the project's known-issues list (`P-xxx` patches, TOOL_ENV FLs); record so the next person greps it instead of rediscovering it |
+| `TOOL_ENV` | Result changes with seed/machine/build but not stimulus; clean lint yet compile-time weirdness; matches a known tool defect (e.g. VCS O-2018 traits — see `scripts/make/vcs-2018.mk` header); stale build artifacts, wrong seed recorded, evidence older than the code it certifies | Clean rebuild + minimal repro; check the project's known-issues list (`P-xxx` patches, TOOL_ENV FLs); record so the next person greps it instead of rediscovering it |
 | `TB_BUG` | Driver violates protocol timing (e.g. valid waits on ready); monitor samples the wrong edge; scoreboard's expected value derived wrongly — or derived **from the RTL instead of the spec** | Fix TB → rerun this scenario **and** spot-check neighboring scenarios that share the component |
 | `CONSTRAINT_BUG` | Random stimulus produced a protocol-illegal combination; or constraints are so tight the target scenario is unreachable | Fix constraints → **re-examine historical PASSes** of scenarios using the same constraints: were they green only because the stimulus never reached the hard case? |
 | `SPEC_ISSUE` | spec.md contradicts upstream documentation, or does not define the behavior at all; DUT and TB each defensible under a different reading | Escalate to rev arbitration → spec change record + re-pin → sync testplan/affected checkers. Never "interpret locally" and move on |

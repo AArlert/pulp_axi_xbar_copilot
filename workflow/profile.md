@@ -1,6 +1,8 @@
 # Profile contract: copilot
 
-<!-- Canonical: iverif-workflow/docs/profile.copilot.md — pinned snapshot. -->
+<!-- Canonical: iverif-workflow/loop/profile.copilot.md — pinned snapshot.
+     Axioms: independence. Consumer: orch at session start; fwsync
+     selects it as workflow/profile.md. -->
 
 Agents write the code. orch (the main session) dispatches cards to
 arch / de / dv / rev (`.claude/agents/`, regenerated on every pull —
@@ -14,7 +16,7 @@ must-include/forbidden matrix, isolation self-check. `--next` speaks to orch
 
 - The four core invariants: no sim log no ✅ · replay command on line 1 ·
   closer ≠ fixer · spec pinned.
-- Record schemas (`workflow/schema/`), failure taxonomy, dispatch tables,
+- Record schemas (`workflow/` + `workflow/fail/`), failure taxonomy, dispatch tables,
   six questions, signoff rubric.
 - Rolling memory: `doc/status.jsonl` + `doc/log.md` + `doc/testplan.md`,
   archives under `doc/archive/`.
