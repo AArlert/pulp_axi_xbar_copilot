@@ -69,8 +69,9 @@ paths: tb/sva/*.sv         <- binding globs, machine-matched (make guards)
 ref: tb/sva/per_id_order_check.sv
 note: what future regression this blocks.
 (Guards are consumed mechanically — `make guards FILES=...` at card
-assembly and at signoff; a guard without `paths:` can never be injected.
-A checklist guard is a mechanization TODO, not a terminus: note what
+assembly and at signoff; no `paths:`, no injection. `paths:` = the note's
+*scope*, not `ref:`'s location — a constraint is usually wider than its
+birth file. A checklist guard is a mechanization TODO: note what
 script/SVA it should become, or why it cannot.)
 
 ## similar

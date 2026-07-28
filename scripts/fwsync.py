@@ -22,6 +22,7 @@ import json
 import os
 import shutil
 import stat
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -168,6 +169,18 @@ def cmd_check():
         die("no %s — this project has no framework snapshot yet "
             "(run --pull <framework-clone>)" % mpath.relative_to(proj))
     manifest = json.loads(mpath.read_text(encoding="utf-8"))
+    # Completeness probe: hash self-consistency cannot see a manifest that
+    # was written incomplete (FB-12) — check the profile contract is pinned.
+    cfg_path = proj / "iverif.json"
+    if cfg_path.exists():
+        prof = json.loads(cfg_path.read_text(
+            encoding="utf-8")).get("profile")
+        if prof in ("learning", "copilot") \
+                and "workflow/profile.md" not in manifest["files"]:
+            print("[FAIL] manifest incomplete: workflow/profile.md not "
+                  "pinned — the last pull ran a stale fwsync; re-run "
+                  "make fw-pull")
+            return 1
     dpath = proj / "scripts" / "iverif.divergence.json"
     div = (json.loads(dpath.read_text(encoding="utf-8")).get("files", {})
            if dpath.exists() else {})
@@ -224,14 +237,33 @@ def do_pull(fw, proj):
                             + "\n", encoding="utf-8")
         profile = cfg.get("profile")
         project_name = cfg.get("project_name", proj.name)
+        if profile not in ("learning", "copilot"):
+            die("iverif.json profile must be learning|copilot, got %r — "
+                "refusing a partial pull" % profile)
 
+    mpath = proj / "scripts" / MANIFEST
+    old_files = (json.loads(mpath.read_text(encoding="utf-8"))
+                 .get("files", {}) if mpath.exists() else {})
     files = {}
     for src, dest in snapshot_pairs(fw, profile=profile):
         target = proj / dest
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(str(src), str(target))
         files[rel_key(dest)] = norm_sha(src)
-    (proj / "scripts" / MANIFEST).write_text(
+    # Orphan sweep: previously pinned, no longer in the set. Pristine ones
+    # are safe to delete; edited ones are only reported (pulp FB-12: a
+    # stale workflow/profiles.md survived a set change, still referenced).
+    for rel, sha in sorted(old_files.items()):
+        p = proj / rel
+        if rel in files or not p.exists():
+            continue
+        if norm_sha(p) == sha:
+            p.unlink()
+            print("removed orphan (no longer pinned): %s" % rel)
+        else:
+            print("warning: %s no longer pinned but locally modified — "
+                  "review and delete by hand" % rel)
+    mpath.write_text(
         json.dumps({"framework": ver, "files": files}, indent=2,
                    sort_keys=True) + "\n", encoding="utf-8")
 
@@ -473,6 +505,15 @@ def main():
         if not (proj / "iverif.json").exists() and HERE.name != "scripts":
             die("target has no iverif.json — for a brand-new project use "
                 "--init")
+        if HERE != fw / "kernel":
+            # Bootstrap hop: the snapshot set is computed by fwsync itself,
+            # so a pull must run the FRAMEWORK's copy — the pinned one may
+            # predate set changes and silently pull an incomplete set
+            # (pulp FB-12: 0.3.0 copy + 0.4.x framework → no profile.md,
+            # green fw-check).
+            sys.exit(subprocess.call(
+                [sys.executable, str(fw / "kernel" / "fwsync.py"),
+                 "--pull", str(fw), "--into", str(proj)]))
         do_pull(fw, proj)
     elif args.init:
         cmd_init(args.init, args.profile, args.columns, args.project)
