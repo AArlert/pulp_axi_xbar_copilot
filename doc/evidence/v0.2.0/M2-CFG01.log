@@ -22,33 +22,13 @@ UVM_FATAL :    0
 Summary: 2143 assertions, 870 with attempts, 0 with failures
 
 ## Key check lines
+../tb/sva/axi_xbar_atop_sva.sv: 12 properties/covers, 996 attempts, 0 match
+../tb/sva/axi_xbar_route_sva.sv: 6 properties/covers, 498 attempts, 6 match
+../tb/sva/axi_xbar_stall_sva.sv: 60 properties/covers, 4980 attempts, 0 match
+../tb/sva/axi_xbar_txlimit_sva.sv: 64 properties/covers, 5312 attempts, 0 match
+../tb/sva/axi_xbar_worder_sva.sv: 8 properties/covers, 664 attempts, 6 match
 UVM_INFO @ 0: reporter [RNTST] Running test m2_cfg01_reconfig_test...
 UVM_INFO ../tb/functional_coverage.sv(217) @ 835000: uvm_test_top.env.sb.fcov [FCOV_SUMMARY] cg_addr_reconfig: samples=30 inst_cov=100.00% | cg_stall: samples=30 inst_cov=33.33% | cg_tx_limit: samples=30 inst_cov=6.67% | cg_w_order: samples=18 inst_cov=100.00% | cg_atop: samples=0 inst_cov=0.00% | cg_atop_read_interaction: samples=0 inst_cov=0.00%
 UVM_INFO ../tb/functional_coverage.sv(226) @ 835000: uvm_test_top.env.sb.fcov [FCOV_SUMMARY] cg_stall coverpoints: cp_stall_state=0.00% cp_dir=100.00% x_state_dir=0.00% | cg_tx_limit cp_inflight=6.67% | cg_addr_reconfig cp_table_version=100.00% cp_src_port=100.00% x_version_src=100.00% | cg_w_order cp_w_contention=100.00% | cg_atop cp_src=0.00% cp_r_resp=0.00% x_src_rresp=0.00% | cg_atop_read_interaction cp=0.00%
 UVM_INFO ../tb/scoreboard_refmodel.sv(711) @ 835000: uvm_test_top.env.sb [SB_SUMMARY] route: match=30 mismatch=0 | resp: match=30 mismatch=0 | resp-route(C3.2): match=30 mismatch=0 | pending(unmatched at end)=0 | stall(C5.1/C5.2): violations=0 open(unmatched at end)=0 | atop(C6.3): pairs=0 open(unpaired at end)=0 | worder(C5.4): match=18 mismatch=0 open(unmatched at end)=0
 [FCOV_SUMMARY]     2
-"../tb/sva/axi_xbar_txlimit_sva.sv", 252: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_23, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 254: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_24, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 256: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_25, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 258: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_26, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 263: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_27, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 265: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_28, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 267: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_29, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 269: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_30, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 252: tb_top.gen_mst_txlimit_sva[6].u_axi_xbar_txlimit_sva.unnamed$$_23, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 254: tb_top.gen_mst_txlimit_sva[6].u_axi_xbar_txlimit_sva.unnamed$$_24, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 256: tb_top.gen_mst_txlimit_sva[6].u_axi_xbar_txlimit_sva.unnamed$$_25, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 258: tb_top.gen_mst_txlimit_sva[6].u_axi_xbar_txlimit_sva.unnamed$$_26, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 263: tb_top.gen_mst_txlimit_sva[6].u_axi_xbar_txlimit_sva.unnamed$$_27, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 265: tb_top.gen_mst_txlimit_sva[6].u_axi_xbar_txlimit_sva.unnamed$$_28, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 267: tb_top.gen_mst_txlimit_sva[6].u_axi_xbar_txlimit_sva.unnamed$$_29, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 269: tb_top.gen_mst_txlimit_sva[6].u_axi_xbar_txlimit_sva.unnamed$$_30, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 252: tb_top.gen_mst_txlimit_sva[5].u_axi_xbar_txlimit_sva.unnamed$$_23, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 254: tb_top.gen_mst_txlimit_sva[5].u_axi_xbar_txlimit_sva.unnamed$$_24, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 256: tb_top.gen_mst_txlimit_sva[5].u_axi_xbar_txlimit_sva.unnamed$$_25, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 258: tb_top.gen_mst_txlimit_sva[5].u_axi_xbar_txlimit_sva.unnamed$$_26, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 263: tb_top.gen_mst_txlimit_sva[5].u_axi_xbar_txlimit_sva.unnamed$$_27, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 265: tb_top.gen_mst_txlimit_sva[5].u_axi_xbar_txlimit_sva.unnamed$$_28, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 267: tb_top.gen_mst_txlimit_sva[5].u_axi_xbar_txlimit_sva.unnamed$$_29, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 269: tb_top.gen_mst_txlimit_sva[5].u_axi_xbar_txlimit_sva.unnamed$$_30, 83 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 252: tb_top.gen_mst_txlimit_sva[4].u_axi_xbar_txlimit_sva.unnamed$$_23, 83 attempts, 0 match

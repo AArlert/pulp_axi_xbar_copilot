@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
 ---
 
-<!-- Canonical template: iverif-workflow/agents/arch.copilot.md (framework 0.4.2).
+<!-- Canonical template: iverif-workflow/agents/arch.copilot.md (framework 0.4.3).
      Rendered by fwsync from iverif.json — edit the framework template, not this file. -->
 
 **Read `workflow/discipline.md` before your first edit** — execution

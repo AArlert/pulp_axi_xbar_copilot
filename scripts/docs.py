@@ -87,6 +87,28 @@ def row_cells(line):
             for c in line.strip().strip("|").split("|")]
 
 
+def check_table_structure(path, errors):
+    """FAIL any data row whose cell count differs from its header's: an
+    unescaped `|` inside a cell shifts every later column, and state gates
+    then silently read the wrong cells (pulp FB-14, BUG-0016)."""
+    header_n = None
+    for i, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip().startswith("|"):
+            header_n = None
+            continue
+        cells = row_cells(line)
+        if header_n is None:
+            header_n = len(cells)
+            continue
+        if all(set(c) <= set("-: ") for c in cells):
+            continue
+        if len(cells) != header_n:
+            errors.append("%s:%d row has %d cells, header has %d — "
+                          "escape literal | in cells as \\|"
+                          % (path.name, i, len(cells), header_n))
+
+
 def split_table_lines(text):
     """Split out the first markdown table by line:
     (pre-table text, 2 header lines, data-row lines, post-table text).
@@ -340,6 +362,9 @@ def cmd_check():
                           % f.relative_to(CFG.root))
     if errors:
         return report(errors, warns)
+
+    for t in (CFG.testplan, CFG.feature_matrix, CFG.bugs, CFG.waivers):
+        check_table_structure(t, errors)
 
     # version.json
     version, _ = read_version()

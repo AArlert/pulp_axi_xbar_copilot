@@ -48,6 +48,12 @@ KEY_LINE_RE = re.compile(r"(?i)\b(pass|match|compare ok|check ok"
                          r"|running test|tests failed|ended|mismatch)\b"
                          r"|\[FCOV_SUMMARY\]")
 KEY_LINES_MAX = 30
+# -assert verbose per-assertion/cover detail lines ('"file", N: inst ...
+# X attempts ... Y match') arrive by the hundred and would eat the key-line
+# cap as an arbitrary prefix (pulp FB-13); they are aggregated per source
+# file instead, and truncation is made visible.
+SVA_DETAIL_RE = re.compile(r'^\s*"([^"]+)",\s*\d+:\s*\S+.*?'
+                           r'(\d+)\s+attempts?\b.*?(\d+)\s+match', re.I)
 
 
 def read_version():
@@ -97,9 +103,25 @@ def extract(log_path, rid):
         except re.error as exc:
             sys.exit("iverif.json key_line_extra[%d] is not a valid regex "
                      "(%s): %r" % (i, exc, pat))
-    keys = [l for l in lines if KEY_LINE_RE.search(l) or rid in l
-            or any(rx.search(l) for rx in extra)]
-    return summary, sva_lines, keys[:KEY_LINES_MAX]
+    agg, keys = {}, []
+    for l in lines:
+        dm = SVA_DETAIL_RE.match(l)
+        if dm:
+            a = agg.setdefault(dm.group(1), [0, 0, 0])
+            a[0] += 1
+            a[1] += int(dm.group(2))
+            a[2] += int(dm.group(3))
+            continue
+        if KEY_LINE_RE.search(l) or rid in l \
+                or any(rx.search(l) for rx in extra):
+            keys.append(l)
+    dropped = len(keys) - KEY_LINES_MAX
+    keys = keys[:KEY_LINES_MAX]
+    if dropped > 0:
+        keys.append("... (%d more key lines truncated)" % dropped)
+    agg_lines = ["%s: %d properties/covers, %d attempts, %d match"
+                 % (f, c[0], c[1], c[2]) for f, c in sorted(agg.items())]
+    return summary, sva_lines, agg_lines + keys
 
 
 def update_row(path, id_col, id_val, updates):

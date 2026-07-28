@@ -3,17 +3,16 @@
 A failure record (FL) is the project's medical chart for one defect: what
 was observed, where the first anomaly is, what class of failure it was, how
 it was fixed, how it was re-verified, and what now guards against its
-return. Future debugging starts by searching old records (`grep` the
-`doc/bugs/` directory) before analyzing from scratch.
+return. Future debugging greps `doc/bugs/` before analyzing from scratch.
+Escape literal `|` in any table cell as `\|` — RTL or-expressions
+otherwise shift every later column, and docs-check fails the row.
 
 Two carriers, one record:
 
 1. **Summary row** in `doc/bugs.md` — one line, scannable.
 2. **Detail page** `doc/bugs/<BUG-ID>.md` — required as soon as the debugging
-   story exceeds one line. The row keeps a summary + link; the page holds
-   the full chart. (Lesson from ppa-lite-copilot: 3000-character
-   adjudications jammed into one table cell are unreadable — the page is the
-   primary carrier, the row is the index.)
+   story exceeds one line. The page is the primary carrier, the row is the
+   index (3000-character table cells proved unreadable once).
 
 ## Summary row (doc/bugs.md)
 
