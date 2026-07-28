@@ -148,6 +148,8 @@
 4. 读响应每个 beat 的数据为 `32'hBADCAB1E`，按数据宽度零扩展或截断。
 5. 响应 ID/握手遵循 AXI4 协议一般规则（本模块声明实现完整 AXI4，xbar.md
    §开篇；协议本身为基线，不在此复述）。
+6. decode error slave 的响应与同一 slave 端口其它事务之间的次序关系见
+   §5.2.6（BUG-0025 裁决，REV-011）。
 
 ## 5. ID 与保序
 
@@ -196,6 +198,32 @@
    （ATOP）经 §6.5 所述机制可能引发一次由**写方向**事件（ATOP 的 AW）触发的
    **读方向** stall——不落在本节 1-4 条"仅同方向配对"的字面框架内，属正常
    设计行为（非退化）。
+6. **译码未命中事务的保序地位（BUG-0025 裁决，REV-011 §1）**：
+   1. 走 §3.3 default master port 的事务，其目标是一个**真实 master 端口**
+      （xbar.md §Decode Errors L35："routed to the default master port
+      instead of the decode error slave"），本节 1-4 条**原样适用**，与命中
+      rule 的事务无区别。
+   2. 走 §4 decode error slave 的事务：`axi_err_slv` 是每 slave 端口的
+      **内部**模块（§4.1；xbar.md L33 "its own internal decode error slave
+      module"），**不是** master 端口，本节第 1 条的"目标为不同 master 端口"
+      不涵盖它。据此分两层：
+      - a. **完整 ID 维度（可断言）**：同一 slave 端口上**完整 ID 相同**、
+        同方向的事务，其 B/rlast 完成序须与接受序一致——**无论**该事务被
+        路由到 master 端口、default master port 还是 decode error slave。
+        依据：§1 + §4.5（本模块实现完整 AXI4，err_slv 响应遵循 AXI4 一般
+        规则）+ §5.2.3（AXI 要求同 ID 同方向事务响应保序；xbar.md L86
+        同述）。checker **必须**把译码未命中事务纳入这一维度的判决。
+      - b. **低位 ID 桶维度（不可断言）**：仅低 `AxiIdUsedSlvPorts` 位
+        相同、**完整 ID 不同**、且其中一笔走 decode error slave 时，二者
+        完成序之间的关系**许可来源未定义**（xbar.md §Ordering and Stalls
+        只约束"不同 master 端口"，§Decode Errors 未涉次序；demux.md/mux.md
+        对 err_slv 无记载）。**不得**据此写断言（无来源，且会在 M3 错误
+        路径场景假红）；须以**非判决 cover** 留痕，并列为**上游确认项**，
+        **不阻塞**里程碑（同 §7.4.4 / §8.4 处置）。
+   3. checker 对 2.b 的排除必须**显式并引本条**。以"未登记 ⇒ 目标/序号读
+      到默认值 ⇒ 比较恰好为假"的方式实现该排除**不成立**：同一完整 ID 若
+      曾登记过，陈旧的目标/序号会继续参与比较，既漏检也可能产生无来源
+      假红（BUG-0025 实现现状，REV-011 §3.3）。
 
 ### 5.3 UniqueIds
 
@@ -405,3 +433,4 @@
 | 3 | 2026-07-27 | 0.2.0 | §2.1、§5.2、§5.4、§6 | M2 蒸馏三条新发现 SPEC_ISSUE 裁决应用（依据 REV-005，仅落地 REV-005 §3 逐条列明的"orch 应用范围"，不外溢）：BUG-0010 `MaxMstTrans` 由扁平口径改为按（约简 ID 桶×方向）分桶计数口径（§2.1、§5.4.1），并标注其与 §5.2 保序 stall 共用同一底层计数器/目标绑定寄存器机制；BUG-0011 保留 §5.4.2 可观测上界 + "per ID"采 xbar.md 口径澄清，执行机制列上游确认项、不阻塞里程碑（§5.4.3）——§2.1 `MaxSlvTrans` 字段行未改动（REV-005 该条裁决未授权此行）；BUG-0012 补 ATOP 原子读注入 AR 计数器可致读方向跨方向假冲突 stall 的派生条款（§6.5），并在 §5.2 加交叉引用（§5.2.5） | REV-005（doc/review/REV-005.md）；来源：vendor/axi/doc/axi_demux.md §Ordering and Stalls→Implementation（L70-74）、§Atomic Transactions→Implementation（L83-87）、axi_xbar.md L46/L47、axi_pkg.sv L489-494/L510、axi_mux.md（全篇核验，无对应按 ID 分桶计数机制段落）@ v0.39.9（SHA a256a3b8） |
 | 4 | 2026-07-28 | 0.2.0 | §5.2、§7.4、§5.4 | M2-OR01 仿真新发现 BUG-0013 裁决应用（依据 REV-006，仅落地 REV-006 §3 逐条列明的"orch 应用范围"）：收窄 §5.2.1"接受边界"字面表述为"不早于完成、判决锚完成序（§5.2.3）"，消除与基线 `CUT_ALL_AX` spill register 弹性缓冲的假红；§7.4 新增第 5 条，把"接受/拒收边界即时性"通用归入延迟不敏感表现（同时覆盖 §5.2 stall 与 §5.4.3 拒收，预防 M2-TL01 独立撞见同类交互）；§5.4.3 MaxMstTrans 侧句尾加交叉指针至 §7.4.5。§5.2.3 正文未改动（现文已充分表述功能目的，surgical） | REV-006（doc/review/REV-006.md）；来源：vendor/axi/doc/axi_xbar.md §Ordering and Stalls（L84/L86）、vendor/axi/doc/axi_demux.md §Configuration（L31）/§Pipelining and Latency（L37）/§Implementation（L70-74）、vendor/axi/src/axi_demux.sv（L89-116/L189-209 spill-register 结构） @ v0.39.9（SHA a256a3b8） |
 | 5 | 2026-07-28 | 0.2.0 | §2.1、§5.4、§7.4 | M2-TL01/TL02 仿真新发现 BUG-0016 裁决应用（依据 REV-007，taxonomy 终判 SPEC_ISSUE，改判 DUT_BUG——DUT 未产生错误输出、`MaxTrans` 为 `idx_width` 定宽提示而非精确上限，许可来源三方矛盾；仅落地 REV-007 §5 逐条列明的"orch 应用范围"，不外溢）：§5.4.1 把每桶在飞上限由字面 `≤MaxMstTrans` 改为**有效上限 `2^idx_width(MaxMstTrans)−1 = 2^⌈log₂MaxMstTrans⌉−1`**（基线 10⇒15；`MaxTrans` 从不进比较器、full 判据为 `&in_flight` 全一）；§5.4.2 **撤销**"每 ID ≤ MaxSlvTrans"可断言上界（`MaxSlvTrans`→`axi_mux.MaxWTrans` = AW→W ID 高位 FIFO 深度、mux 无 per-ID 在飞计数机制），并正式收回 REV-005 为 M2-TL02 解锁的"≤MaxSlvTrans 绝不假红"可观测上界监视器；§5.4.3 把 MaxMstTrans 侧拒收门改锚有效上限、MaxSlvTrans 侧由"上游确认项"升级为"mux 侧机制不存在"已定结论；§7.4.5 把"上限最终被守"绑定 §5.4.1 有效上限公式、明确越字面值为位宽取整效应非 spill；§2.1 `MaxMstTrans`/`MaxSlvTrans` 字段行同步收口。§5.2 保序机制与 BUG-0010 分桶口径措辞未动 | REV-007（doc/review/REV-007.md）；来源：vendor/axi/src/axi_demux_simple.sv（L69 `IdCounterWidth=idx_width(MaxTrans)`、L168/L322 full 门、L557/L615 `&in_flight` 判满、L460-508 无 MaxTrans 合法性检查）、vendor/common_cells/src/cf_math_pkg.sv（L57-58 `idx_width`）、vendor/common_cells/src/delta_counter.sv（`overflow_o` 语义）、vendor/axi/src/axi_xbar.sv（L141 `MaxWTrans←MaxSlvTrans`）、axi_xbar_unmuxed.sv（L175 `MaxTrans←MaxMstTrans`）、axi_mux.sv（L46/L319 `MaxWTrans` FIFO 深度）、vendor/axi/doc/{axi_xbar.md L46/L47,axi_demux.md L72,axi_mux.md L29}、axi_pkg.sv L489-494（四处散文互相矛盾）@ v0.39.9（SHA a256a3b8） |
+| 6 | 2026-07-28 | 0.2.2 | §5.2、§4 | BUG-0025 SPEC_ISSUE 半边仲裁应用（依据 REV-011 §1.3，仅落地条款提案 P-REV011-1/P-REV011-2 原文，不外溢）：§5.2 新增第 6 条**译码未命中事务的保序地位**——(1) 走 §3.3 default master port 的事务目标是真实 master 端口，§5.2.1-4 原样适用；(2) 走 §4 decode error slave 的事务分两层，**完整 ID 维度可断言**（同一 slave 端口上完整 ID 相同、同方向事务的 B/rlast 完成序须与接受序一致，无论路由去向，checker 必须纳入判决）、**低位 ID 桶维度不可断言**（完整 ID 不同且其一走 err_slv 时次序许可来源未定义，不得写断言、以非判决 cover 留痕并列上游确认项、不阻塞里程碑）；(3) 该排除必须显式引本条，**不得**以"未登记⇒读默认值⇒比较恰好为假"实现（陈旧值会继续参与比较，既漏检也可产生无来源假红）。§4 新增第 6 条一行交叉指针至 §5.2.6。§5.2.1-5 与 §4.1-5 正文未改动（surgical） | REV-011（doc/review/REV-011.md §1）；来源：vendor/axi/doc/axi_xbar.md L33/L35（Decode Errors and Default Slave Port）、L84/L86（Ordering and Stalls）、§开篇（完整 AXI4+ATOP）；vendor/axi/doc/axi_demux.md L54-76、vendor/axi/doc/axi_mux.md（对 err_slv 无记载，作为"未定义"的否定性证据）；spec 内部 §1/§3.3/§4.1/§4.5/§5.2.1/§5.2.2/§5.2.3 @ v0.39.9（SHA a256a3b8）。**无 RTL 实现体来源**——REV-011 明确声明未读 axi_xbar.sv/axi_demux.sv 实现体，spec-from-RTL 红线未破 |

@@ -1,3 +1,4 @@
+{"date": "2026-07-28", "version": "0.2.2", "summary": "REV-011 spec 条款落地：新增 §5.2.6「译码未命中事务的保序地位」（default port 半边照常适用；err_slv 半边完整 ID 维度可断言、低位桶维度无来源不可断言）+ §4 交叉指针 + 重 pin；BUG-0025 SPEC_ISSUE 半边解除 M3 阻塞"}
 {"date": "2026-07-28", "version": "0.2.1", "summary": "M2 场景全部 ✅（新增 M2-OR03 守卫场景，共 8 条）+ F-M2-08 功能覆盖落地；框架 0.3.0→0.4.5 五版回流（FB-10 guard 注入进 canon 并复验闭环）；bug active 12→4；signoff-check 条件 1/2 转绿，M2 未签核"}
 {"date": "2026-07-27", "version": "0.2.0", "summary": "M1 里程碑签核 PASS（doc/evidence/v0.1.2/signoff-M1.md）：M1-02 落地 ✅，落地期发现修复 BUG-0009（TB monitor AW/W 配对缺陷，TB_BUG CLOSED，守卫经签核亲验见红），REV-004 裁决 BUG-0008→WONTFIX，regress.list 补全至 3/3 PASS；转入 M2"}
 {"date": "2026-07-27", "version": "0.1.2", "summary": "框架 0.2.0 → 0.3.0 两轮回流闭环：FB-1~FB-7 全部 fixed@0.2.1，0.3.0 带来 workflow/discipline.md（执行纪律五条，本仓库的\"小步快跑\"被上收为其 rule 5）；两处本地重述收成指针防漂移；补登 BUG-0008（TOOL_ENV，M0 三条证据 Key check lines 段为空，存量是否重生成待 rev 裁决）；M1-02 未动"}
@@ -5,4 +6,3 @@
 {"date": "2026-07-27", "version": "0.1.0", "summary": "M0 里程碑签核 PASS（doc/evidence/v0.0.2/signoff-M0.md），基建+sanity+spec v0 收官；R1 回流 fw-feedback FB-6；转入 M1"}
 {"date": "2026-07-27", "version": "0.0.2", "summary": "DV 复验闭环：M0-01 ✅，BUG-0001/0006 CLOSED，signoff-check 机器条件全过；待 rev 里程碑签核"}
 {"date": "2026-07-27", "version": "0.0.1", "summary": "M0 基建首循环收官：vendor pin(axi v0.39.9)+sim 基建+P-001/P-002 编译排雷(compile 全过)+spec v0 评审应用重 pin；M0-01 待 DV 复验，FB-1~5 待回流"}
-{"date": "2026-07-27", "version": "0.0.0", "summary": "repo scaffolded by fwsync --init"}
