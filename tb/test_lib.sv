@@ -187,6 +187,26 @@ class m2_tl02_slvtrans_test extends base_test;
   endtask
 endclass
 
+// M2-OR03 BUG-0023/BUG-0024 joint regression guard (testplan.md M2-OR03).
+// Responders keep their default zero hold: the testplan's construction wants
+// the stall release and the last same-target completion to coincide (or not)
+// under natural run conditions, with no extra response backpressure.
+class m2_or03_guard_test extends base_test;
+  `uvm_component_utils(m2_or03_guard_test)
+
+  function new(string name = "m2_or03_guard_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m2_or03_guard_vseq vseq;
+    phase.raise_objection(this, "m2_or03_guard_vseq running");
+    vseq = m2_or03_guard_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m2_or03_guard_vseq done");
+  endtask
+endclass
+
 // M2-WO01 W channel order under multi-source convergence (testplan.md M2-WO01).
 class m2_wo01_worder_test extends base_test;
   `uvm_component_utils(m2_wo01_worder_test)

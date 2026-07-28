@@ -632,10 +632,25 @@ class xbar_scoreboard extends uvm_scoreboard;
         int unsigned this_idx;
         bit          this_found;
         this_found = 1'b0;
+        // Attribution rule (BUG-0027): when several records share the FULL
+        // slv-side id, this completing B/rlast belongs to the OLDEST of them
+        // — same-id/same-direction responses return in acceptance order
+        // (AXI4 same-id in-order, spec §1/§5.2.3), which the queue holds in
+        // push (accept) order, so the first match is the right one. Picking
+        // the last match instead attributed every completion of a same-full-id
+        // group to its newest, different-target member and reported the legal
+        // spec §5.2.4 stack as a §5.2.3 reordering (336 false SB_OR_REORDER in
+        // `make run TEST=m2_or03_guard_test SEED=1`, BUG-0027). Ordering
+        // *within* one full id is not judged here at all (B carries only
+        // id+resp, so the boundary cannot tell two same-id writes apart); it
+        // is judged by the master-side FIFO route check (SB_ROUTE — a
+        // forwarding order swap surfaces there) and, for reads, by the
+        // per-address data check (SB_RDATA).
         foreach (or_open_q[k][idx]) begin
           if (or_open_q[k][idx].slv_id == ro.id) begin
             this_idx   = idx;
             this_found = 1'b1;
+            break;
           end
         end
         if (this_found) begin

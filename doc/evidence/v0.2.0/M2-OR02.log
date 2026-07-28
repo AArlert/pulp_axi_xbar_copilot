@@ -24,11 +24,11 @@ Summary: 2143 assertions, 870 with attempts, 0 with failures
 ## Key check lines
 ../tb/sva/axi_xbar_atop_sva.sv: 12 properties/covers, 696 attempts, 0 match
 ../tb/sva/axi_xbar_route_sva.sv: 6 properties/covers, 348 attempts, 0 match
-../tb/sva/axi_xbar_stall_sva.sv: 60 properties/covers, 3480 attempts, 12 match
+../tb/sva/axi_xbar_stall_sva.sv: 84 properties/covers, 4872 attempts, 12 match
 ../tb/sva/axi_xbar_txlimit_sva.sv: 64 properties/covers, 3712 attempts, 0 match
 ../tb/sva/axi_xbar_worder_sva.sv: 8 properties/covers, 464 attempts, 0 match
 UVM_INFO @ 0: reporter [RNTST] Running test m2_or02_nonstall_test...
 UVM_INFO ../tb/functional_coverage.sv(217) @ 585000: uvm_test_top.env.sb.fcov [FCOV_SUMMARY] cg_addr_reconfig: samples=48 inst_cov=66.67% | cg_stall: samples=48 inst_cov=66.67% | cg_tx_limit: samples=48 inst_cov=13.33% | cg_w_order: samples=24 inst_cov=50.00% | cg_atop: samples=0 inst_cov=0.00% | cg_atop_read_interaction: samples=0 inst_cov=0.00%
 UVM_INFO ../tb/functional_coverage.sv(226) @ 585000: uvm_test_top.env.sb.fcov [FCOV_SUMMARY] cg_stall coverpoints: cp_stall_state=66.67% cp_dir=100.00% x_state_dir=33.33% | cg_tx_limit cp_inflight=13.33% | cg_addr_reconfig cp_table_version=50.00% cp_src_port=100.00% x_version_src=50.00% | cg_w_order cp_w_contention=50.00% | cg_atop cp_src=0.00% cp_r_resp=0.00% x_src_rresp=0.00% | cg_atop_read_interaction cp=0.00%
-UVM_INFO ../tb/scoreboard_refmodel.sv(711) @ 585000: uvm_test_top.env.sb [SB_SUMMARY] route: match=48 mismatch=0 | resp: match=48 mismatch=0 | resp-route(C3.2): match=48 mismatch=0 | pending(unmatched at end)=0 | stall(C5.1/C5.2): violations=0 open(unmatched at end)=0 | atop(C6.3): pairs=0 open(unpaired at end)=0 | worder(C5.4): match=24 mismatch=0 open(unmatched at end)=0
+UVM_INFO ../tb/scoreboard_refmodel.sv(726) @ 585000: uvm_test_top.env.sb [SB_SUMMARY] route: match=48 mismatch=0 | resp: match=48 mismatch=0 | resp-route(C3.2): match=48 mismatch=0 | pending(unmatched at end)=0 | stall(C5.1/C5.2): violations=0 open(unmatched at end)=0 | atop(C6.3): pairs=0 open(unpaired at end)=0 | worder(C5.4): match=24 mismatch=0 open(unmatched at end)=0
 [FCOV_SUMMARY]     2

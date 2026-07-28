@@ -177,6 +177,61 @@ module axi_xbar_stall_sva
     end
   end
 
+  // ---- BUG-0024 corner witness (non-judgemental, per-FULL-ID). REV-009 §2.3:
+  // every predicate below (`w_sibling_open`/`w_reorder`) skips the queried ID
+  // itself (`cand != id`), so nothing in this module can observe how many
+  // transactions ONE full ID has in flight — which is exactly the state spec
+  // §5.2.4 allows to stack up and BUG-0024's single-bit `w_id_open` cannot
+  // represent. This adds that missing self-referential observable as a plain
+  // witness: a per-full-ID in-flight count, plus (while all of them share one
+  // target) that target. The judgement table above (w_id_tgt/w_id_open/
+  // w_id_seq) is NOT touched — these signals feed covers only.
+  // `w_uni` is conservative: a completion never re-raises it (a non-uniform
+  // set may become uniform again without being noticed), so the covers below
+  // can only under-claim, never over-claim.
+  int unsigned w_n[NUM_IDS],    r_n[NUM_IDS];
+  int unsigned w_utgt[NUM_IDS], r_utgt[NUM_IDS];
+  bit          w_uni[NUM_IDS],  r_uni[NUM_IDS];
+
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      for (int unsigned i = 0; i < NUM_IDS; i++) begin
+        w_n[i]   <= 0;    r_n[i]   <= 0;
+        w_uni[i] <= 1'b1; r_uni[i] <= 1'b1;
+      end
+    end else begin
+      if (aw_valid && aw_ready && aw_hit) begin
+        int unsigned n_now; // count after this same edge's own completion, if any
+        n_now = w_n[aw_id]
+                - ((b_valid && b_ready && (b_id == aw_id) && w_n[aw_id] > 0) ? 1 : 0);
+        w_n[aw_id]    <= n_now + 1;
+        w_uni[aw_id]  <= (n_now == 0) ? 1'b1
+                                      : (w_uni[aw_id] && (w_utgt[aw_id] == aw_tgt));
+        w_utgt[aw_id] <= (n_now == 0) ? aw_tgt : w_utgt[aw_id];
+      end
+      if (b_valid && b_ready && w_n[b_id] > 0
+          && !(aw_valid && aw_ready && aw_hit && (aw_id == b_id))) begin
+        w_n[b_id] <= w_n[b_id] - 1;
+        if (w_n[b_id] == 1) w_uni[b_id] <= 1'b1;
+      end
+      if (ar_valid && ar_ready && ar_hit) begin
+        int unsigned n_now;
+        n_now = r_n[ar_id]
+                - ((r_valid && r_ready && r_last && (r_id == ar_id) && r_n[ar_id] > 0)
+                     ? 1 : 0);
+        r_n[ar_id]    <= n_now + 1;
+        r_uni[ar_id]  <= (n_now == 0) ? 1'b1
+                                      : (r_uni[ar_id] && (r_utgt[ar_id] == ar_tgt));
+        r_utgt[ar_id] <= (n_now == 0) ? ar_tgt : r_utgt[ar_id];
+      end
+      if (r_valid && r_ready && r_last && r_n[r_id] > 0
+          && !(ar_valid && ar_ready && ar_hit && (ar_id == r_id))) begin
+        r_n[r_id] <= r_n[r_id] - 1;
+        if (r_n[r_id] == 1) r_uni[r_id] <= 1'b1;
+      end
+    end
+  end
+
   // Enumerate the NUM_SIBLINGS full IDs sharing `id`'s low BUCKET_W bits
   // (spec §5.2.2's own "same ID" bucket comparison) other than `id` itself.
   function automatic int unsigned sibling_id(input int unsigned id,
@@ -257,6 +312,32 @@ module axi_xbar_stall_sva
   logic w_collide_kept_now, r_collide_kept_now;
   always_comb w_collide_kept_now = w_collide_q && w_id_open[w_collide_id_q];
   always_comb r_collide_kept_now = r_collide_q && r_id_open[r_collide_id_q];
+  // BUG-0024 corner (M2-OR03): this full ID already has >= 2 transactions in
+  // flight, all at one target, and the AW/AR being accepted now carries the
+  // same full ID for a *different* target — which spec §5.2.1 forbids
+  // forwarding until every one of those completes, i.e. it is pending
+  // forwarding from this edge on.
+  logic aw_stack_diff_now, ar_stack_diff_now;
+  always_comb aw_stack_diff_now = (w_n[aw_id] >= 2) && w_uni[aw_id]
+                                  && (w_utgt[aw_id] != aw_tgt);
+  always_comb ar_stack_diff_now = (r_n[ar_id] >= 2) && r_uni[ar_id]
+                                  && (r_utgt[ar_id] != ar_tgt);
+  // BUG-0024 defect witness: some full ID demonstrably still has transactions
+  // in flight (accepted, not yet completed) while the judgement table above has
+  // already dropped it from the open set — i.e. the reorder check has silently
+  // stopped watching it. Reverse polarity to the covers above: it is expected
+  // to MATCH while `w_id_open`/`r_id_open` stay single bits and must fall to
+  // zero once BUG-0024's fix makes them represent multiple in-flight
+  // transactions per full ID.
+  logic w_lost_now, r_lost_now;
+  always_comb begin
+    w_lost_now = 1'b0;
+    r_lost_now = 1'b0;
+    for (int unsigned i = 0; i < NUM_IDS; i++) begin
+      if (w_n[i] > 0 && !w_id_open[i]) w_lost_now = 1'b1;
+      if (r_n[i] > 0 && !r_id_open[i]) r_lost_now = 1'b1;
+    end
+  end
 
   // ---- main judgement (spec §5.2.3, BUG-0013-safe anchor): a completing
   // B/rlast must not overtake an older, still-open, same-bucket/direction,
@@ -308,5 +389,16 @@ module axi_xbar_stall_sva
   cover property (@(posedge clk_i) disable iff (!rst_ni) w_collide_kept_now);
   cover property (@(posedge clk_i) disable iff (!rst_ni) r_collide_q);
   cover property (@(posedge clk_i) disable iff (!rst_ni) r_collide_kept_now);
+
+  // ---- covers: BUG-0024 regression guard (testplan M2-OR03 criterion (2)).
+  // First of each pair: the §5.2.4 stack + different-target same-full-ID
+  // request corner is actually reached by the stimulus. Second: the tracking
+  // table lost a still-in-flight record there (see w_lost_now above).
+  cover property (@(posedge clk_i) disable iff (!rst_ni)
+    aw_valid && aw_ready && aw_hit && aw_stack_diff_now);
+  cover property (@(posedge clk_i) disable iff (!rst_ni)
+    ar_valid && ar_ready && ar_hit && ar_stack_diff_now);
+  cover property (@(posedge clk_i) disable iff (!rst_ni) w_lost_now);
+  cover property (@(posedge clk_i) disable iff (!rst_ni) r_lost_now);
 
 endmodule

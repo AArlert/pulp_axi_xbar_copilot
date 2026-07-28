@@ -762,6 +762,134 @@ class m2_tl02_slvtrans_vseq extends uvm_sequence #(uvm_sequence_item);
 endclass
 
 // ----------------------------------------------------------------------------
+// M2-OR03 — BUG-0023/BUG-0024 joint regression guard (testplan.md M2-OR03,
+// spec §5.2.1/§5.2.3/§5.2.4, §7.4.5). One slave port, ONE full slave-side id
+// X per iteration:
+//   (1) n_a same-direction requests at master port A, presented back-to-back
+//       (drive_burst never waits for a completion in between), so they stack
+//       up legally in flight — spec §5.2.4 exempts same-id/same-direction/
+//       SAME-target requests from the §5.2 stall. n_a is deliberately well
+//       past "≥2" (testplan's floor) so the in-flight count also runs into the
+//       DUT's own per-(bucket,direction) ceiling (spec §5.4.1, effective 15):
+//       once there, each further AW/AR acceptance is paced by a returning
+//       B/rlast, which is the interleaving BUG-0023's ## regression_guard
+//       names as the way to reach its same-edge corner.
+//   (2) n_b requests with the SAME full id X at master port B (B != A),
+//       presented while that stack is still in flight — per spec §5.2.1 these
+//       may not be forwarded until every earlier same-id request on A has
+//       completed, so their acceptance/forwarding is released exactly around
+//       the last A completion (BUG-0023's same-edge "AW accept + B complete on
+//       one full id" chance, and BUG-0024's "≥2 same-target in flight while a
+//       different-target same-id request waits" corner).
+// The responder is left at its default zero hold (testplan: "对 A 上堆积事务
+// 的应答不额外背压"), so the release above happens under natural run
+// conditions; nothing here asserts any cycle count (spec §7.4.5). Write and
+// read mirrors are built by the same helper, and the iteration walks several
+// full ids so the timing coincidence gets many independent chances.
+// ----------------------------------------------------------------------------
+function automatic axi_burst_item build_or03_burst(
+    input string        name,
+    input bit           is_write,
+    input xbar_types_pkg::id_slv_t id_full,
+    input int unsigned  tgt_a, input int unsigned tgt_b,
+    input int unsigned  n_a,   input int unsigned n_b,
+    input xbar_types_pkg::addr_t addr_base);
+  axi_burst_item burst;
+  burst = axi_burst_item::type_id::create(name);
+  for (int unsigned k = 0; k < n_a + n_b; k++) begin
+    axi_seq_item it;
+    int unsigned tgt;
+    tgt = (k < n_a) ? tgt_a : tgt_b;
+    it  = axi_seq_item::type_id::create($sformatf("%s_%0d", name, k));
+    it.is_write = is_write;
+    it.id       = id_full;                 // ONE full id for the whole group
+    it.addr     = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
+                  + addr_base + xbar_types_pkg::addr_t'(k) * 32'h40;
+    // Reads: single beat — an AR per cycle is what drives the in-flight count
+    // to the ceiling. Writes: alternate AxLEN 0/1, i.e. 2 and 3 cycles per
+    // request. A uniform write stream is phase-locked against the returning B
+    // stream (AW handshakes land on one parity, B handshakes on the other), so
+    // the same-edge accept+complete BUG-0023 needs never occurs; alternating
+    // the length sweeps that phase instead of adding response backpressure,
+    // which this scenario is not allowed to add. Measured: uniform AxLEN=0
+    // gives 0 write-side collisions, alternating gives 192.
+    it.len      = axi_pkg::len_t'(is_write ? (k % 2) : 0);
+    if (is_write) begin
+      for (int unsigned b = 0; b <= it.len; b++) begin
+        it.wdata.push_back({$urandom(), $urandom()});
+        it.wstrb.push_back('1);
+      end
+    end
+    burst.items.push_back(it);
+  end
+  return burst;
+endfunction
+
+class slvport_or03_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_or03_seq)
+
+  int unsigned slv_port_idx;
+  int unsigned num_ids = 4;  // distinct full ids iterated, one group each
+  int unsigned n_a     = 14; // same-target stack (>= 2, testplan floor)
+  int unsigned n_b     = 4;  // different-target requests behind the stall
+
+  function new(string name = "slvport_or03_seq");
+    super.new(name);
+  endfunction
+
+  task body();
+    for (int unsigned it = 0; it < num_ids; it++) begin
+      axi_burst_item wb, rb;
+      xbar_types_pkg::id_slv_t id_full;
+      int unsigned tgt_a, tgt_b;
+      // Full id = {2-bit iteration index, this port's own 3-bit bucket}: one
+      // full id per group, four distinct ones per port, and groups are
+      // serialised (start_item blocks to completion) so no two of them are
+      // ever in flight together.
+      id_full = xbar_types_pkg::id_slv_t'({it[1:0], slv_port_idx[2:0]});
+      tgt_a   = (slv_port_idx + it) % xbar_types_pkg::NO_MST_PORTS;
+      tgt_b   = (tgt_a + 1) % xbar_types_pkg::NO_MST_PORTS;
+
+      wb = build_or03_burst($sformatf("or03_w_%0d_%0d", slv_port_idx, it),
+                             1'b1, id_full, tgt_a, tgt_b, n_a, n_b,
+                             32'h0008_0000 + xbar_types_pkg::addr_t'(it) * 32'h1000);
+      start_item(wb);
+      finish_item(wb);
+
+      rb = build_or03_burst($sformatf("or03_r_%0d_%0d", slv_port_idx, it),
+                             1'b0, id_full, tgt_a, tgt_b, n_a, n_b,
+                             32'h000c_0000 + xbar_types_pkg::addr_t'(it) * 32'h1000);
+      start_item(rb);
+      finish_item(rb);
+    end
+  endtask
+endclass
+
+class m2_or03_guard_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m2_or03_guard_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+
+  function new(string name = "m2_or03_guard_vseq");
+    super.new(name);
+  endfunction
+
+  task body();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork
+        begin
+          slvport_or03_seq s;
+          s = slvport_or03_seq::type_id::create($sformatf("or03_seq_%0d", ii));
+          s.slv_port_idx = ii;
+          s.start(p_sequencer.slv_sqr[ii]);
+        end
+      join_none
+    end
+    wait fork;
+  endtask
+endclass
+
+// ----------------------------------------------------------------------------
 // M2-CFG01 — address-table / default-port runtime reconfiguration (testplan.md
 // M2-CFG01, uvm_env.md C5.1, spec §3.1/§3.2/§3.3/§3.4). Every leg is single-
 // outstanding-per-port (the blocking driver serialises each item to its own

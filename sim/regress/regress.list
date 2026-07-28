@@ -2,3 +2,11 @@
 upstream_sanity 1
 m1_01_smoke_test 1
 m1_02_id_prefix_test 1
+m2_cfg01_reconfig_test 1
+m2_or01_stall_test 1
+m2_or02_nonstall_test 1
+m2_or03_guard_test 1
+m2_tl01_txlimit_test 1
+m2_tl02_slvtrans_test 1
+m2_wo01_worder_test 1
+m2_at01_atop_test 1
