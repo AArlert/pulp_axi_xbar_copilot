@@ -2,6 +2,78 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.2.3] 2026-07-28 REV-011 台账落地：四条债务转 ACCEPTED@M3 + 新登 BUG-0031，signoff-check 条件 3 转绿
+
+**Done**
+- **REV-011 条件 C-2/C-3/C-4 落地**（C-1 spec 部分见 0.2.2）：
+  - **C-2 新登 BUG-0031**（TB_BUG）：`tb/sva/axi_xbar_stall_sva.sv:99-100` 调
+    `decode_mst_port(aw_addr, **ADDR_MAP**, …)`，地址表取编译期 localparam，而
+    `tb/sva_bind.sv:33-35` 该模块**结构上拿不到** `cfg_if`（隔壁 `:41-47` 的
+    `axi_xbar_route_sva` 却接了）。`design-prompt/sva_bind.md` §3 明文要求改传
+    运行时活值表——函数签名已改（`xbar_types_pkg.sv:148` 收 `amap` 形参），
+    **调用点没改，要求只落实了一半**。M2-CFG01 确实在运行时改表
+    （`seq_lib.sv:993-996`，rule 0 的 idx 0→5）⇒ 重配后命中 region0 的事务
+    `w_id_tgt` 记 mst0、实际 mst5。**误差双向（可假红）**，与 0023/0024/0025 的
+    单向漏检不同类
+  - **C-3 三条 `## regression_guard` 改写**：0024 的 (a) 路线旧口径
+    （"`w_lost_now` 归零即修复"）**明文作废**——(b) 路线下该数不必归零，两种
+    口径不得并存；0025 由"待 spec 结论"改为按 §5.2.6 定形的三段式；0018 补入
+    M3 归属理由与逐 test 基线数
+  - **C-4 三处订正同步进详情页正文**：0024 `## symptom`（"只漏检不会假红"
+    不成立，附四步假红构造）、0025 `## symptom`/`## rca` 第 3 点/`## 对已登记
+    证据的影响`（"读到 X 恒假"错、"从未被触发"错）、0018 `## symptom` scope
+    补 `cg_tx_limit`
+  - 额外订正一处 rev 未点到的矛盾：**BUG-0025 的 `min_repro` 列**原值是
+    "无（当前激励集全为译码命中路径，本条不可触发）"，与 REV-011 §5.2 的实测
+    直接冲突，已改为 `make run TEST=m2_cfg01_reconfig_test SEED=1`
+- **BUG-0031 的状态退回 rev 补裁**（orch 不自填）：`ACCEPTED@M<n>` 的 rationale
+  按 schema 须 rev 签名，而 `docs.py:489` 只校验行内含 `REV-`、校验不了那份
+  rationale 是否真的存在——orch 自行落 ACCEPTED 恰是 REV-011 §4 G3 警告的
+  "ACCEPTED 变成新地毯"。rev 补裁 **`ACCEPTED@M3`**（REV-011 §5.4），并给出
+  三条**可被同样 grep 推翻**的依据：(1) 全仓只有 `tb_top.sv:59` 与
+  `seq_lib.sv:994` 两处写 `cfg_vif.addr_map` ⇒ 除 CFG01 外所有场景编译期表恒等
+  于活值表；(2) 唯一用到陈旧表的 `m2_cfg01_reconfig_test_1.log` 里该模块
+  **84 条 cover 行全部 0 match**（对照 or01 同名 cover 非零 ⇒ 非日志假象）⇒
+  结构性空转、贡献零判决；(3) testplan M2-CFG01 的判决锚点是 scoreboard +
+  独立 SVA C3.1，**不含** C3.2。任一条被证伪则该裁决失效、须改判 M2 内修
+- **`make signoff-check` 条件 3 转 PASS**：四条 active bug（0018/0024/0025/0031）
+  各自获得一份 rev 签名、各自带证伪条件的排期理由，到期点**均为 M3 签核**
+  （`docs.py:855`：n ≤ 被签核里程碑即拦）
+
+**Not done**
+- M2 里程碑签核（`doc/evidence/v0.2.*/signoff-M2.md`）未做——`signoff-check`
+  仅剩 `[not yet] signoff file` 一项
+- 四条 ACCEPTED 债务本身未修（这正是 ACCEPTED 的语义：已分析、已排期、未做）
+- M3-TL01 已注册但未落地
+
+**Next**
+- 派 **M2 签核卡**（rev，新实例）。REV-011 交下来两条**硬性交接条件**：
+  1. rubric 第 4 条"再读一个被豁免的洞"**明确挑 BUG-0018**，不得绕开它另挑
+     好看的 bin；
+  2. **不得**把 `axi_xbar_stall_sva` 的"通过"计为 M2-CFG01 的独立证据——
+     84/84 零命中即其空转的机械证明；该场景证据链是 scoreboard
+     （`route: match=30 mismatch=0`）+ `axi_xbar_route_sva`(C3.1)。与 BUG-0024
+     的 b-3 同一条纪律：任何"SVA 也过了"必须附上那次运行的空转/范围见证
+  rubric 第 5 条用 `make guards FILES=<里程碑触及文件>` 定复核范围，至少证伪一条
+- M3 开工时：BUG-0025 + BUG-0031 **同一张修复卡**（同一调用点的两个实参，
+  REV-011 §4 G4），其守卫场景与 M3 decode-error 场景应在**同一张 arch 注册卡**
+  里登记（构造要素重叠）
+
+**How verified**
+- `make docs-check` 绿；`make fw-check` 绿（框架 0.5.2，26 files pinned）
+- `make signoff-check` 条件 1/2/3 全 PASS，仅余 `[not yet] signoff file`
+- `make guards FILES="tb/sva/axi_xbar_stall_sva.sv"` **8 条命中**（原 7 条 +
+  新登的 BUG-0031）——新 guard 的注入机制生效得证，下一张动该文件的卡会自动
+  收到它
+- 台账终态核对：0018/0024/0025/0031 四行均 `ACCEPTED@M3`，各行文本含 `REV-011`
+  （`docs.py:489` 的两道校验：须含 `REV-`、n ≥ 当前里程碑）
+
+**这一段最该记住的一件事**：登记 BUG-0031 让刚刚转绿的条件 3 **立刻又变红**，
+而把它填成 ACCEPTED 只需我改一个单词、机器完全查不出来。门禁在这里挡不住
+orch——挡住的是"ACCEPTED 的 rationale 必须由 rev 签名"这条**约定**，以及
+rev 交回来的那三条**可被 grep 推翻**的依据。可证伪性是自愿交出来的，不是被
+门禁逼出来的；这与 REV-011 §4 G1 的"沉默的通过"是同一枚硬币的两面。
+
 ## [0.2.2] 2026-07-28 REV-011 spec 条款落地：译码未命中事务的保序地位（BUG-0025 SPEC_ISSUE 半边裁决）
 
 **Done**
@@ -113,56 +185,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 profile 静默降级 / bugs.md 表格错位后门禁照过 / regress 分母缩水 / BUG-0015 的 guard 写下了
 却没有强制消费）。前四条已回流框架成 FB-11/12/14 与 BUG-0028，第五条促成了 0.4.1 的
 guard 注入机制。**看到绿灯要先问它覆盖了什么。**
-
-## [0.2.0] 2026-07-27 M1 里程碑签核 PASS：M1-02 落地 + BUG-0008/0009 终态 + regress 覆盖补全，转入 M2
-
-**Done**
-- DV 卡：M1-02（ID 前缀响应路由 smoke）落地——`tb/seq_lib.sv`/`test_lib.sv`
-  新增 `m1_02_id_prefix_{seq,vseq,test}`（多 slave 端口共享低位 ID、各指
-  不同 master 端口，规避 §5.2.1 假冲突 stall）；`tb/scoreboard_refmodel.sv`
-  新增 C3.2 源端口响应路由判据（`resp_expect[]`，独立于既有 payload/resp-
-  code 判据，可捕获 B 通道无 payload 的跨端口错送）；evidence
-  `doc/evidence/v0.1.2/M1-02.log`（96/96/96 match），testplan M1-02 🔲→✅
-- 落地期发现并修复 **BUG-0009**（TB_BUG，CLOSED）：`mstport_monitor` 单槽
-  AW/W 配对方案在 master 端口 AW-W 解耦/多写 burst 汇聚时错配（第二个 AW
-  覆盖首个未收尾 burst 的元数据）；改 AW FIFO 队列配对（`aw_q[$]`，镜像
-  `mstport_responder` 既有写法）；同轮修复 scoreboard `pending_by_id` 键加
-  方向位（读写独立通道，同 id 不再别名）。DUT 全程功能正确（resp-route
-  C3.2 96/0）。detail page `doc/bugs/BUG-0009.md` 补齐（orch 发现该行初始
-  漏建详情页 + taxonomy 标签误用非正典的 "DV_ISSUE"，均已订正为 TB_BUG）
-- rev 卡 REV-004：仲裁 BUG-0008（M0 三条存量证据 `## Key check lines` 段
-  为空）处置——赞同不追溯重写、不改 signoff-M0，并纠正终态应由 OPEN 转
-  **WONTFIX**（已应用）；独立核验 CLAUDE.md 两处"本地重述→指针"收成
-  （taxonomy 登记无条件、执行纪律→discipline.md）语义无损，本地仪式
-  （`/closeout`+`git push`+等待指令）确认仍落在保留句里，未悄悄消失
-- 补全 `sim/regress/regress.list`：M0 期只有 `upstream_sanity`，M1 落地后
-  一直未跟进；补入 `m1_01_smoke_test`/`m1_02_id_prefix_test`（恰对应
-  BUG-0007/0009 的 min_repro，满足清单自身"每个已闭合 bug 失败 seed 永久
-  入列"的约定），`make regress` 3/3 PASS，`doc/evidence/v0.1.2/
-  result_summary.txt` 登记，`make signoff-check` 机器条件三项转全绿
-- rev 卡：M1 里程碑签核 `doc/evidence/v0.1.2/signoff-M1.md`——**PASS**（带
-  2 项非阻塞残留风险：R1 已登记的 `v0.1.0/M1-01.log` 字节滞后于 BUG-0009
-  后的当前树，功能面由回归摘要+详情页+签核三路独立复跑覆盖；R2 本轮改动
-  提交前 `fix_commit` 为占位，随本次 closeout 提交回填）。人工抽查 5 对
-  BUG-0009 做了真实的一次性废弃分支守卫证伪：回退 monitor 单槽版本后
-  确定性复现"4 route 失配+7 dangling"登记签名，逐字节复原后丢弃分支
-
-**Not done**
-- M2（功能场景 + SVA + 功能覆盖）未开始
-- BUG-0008 存量三条 M0 证据仍未重生成（REV-004 裁决为不重写，非待办）
-- signoff-M1 R1：`doc/evidence/v0.1.0/M1-01.log` 未随 BUG-0009 修复重生
-  （非阻塞，功能面已三路复验覆盖，留给后续视需要处理）
-
-**Next**
-- 派 arch 设计输入卡：M2 功能场景清单（保序/stall/decode error/ATOP 等，
-  design-prompt C2/C5 已成文待激活）+ SVA 覆盖点规划
-- M2 功能覆盖率采集基建（六类覆盖率路线图见 CLAUDE.md §6）
-
-**How verified**
-- 独立重跑 `make run TEST=m1_02_id_prefix_test SEED=1`（96/96/96 match，
-  UVM_ERROR 0，SVA 0 failures）与 `make run TEST=m1_01_smoke_test SEED=1`
-  回归（48/48/48，0 错误，新判据无回归）；`make regress` 3/3 PASS；
-  `make signoff-check` 全绿（含 `[yes] signoff file`）；`make docs-check`/
-  `make fw-check` 全绿；REV-004/signoff-M1 见 `doc/review/`、
-  `doc/evidence/v0.1.2/`
 
