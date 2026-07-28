@@ -5,7 +5,7 @@
     ".claude/skills/evidence/SKILL.md": "2bfb192baf895e1f8be45468294229f4ab867f5b18f9e06d7c98263fe746dca7",
     ".claude/skills/handover/SKILL.md": "5f67d490b4e2d1210f3b1c30c25b6f0d175dfcb2625f8b1ddfb79d499ed1c1f1",
     "scripts/bump.py": "cd2a2172f5b46ebbdbc2907d3f5098d647249148b3e4721ba470580ee94aa581",
-    "scripts/docs.py": "031d7e570771c30a29853bb623690662d8cf6d3f186c5e20689ba800988b4caf",
+    "scripts/docs.py": "c92b339e280ba3d750cb2a71c4daa9fb8dc4cf44fd0f0c08abd1da2f5d691028",
     "scripts/evidence.py": "16fab9c29191f451b12126254eab7c6247820cee2fe07b7bd8d1d263573aff24",
     "scripts/fwsync.py": "039327244ef85ead22934d9481c26856a50a0714b40f5e6747afef6d9bc40b0a",
     "scripts/iverif_config.py": "aee3aba997f18fdb3c60416a1537916aeb5ae3e5dec455f1d3216d64c63a1452",
@@ -22,10 +22,10 @@
     "workflow/schema/evidence_record.md": "db9f72d23e07264401e8448102403219d88f1fe0da3b4ff1d5bfd62c0bd565cf",
     "workflow/schema/failure_record.md": "abb3353d41e92a48551d31f0a41dd4af2fd18f7dbcbc8f980dee545639bb109e",
     "workflow/schema/testplan_entry.md": "3a60ebb6f60a94ec2c84ee5683bf2e8d801ea6f3b827758bd6cd7c52e4edf61c",
-    "workflow/signoff/rubric.md": "81332d5ec1194499337c3189c5d0db8f6dea0f1d8434fddf1581e5b5ccf01eec",
+    "workflow/signoff/rubric.md": "0f933bd51217c18a6fa6846f847af22ae96800aa422ec1dbaf55449d6d4a965f",
     "workflow/signoff/six_questions.md": "3dd5df0f48ddd354910c4debe4d5907dabb321d63802943833820ab6642d9865",
     "workflow/taxonomy/failure_taxonomy.md": "c94e5340a19e2afcae0eeffb322a1f2d03d631a7799abefc3d763230fa2d5be6",
     "workflow/taxonomy/rca_template.md": "58ea28f44f6777197131983afbb4065ec43788df0c0a0aaa509681711ada0a88"
   },
-  "framework": "0.6.0"
+  "framework": "0.6.1"
 }

@@ -894,6 +894,10 @@ def cmd_signoff():
           "acceptance rationale")
     print("  7. accepted debt: each ACCEPTED row's REV rationale is "
           "falsifiable; carry-overs re-arbitrated, never auto-extended")
+    print("  8. chain audit answered: paste one run into the signoff "
+          "record; disposition per gap class (report follows)")
+    print("")
+    cmd_chain_audit()
     return 1 if fails else 0
 
 
@@ -1006,9 +1010,14 @@ def cmd_chain_audit():
                 if "# spec_ref:" not in p.read_text(encoding="utf-8",
                                                     errors="replace"):
                     ev_missing_specref += 1
+    # Numeric sort + full print: string sort truncated the highest-numbered
+    # chapters — exactly the next milestone's territory — and silently
+    # (pulp FB-22). This is the one line that must never be cut.
     uncited = sorted(
-        s for s in secs if "." in s and s not in all_refs
-        and not any(ref == s or ref.startswith(s + ".") for ref in all_refs))
+        (s for s in secs if "." in s and s not in all_refs
+         and not any(ref == s or ref.startswith(s + ".")
+                     for ref in all_refs)),
+        key=lambda s: [int(x) for x in s.split(".")])
 
     print("== chain audit ==")
     print("[%s] dangling spec refs (cited, no such section): %d%s"
@@ -1022,7 +1031,7 @@ def cmd_chain_audit():
                                   " — " + ", ".join(items) if items else ""))
     print("[gap] spec subsections cited by no scenario: %d%s"
           % (len(uncited),
-             " — §" + ", §".join(uncited[:15]) if uncited else ""))
+             " — §" + ", §".join(uncited) if uncited else ""))
     print("[gap] ✅ evidence without a spec_ref header: %d/%d "
           "(convention, not yet enforced)"
           % (ev_missing_specref, ev_checked))

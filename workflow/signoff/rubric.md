@@ -36,6 +36,10 @@ It is read-only — it never edits state.
    REV record states a *falsifiable* rationale (which fact, if refuted,
    voids the ruling). Carry-overs were re-arbitrated — never
    auto-extended — and say why the previous due date slipped.
+8. **Chain audit answered.** Paste one `make chain-audit` run into the
+   signoff record; give each gap class a disposition or a written
+   acceptance. Dangling refs are fixed, never accepted. (Visibility, not
+   a gate — `--signoff` prints the report so it cannot go unseen.)
 
 ## The signoff record
 

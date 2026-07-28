@@ -1,4 +1,58 @@
 # Work log archive
+## [0.2.5] 2026-07-28 拉框架 0.5.3：FB-18 当日闭环，M2 签核卡解除暂停
+
+**Done**
+- **`make fw-pull` → 框架 0.5.3**，`fw-check`（26 files pinned）/ `docs-check`
+  双绿。pull 只动 4 个文件（+4 个重新渲染的 agent 文件），逐 diff 核对无外溢：
+  `workflow/signoff/rubric.md`、`scripts/docs.py`、`scripts/iverif.manifest.json`、
+  `iverif.json`
+- **FB-18 → `fixed@0.5.3`**（框架 commit `12b1548`），两半全采纳：
+  - (a) rubric 机器条件 3 同步为 "terminal **or unexpired `ACCEPTED@M<n>`**"
+  - (b) 新增人工抽查**第 7 条**（`docs.py --signoff` 同步打印，实测已见）：
+    "each `ACCEPTED@M<n>` row: the cited REV record states a *falsifiable*
+    rationale …… Carry-overs were re-arbitrated — never auto-extended — and
+    say why the previous due date slipped"
+  ⇒ 本仓库 REV-011 §4 G3 的项目自立规则**入 canon**，§5.4 作为参考形状记入框架
+  CHANGELOG；框架侧另加 fuse 钉住 rubric/工具在条件 3 与第 7 条上的永久一致
+- **FB-11 → `fixed@0.5.2`**：gate 自证教义按本仓库送出的**对抗原型证伪结论**
+  （stamp 候选形态的两个洞 + "elaboration done" 在 VCS O-2018 根本不存在）
+  全文重写进框架 deferred 台账；本仓库 `sim/Makefile`（BUG-0022 的无条件重跑 +
+  逐文件执行证明）被记为参考实现。本仓库原待办两项已随 BUG-0022 完成，无欠账
+- **BUG-0030 上游订正落页，但**不**关闭**：框架 0.5.2（`iverif-workflow@68a7e83`）
+  承认尾冒号是**快照缺陷而非环境约束**，`vcs-2018.mk` 改条件拼接。本仓库实测该
+  fragment 单独展开确已无尾冒号。**但框架"`env -i` 绕法可退役"的结论未采信**：
+  本页判据写的是"必须**恰为** `$VERDI_HOME/share/PLI/VCS/LINUX64`"，而
+  `sim/Makefile` 走完整 include 链后实测仍带 VCS lib 前缀 ⇒ **仍不"恰为"**。
+  尾冒号与"恰为"是两件事，上游只修了前者；当初的二分定位是逐项**加**变量做的，
+  没测过"带无关前缀但无尾冒号"这一形态 ⇒ 二者未经实测无法区分。维持 WONTFIX，
+  并在其 `## regression_guard` 登记一项**待兑现的附带义务**（下一张需要 xdebug
+  的卡本来就会产 FSDB，顺手做一次二值实验：成功则绕法退役、本条转 CLOSED 走
+  FB-16 的 `CMD=`/`EXPECT=` 形态；失败则"恰为"成立、绕法保留）
+
+**Not done**
+- M2 签核未做（本 chunk 只解除其前置阻塞）
+- BUG-0030 的二值实验未做（需 FSDB，不为不阻塞门禁的终态条目单独烧一次
+  编译+仿真；已登记为守卫义务，不是遗忘）
+- 四条 ACCEPTED@M3 债务本身未修；M3-TL01 未落地
+
+**Next**
+- **派 M2 签核卡**（rev，新实例——REV-011 作者不得签自己裁的债）。三条交接条件：
+  1. rubric #4"再读一个被豁免的洞"**明确挑 BUG-0018**（REV-011 §3.3 指定）
+  2. **不得**把 `axi_xbar_stall_sva` 的通过计为 M2-CFG01 的独立证据——84/84
+     零命中即其空转的机械证明（REV-011 §5.4）
+  3. rubric #7 是**新条**，四行 ACCEPTED@M3 全部落在它的抽查范围内
+- 签核 PASS 后 `make bump-minor` → 0.3.0 / M3 + `git tag`
+
+**How verified**
+- `make fw-check` 绿（0.5.3，26 files pinned）；`make docs-check` 绿
+- 新 rubric 逐条读过：条件 3 措辞已含 "or unexpired `ACCEPTED@M<n>`"，人工抽查
+  第 7 条存在且 `make signoff-check` 尾部确实打印它（**不是只改文档没改工具**）
+- `make signoff-check` 条件 1/2/3 全 PASS，仅余 `[not yet] signoff file`
+- BUG-0030 的上游修法是**实测**而非采信：`make -f -` 求值一个只 include 该
+  fragment 的临时 Makefile，父变量为空时结果恰为单一路径；对照 `sim/Makefile`
+  完整链的实测值带 VCS lib 前缀——正是这个对照支撑了"不采信绕法退役"的判断
+- `make guards FILES="sim/Makefile"` 7 条命中，含 BUG-0030 的新增待兑现义务
+
 ## [0.2.4] 2026-07-28 FB-18 回流并阻塞 M2 签核：ACCEPTED 只落到机器侧，rubric 两处未同步
 
 **Done**

@@ -1,3 +1,4 @@
+{"date": "2026-07-27", "version": "0.2.0", "summary": "M1 里程碑签核 PASS（doc/evidence/v0.1.2/signoff-M1.md）：M1-02 落地 ✅，落地期发现修复 BUG-0009（TB monitor AW/W 配对缺陷，TB_BUG CLOSED，守卫经签核亲验见红），REV-004 裁决 BUG-0008→WONTFIX，regress.list 补全至 3/3 PASS；转入 M2"}
 {"date": "2026-07-27", "version": "0.1.2", "summary": "框架 0.2.0 → 0.3.0 两轮回流闭环：FB-1~FB-7 全部 fixed@0.2.1，0.3.0 带来 workflow/discipline.md（执行纪律五条，本仓库的\"小步快跑\"被上收为其 rule 5）；两处本地重述收成指针防漂移；补登 BUG-0008（TOOL_ENV，M0 三条证据 Key check lines 段为空，存量是否重生成待 rev 裁决）；M1-02 未动"}
 {"date": "2026-07-27", "version": "0.1.1", "summary": "M1 首个场景落地：UVM env 骨架 + M1-01 smoke ✅（evidence v0.1.0/M1-01.log），REV-002 design-prompt 放行，REV-003 核验 VCS-2018 bind 限制的直接例化替代方案；M1-02 待做，FB 回流仍欠账"}
 {"date": "2026-07-27", "version": "0.1.0", "summary": "M0 里程碑签核 PASS（doc/evidence/v0.0.2/signoff-M0.md），基建+sanity+spec v0 收官；R1 回流 fw-feedback FB-6；转入 M1"}
