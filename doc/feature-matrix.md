@@ -18,3 +18,12 @@ feature → deliverable → testplan scenarios. Delivery/verification are comput
 | F-M2-07 | M2 | 协议/时序 SVA M2 激活集（design-prompt sva_bind.md C3.1-C3.5）：配置稳定性(C3.1) / 保序 stall(C3.2) / W 次序(C3.3，cover-only、不新增独立断言) / 事务上限(C3.4) / ATOP 成对+ID 唯一(C3.5)，各配一条非判决性 cover property 佐证非空转 | sva_bind | M2-CFG01, M2-OR01, M2-OR02, M2-TL01, M2-TL02, M2-WO01, M2-AT01, M2-OR03 |
 | F-M2-08 | M2 | functional + assert 功能覆盖采集基建：六类覆盖口径（SPEC-0 行4）中 functional（covergroup）与 assert（cover property）两维度在 M2 场景落地 | functional_coverage | M2-CFG01, M2-OR01, M2-OR02, M2-TL01, M2-TL02, M2-WO01, M2-AT01 |
 | F-M3-01 | M3 | `MaxMstTrans` 跨（低位 ID 桶×方向）聚合在飞规模合法性确认：≥2 个不同 ID 桶同时压满、单 slave 端口合计在飞数远超扁平上限仍被合法接受，将 demux.md 分桶口径由文档信任升级为波形经验确认（SPEC-5.4.1，BUG-0010 裁决守卫） | uvm_env+scoreboard_refmodel | M3-TL01 |
+| F-M3-02 | M3 | decode error slave 应答参考模型判据：`RESP_DECERR` + 读出齐 `AxLEN+1` beats 且末拍 `RLAST` + 写单拍 B + 读数据 `32'hBADCAB1E` 零扩展（SPEC-4.1/4.2/4.3/4.4/4.5） | scoreboard_refmodel | M3-DE01, M3-CF01, M3-CF02 |
+| F-M3-03 | M3 | default master port 路由：逐 slave 端口独立使能，未命中地址改走 default 而非 err_slv，与命中路由/ID 前缀/响应回送共存（SPEC-3.3/4.2/5.1） | uvm_env+scoreboard_refmodel | M3-DE02, M3-CF04 |
+| F-M3-04 | M3 | 译码未命中事务的保序地位落地（SPEC-5.2.6）：default port 半边纳入跟踪表、完整 ID 维度纳入完成序判决、低位桶维度显式引条款排除并配非判决 cover（BUG-0025 三层守卫） | sva_bind+scoreboard_refmodel | M3-DE02, M3-OR04 |
+| F-M3-05 | M3 | SVA 判决路径的运行时配置可见性：地址表/`en_default`/`default_mst_port` 取运行时活值而非编译期常量，与 scoreboard 共用同一份活值译码（SPEC-3.4/3.1，BUG-0031 守卫） | sva_bind | M3-CFG02 |
+| F-M3-06 | M3 | stall SVA 判决范围声明与范围外解除武装：范围 = 每完整 ID 至多一笔在飞，N≥2 由 scoreboard 每事务队列判据承担；范围外不得产出乱序告警（SPEC-5.2.4/5.2.3，BUG-0024 路线 (b) 守卫） | sva_bind | M3-OR05 |
+| F-M3-07 | M3 | AW/AR 接受时刻观测事件流：覆盖采样相位与判决输入管线对齐，使 §5.2/§5.5 相关 cross bin 在**各自对口场景**内命中（BUG-0018 守卫；不新增场景，验收=重跑对口 M2 场景） | uvm_env+functional_coverage | M2-OR01, M2-OR02, M2-WO01 |
+| F-M3-08 | M3 | 多配置构建与回归基建：配置点由 TEST 名唯一选定、每配置独立构建产物、运行日志自报生效的全部 `Cfg` 字段与模块参数，基线配置逐位不变（M0-M2 既有证据保持可复现） | tb_top | M3-CF01, M3-CF02, M3-CF03, M3-CF04 |
+| F-M3-09 | M3 | 配置矩阵维度覆盖（SPEC-0 行 3）：拓扑 1×N / N×1 / 4×4、`LatencyMode` NO_LATENCY / CUT_ALL_PORTS（CUT_ALL_AX 由基线承担）、`UniqueIds=1`、`ATOPs=0`、稀疏 `Connectivity`——每个维度取值至少出现在一个配置点 | tb_top+uvm_env | M3-CF01, M3-CF02, M3-CF03, M3-CF04 |
+| F-M3-10 | M3 | ATOP 原子读的跨方向假冲突 stall：条款化后的定向守卫——该交互只影响是否被 stall、不影响功能正确性，保序判据对它不报违反是有意的范围边界（SPEC-6.5/5.2.5，BUG-0012 守卫） | uvm_env+functional_coverage | M3-AT02 |

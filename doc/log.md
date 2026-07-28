@@ -2,6 +2,82 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.3] 2026-07-29 arch 卡：M3 场景清单落地 + 推翻 orch 的 constrained-random 决定
+
+**Done**
+- **arch 设计输入卡交付**：`doc/testplan.md` 新增 11 条 M3 场景
+  （DE01/DE02/OR04/CFG02/OR05/AT02/CF01~04/TL01——TL01 系既有行，核对满足
+  BUG-0010 guard 三要素，未改动）；`doc/feature-matrix.md` 新增
+  F-M3-02~F-M3-10；`doc/design-prompt/` 五份文件（tb_top/uvm_env/
+  scoreboard_refmodel/sva_bind/functional_coverage）各补 M3 增量段
+- **arch 反驳了 orch 关于"M3 引入配置维 constrained-random"的决定，
+  orch 采纳**。反驳给出三条可机械核验的事实（均已复核为真）：(1) 配置维
+  全部是 elaboration 期 `localparam`（`tb/xbar_types_pkg.sv:19-83`），SV
+  `randomize()` 是运行期求解器，语义上落不了地；(2) `+ntb_random_seed`
+  只进 `run:` 不进 `compile:`（`sim/Makefile:64` vs `:32-35`），要让种子
+  决定配置须让 elaboration 消费 SEED，即每种子一次全量重编；(3) 更要命的
+  是 `run: compile` 只产一个固定名 `simv`——配置随种子变而产物名不变时，
+  VCS 增量编译一旦复用旧 `simv`，"配置 X 通过"与"基线又跑一遍"在日志上
+  **完全同形**，与 BUG-0022（lint 假绿）/BUG-0028（分母缩水）同一沉默通过
+  家族，且比二者更隐蔽——判决路径的随机缺陷至少会以失配现形，配置随机的
+  缺陷表现为"跑的根本不是你以为的那个设计"。**替代方案**：配置维不做随机，
+  做**声明式覆盖子集**（4 个配置点 + 基线，spec §0 行 3 每维度每取值至少
+  出现一次，72 点全叉 → 5 点），组合爆炸同样被治住而每点由 `TEST` 名唯一
+  确定、可复现、可归因。事务序列保持定向未受影响
+- 四条 `ACCEPTED@M3` 债务逐条给出场景归属：BUG-0025+BUG-0031 同卡登记
+  （M3-DE02 第 1 层 + M3-OR04 第 2/3 层 + M3-CFG02，满足 REV-011 §4 G4 的
+  同卡修要求）；BUG-0024 → M3-OR05；**BUG-0018 判定不需要新场景**——新建
+  test 会与"逐 test 看、不看 merged"的判据相冲突，到期验收就是逐 test 重跑
+  既有 M2-OR01/WO01
+- BUG-0012 guard 点名"随条款落地补齐"的定向场景（条款 0.2.0 起已落地但一直
+  无人认领）补注册为 M3-AT02
+- **新登 BUG-0032**（SPEC_ISSUE，OPEN）：err_slv 对 ATOP 的应答形态许可来源
+  未定义——§4.3 按读/写二分只给"写事务返回单拍 B"，§6.3 要求原子读 B/R
+  双通道返回，err_slv 该产几拍 R、什么数据、什么响应码，无条款可推；
+  arch 亲跑 grep 确认上游文档 §Decode Errors 全段无 ATOP 命中。处置沿用
+  BUG-0002/0003 先例：env 构造性约束使其不可触发 + 列上游确认项，不阻塞
+  M3——但**状态未终判**，见 Not done
+- 一条可选 spec 编辑提案（非强制）：§4/§5.3 正文从不自引用其编号子条款，
+  致 `chain-audit` 的 parent-anchored 由 5 增至 15；arch 建议保留精确引用、
+  不退化为父级引用，未落地，交 rev 判断是否值得动 pin
+
+**Not done**
+- **BUG-0032 未终判**——orch 不得自填状态（同 BUG-0031 先例，ACCEPTED 的
+  rationale 须 rev 签名），需派 rev 仲裁卡确认 SPEC_ISSUE 处置 + 是否需要
+  spec 补条款
+- M3 尚未派发任何 DV/DE 执行卡，五份 design-prompt 增量与 11 条场景描述均
+  停留在设计输入阶段
+- `make signoff-check` 现状：条件 1 open 11 行、条件 3 active 多 BUG-0032、
+  accepted debt due 4 条——均是 M3 正常态，非本 chunk 遗留问题
+
+**Next**
+- 派 rev 仲裁卡：BUG-0032 状态终判（沿用 BUG-0002/0003 先例是否成立）+
+  是否需要 spec 补条款；顺带评估那条可选的 §4/§5.3 自引用编辑提案是否值得动
+- 按 arch 建议的五块切分派发 M3 执行卡（**严格顺序**，④ 必须先于 ⑤）：
+  ① BUG-0025+0031 同卡修 + M3-DE01/DE02/OR04/CFG02
+  ② BUG-0024 (b) 路线 + M3-OR05
+  ③ BUG-0018 修 + 重跑 M2-OR01/WO01 对口场景
+  ④ 多配置基建（tb_top C5.1-C5.7 声明式配置点）+ M3-CF01——验收锚点须含
+     "既有 11 条证据仍逐字节可复现"
+  ⑤ M3-CF02/03/04 + M3-AT02（依赖 ④ 的配置基建）
+- M3 签核卡需重做"判决活性矩阵"（M2 签核人交办，非任一 DV 卡交付物）；
+  §5.2.6 2.b 非判决 cover 落 `cg_miss_order.same_bucket_diff_full_id_with_err_slv`
+  （M3-OR04）
+- BUG-0025/BUG-0031 详情页 `ref: 待定` 未填——待其修复卡落地时一次性填入
+  具体 cover/assert 名，M3 签核时不得仍是"待定"
+
+**How verified**
+- `make docs-check` 绿；`make fw-check` 绿（框架 0.6.1，26 files pinned）
+- `make chain-audit`：dangling **仍为 0**（hard-fail 未被本卡触发）；
+  uncited 由 19 降至 9（§4.1/§4.5/§5.2.6/§5.3/§5.5.3/§6.5/§7.2/§8.3 均已
+  被新场景覆盖）；parent-anchored 由 5 增至 15（软缺口，见"可选提案"段）
+- orch 独立复核 arch 反驳的三条事实：`grep localparam tb/xbar_types_pkg.sv`
+  确认配置维全为 elaboration 期常量；`grep ntb_random_seed sim/Makefile`
+  确认仅在 `run:` recipe；`grep -n "^run:\|^compile:\|simv" sim/Makefile`
+  确认固定产物名 `$(OUT)/simv`——三条独立验证，非采信 arch 转述
+- M3-TL01 未改动，核对 BUG-0010 guard 三要素（跨 ID 桶压满 / 单端口合计远超
+  扁平上限 / 扁平表现触发 DUT_BUG 复核路径）逐条已具备
+
 ## [0.3.2] 2026-07-28 拉框架 0.6.1：FB-21/FB-22 当日闭环，M3 开工前底座就位
 
 **Done**
@@ -104,84 +180,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - 0.6.0 的 pull 范围逐 diff 核对：`docs.py`(+74) / `evidence.mk`(+7，新增
   `chain-audit` target) / `dispatch/SKILL.md`（FB-19 例外条款）/ manifest /
   iverif.json + 4 个重新渲染的 agent 文件，无外溢
-
-## [0.3.0] 2026-07-28 M2 里程碑签核 PASS，收官转入 M3
-
-**Done**
-- **M2 签核 PASS**（`doc/evidence/v0.2.5/signoff-M2.md`，rev 新实例——REV-011
-  作者不得签自己裁的债）。`make signoff-check` 四项全绿：机器条件 1/2/3 +
-  `[yes] signoff file`
-- 签核人**没有接受"树未动故条件 2 无需重跑"这条转述**（那是我在卡里给的环境
-  事实）：独立重跑 `make regress` 得 11/11，重写 `sim/result_summary.txt` 后
-  `git status` 不变脏 ⇒ 与登记证据逐字节相同。并核对分母——`regress.list`
-  11 行 ↔ testplan ✅ 11 行、差集为空（BUG-0028 guard 指派给签核人的动作已履行）
-- **rubric #5 的证伪是真做的**：废弃分支 `rev011-falsify-scratch` 上把 BUG-0027
-  的原缺陷放回 `tb/scoreboard_refmodel.sv`（删掉完成认领 `foreach` 里的
-  `break;`），`m2_or03_guard_test SEED=1` ⇒ **`UVM_ERROR: 336` /
-  `stall(C5.1/C5.2): violations=336`**，与详情页基线精确相符；复原后归零、
-  `SB_SUMMARY` 与登记证据逐字段相同，分支已销毁、工作树干净。选它是因为它守的
-  是**七行 M2 场景共用的判决锚点**
-- **rubric #7（0.5.3 新条）首次实战，四条 `ACCEPTED@M3` 全数通过**——签核人是
-  **带着推翻意图**去查的，12 项承重事实无一得手：BUG-0024 的假红构造三个结构
-  前提逐条验证（`stall_sva.sv:131` 无条件覆写 / `:273-283` 合取式里确实没有
-  `w_id_open[completing_id]` 项 / `:120-127` 复位只清 `*_id_open`）；BUG-0031
-  的三条 grep 事实推翻不了；BUG-0025 的否定性证据复核（`grep -in
-  "err_slv|error slave|decode error" axi_demux.md axi_mux.md` = **空集**，
-  xbar.md L33/L35/L86 三处引文逐字属实，spec 应用文本与提案逐字相同、无 RTL
-  来源）；BUG-0018 的 M4→M3 提前推理成立（`doc/spec.md:25` 六类确不含
-  covergroup）。无顺延条目（`ACCEPTED@M<n>` 今日首用），已按 rubric 明确确认
-- **一处超出既有记载的发现**：BUG-0018 的盲区差点动摇 **M2-WO01**——其非空转
-  判据要求"≥2 不同源 AW 未决"被激励到，而 covergroup 侧 `cp_w_contention` 恰被
-  该盲区打空（50%，只填 `single_source`）。实测证明判据由 assert 维度独立承担：
-  `axi_xbar_worder_sva.sv:107` 在 master 端口 0 上 `207 attempts, 46 match`
-  （同场景 [1..7] 全 0），与 WO01"多源汇聚同一 master 端口"的构造精确吻合
-  ⇒ 豁免成立，✅ 不动摇
-- REV-011 两条交接条件均已执行，且签核人把 §5.4 那条**推广**成了一张 8 行的
-  **判决活性矩阵**——此前记载里只有 CFG01 与 TL02 两个孤点
-- **登记 FB-20**（annoyance，由签核人报出）：**终态行携带的未兑现义务对
-  `signoff-check` 条件 3 完全不可见——终态即免检**。实例 BUG-0030（WONTFIX，
-  却挂着"`LD_LIBRARY_PATH` 必须*恰为*"是否属过度归纳的未做实验）。与 FB-18(b)
-  是同一缺口的两侧
-- 版本 0.2.5 → **0.3.0（M3）**，tag `v0.3.0`
-
-**Not done**
-- 四条 `ACCEPTED@M3` 债务本身未修（0018/0024/0025/0031）——**到期点就是 M3
-  签核**，届时 `docs.py:855` 会拦，且不得续期（顺延须重走仲裁，rubric #7）
-- BUG-0030 的"恰为"二值实验未做（需 FSDB，已登记为守卫义务 + FB-20）
-- M3-TL01 已注册未落地；M3 场景清单尚未设计
-- **框架 0.5.4 尚未 pull**（FB-19 已 fixed@0.5.4）——签核卡跑完前刻意不拉，
-  避免在其脚下换掉判据来源；现在可拉
-
-**Next**
-- `make fw-pull` → 0.5.4
-- 派 arch 设计输入卡：**M3 场景清单**（错误路径 / decode error / 多配置回归）。
-  两条前置已备好：spec §5.2.6 已定案（译码未命中事务的保序地位三层判据），
-  BUG-0025 + BUG-0031 应**同一张修复卡**且其守卫场景与 M3 decode-error 场景
-  在**同一张 arch 注册卡**里登记（REV-011 §4 G4）
-- 签核人留的两条 M3 指导：(1) `axi_xbar_stall_sva` 的判决活性矩阵须在 M3 新
-  场景落地后**重做**；(2) **§5.2.6 2.b 的非判决 cover 是 M3 的硬性抽查项**
-  ——M3 主题即错误路径，它缺席时"显式排除"与"忘了写"在报告上同形
-
-**How verified**
-- `make signoff-check` 四项全 `[PASS]`/`[yes]`；`make docs-check` / `make
-  fw-check`（0.5.3，26 files pinned）绿
-- 签核记录 `doc/evidence/v0.2.5/signoff-M2.md`（46 KB）含机器条件输出原文粘贴、
-  抽查 4/5/6/7 各自的引证、残留风险 R1–R7、判决 **PASS**
-- 判 PASS 而非 conditional 的理由（签核人原文口径）：查出的每一处残留风险
-  **都已有登记载体与到期点**，没有一条属于"新发现且无人认领"或"须在 M2 内补做
-  才能让 ✅ 成立"；八行 ✅ 的判决锚点均被验证为**存在、非空转、且可变红**
-- Taxonomy-class anomaly：**no**。三处候选追查后判定不构成新行，逐条留痕于
-  签核记录 §10（`cg_stall` 的 `SC_NONE` 无 bin 是有意设计；stall_sva 空转的成因
-  已分属 BUG-0024/0025/0031；BUG-0030 的待兑现实验已在其详情页 `:103-110`）
-- 派卡规则偏离（FB-19 那处）经签核人裁断：**未损害本次签核**——rubric #5 本就
-  命令签核人自跑同一命令、跑出的 22 条与索引逐条相符；省下的预算实际用在读
-  10 份 raw log 与 6 个源文件上，而那正是全部实测结论的来源
-
-**这一轮最该记住的一件事**：本轮三条框架反馈（FB-18/19/20）指向的是**同一个
-形状**——机制把最后一道防线放在执行者的自觉上。FB-18(b) 是 ACCEPTED 的
-rationale 无人复核，FB-19 是 orch 自行裁量要不要遵守派卡规则，FB-20 是终态行
-的未兑现义务无人看见。三次都靠自觉挡住了，三次都说明**凡是需要靠自觉的地方，
-就是规则该补的地方**——这句话已入框架 CHANGELOG。与 0.2.1 那轮"看到绿灯要先问
-它覆盖了什么"互为表里：那条问的是**门禁的覆盖面**，这条问的是**门禁之外靠什么
-兜底**。
 

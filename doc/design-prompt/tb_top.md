@@ -83,7 +83,50 @@ M1 的静态验证顶层 `tb_top`：例化**单个** `axi_xbar` DUT + 时钟/复
   信号，不受影响。依据：spec §2.3（`addr_map_i`/`en_default_mst_port_i`/
   `default_mst_port_i` 端口定义）、§3.4。
 
-## 5. 交付形态与验收锚点
+## 5. M3 增量：配置点参数化与多配置构建
+
+M3 要把 spec §0 行 3 的配置矩阵落成可回归的构建产物。本节只约束**构建/选型机制**，
+配置点各自要验什么由 `doc/testplan.md` M3-CF01~CF04 承载。
+
+- **C5.1 配置点由 `TEST` 名唯一选定**。理由是机械的：`scripts/regress.py`（pinned
+  snapshot，本地不可改）对每条回归条目只执行 `make -C sim run TEST=<t> SEED=<n>`，
+  除 `TEST`/`SEED` 外不传任何变量——配置点若不由 `TEST` 名决定，回归清单就无法
+  表达它。同时核心不变式要求 `make run TEST=<t> SEED=<n>` 唯一确定"被仿真的是
+  哪个设计"，故配置点**不得**由环境变量、外部文件或随机数决定。
+- **C5.2 每配置点独立构建产物**（独立输出目录与 `simv`），不得共用同一个
+  `$(OUT)/simv`。理由：配置为 elaboration 时常量，切换配置必须重新 elaborate；
+  共用产物时 VCS 增量编译一旦复用上一配置的 `simv`，"配置 X 通过"与"基线又跑了
+  一遍"在日志上完全同形——即 BUG-0022（lint 假绿）/BUG-0028（分母缩水）那一类
+  **沉默的通过**。
+- **C5.3 运行自报生效配置**：每次仿真在开头打印本次 elaborate 生效的**全部 13 个
+  `Cfg` 字段 + `ATOPs` + `Connectivity` + 地址表条目**。这样每份 evidence 自证其
+  配置点，签核抽查不必反推。依据：spec §2.1/§2.2（字段清单）、§0 行 3。
+- **C5.4 基线配置逐位不变**：参数化重构**不得**改变基线（C1.2）的任何取值或地址表
+  区间布局。验收锚点是既有 11 条证据仍可复现——`make regress` 产出的
+  `sim/result_summary.txt` 与 `doc/evidence/v0.2.*/result_summary.txt` 保持一致。
+- **C5.5 配置点的定义规则**：配置点之间**只**变动 spec §0 行 3 列举的维度
+  （`NoSlvPorts`/`NoMstPorts`、`LatencyMode`、`UniqueIds`、`ATOPs`、`Connectivity`）；
+  其余 `Cfg` 字段（`MaxMstTrans`/`MaxSlvTrans`/`FallThrough`/`PipelineStages`/
+  `AxiIdWidthSlvPorts`/`AxiIdUsedSlvPorts`/`AxiAddrWidth`/`AxiDataWidth`/
+  `NoAddrRules=8`）与 8 条 rule 的地址区间布局一律沿用基线，rule 的 `idx` 取
+  `rule_index mod NoMstPorts`（cfgD 例外见 C5.7）。目的：让配置点之间的差异**只有
+  被验的那一维**，失败可归因。依据：spec §0 行 2/行 3、§3.1（多条 rule 可指向同一
+  master 端口）。
+- **C5.6 `NoSlvPorts=1` 的 ID 前缀退化**（cfgA）：按 spec §5.1 的公式字面取值，
+  master 端口 ID 宽 = `AxiIdWidthSlvPorts + $clog2(1)` = `AxiIdWidthSlvPorts` = 5，
+  前缀为 **0 位宽**。类型定义与参考模型须按该字面取值处理，不得沿用基线的 3 位
+  前缀假设；0 位宽 part-select 在 SV 中非法，实现应把该情形表达为"无前缀字段"而
+  不是宽度为 0 的切片。依据：spec §5.1。
+- **C5.7 稀疏 `Connectivity` 的构造规则**（cfgD）：地址表是**全局共享**的一张表
+  （spec §3.1.1），故译码结果与源 slave 端口无关；要让 spec §8.3 的环境约束
+  （不把任一 slave 端口的任何地址译码到其非连通 master 端口）**构造性**成立，
+  唯一可行的构造是——**凡有 rule 指向的 master 端口，对所有 slave 端口连通**；
+  稀疏只能出现在**无任何 rule 指向**的 master 端口上，而这类端口是合法配置、仅经
+  default master port 可达（spec §3.1.2）。cfgD 据此令 8 条 rule 只指向 mst0/mst1，
+  mst2/mst3 仅作逐 slave 端口的 default master port，`Connectivity` 逐行只留出本行
+  自己的 default 端口。依据：spec §3.1、§3.3、§8.3。
+
+## 6. 交付形态与验收锚点
 
 - 产物：`tb/`（或按 flist 约定路径）下的 `tb_top`（静态 SV），可被 `sim/flist/tb.f`
   收录（CLAUDE.md §6 flist 布局）。
@@ -93,4 +136,4 @@ M1 的静态验证顶层 `tb_top`：例化**单个** `axi_xbar` DUT + 时钟/复
 
 ## 引用的 spec 章节
 
-§0（行 1/2/3/4）、§1、§2.1、§2.2、§2.3、§3.1、§3.3、§3.4、§4、§5.1、§7.4。
+§0（行 1/2/3/4）、§1、§2.1、§2.2、§2.3、§3.1、§3.3、§3.4、§4、§5.1、§7.4、§8.3。

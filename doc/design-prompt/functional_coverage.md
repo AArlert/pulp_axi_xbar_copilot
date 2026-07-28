@@ -84,14 +84,50 @@ property` 原生产生（VCS assertion 覆盖数据库），但它天然只反�
   记录（例如 `cg_stall` 的 `stalled` bin 与 sva_bind C3.2 主属性的 cover 大致
   对应同一激励），这是有意的交叉验证，不是重复劳动的信号。
 
-## 4. M4 收敛口径的占位
+## 4. M3 覆盖点清单（错误路径 + 多配置；逐条引用 spec + 对应场景）
 
-本文登记的 bin 是 M2 场景对应的最小集合，用于证明"M2 新增的判决机制不是靠空转/
-偶然通过"。M4 六类 ≥90% 收敛时若发现缺口，遵照 `workflow/dispatch/coverage_hole.md`
-的流程处理（先问"testplan 场景是否存在"，而非直接派 DV 试图硬凑激励命中）；本文
-不预判 M4 的具体缺口，也不在此提前给出 M3（decode error/错误路径）或 M4（配置矩阵）
-的 bin 设计——那些属于各自里程碑的 arch 设计输入卡范围。
+采样时机与挂点约束同 §1（C1.1/C1.2）。除 `cg_decode_error`/`cg_decerr_shape` 外
+本节均为**非判决**留痕。
+
+- **`cg_decode_error`**：coverpoint「本次事务的译码去向」（bins：`hit_rule`、
+  `miss_err_slv`、`miss_default_port`）；cross 源 slave 端口 idx × 方向。依据
+  spec §3.2/§3.3/§4.2；场景 M3-DE01/M3-DE02。
+- **`cg_decerr_shape`**：coverpoint「err_slv 应答形态被验到的 burst 长度档」
+  （bins：`len_eq_0`、`len_gt_0`）× 方向——用于证明 spec §4.3 的 beat 数判据
+  （读出齐 `AxLEN+1` 拍、写单拍 B）不是只在单拍 burst 上平凡通过。依据 spec §4.3；
+  场景 M3-DE01。
+- **`cg_miss_order`（非判决，spec §5.2.6 第 2.b/第 3 条要求的留痕）**：两个 bin
+  ——`same_full_id_hit_miss_coexist`（同一完整 ID 的命中笔与未命中笔同时在飞，
+  即**被判决**的那一维，spec §5.2.6 第 2.a 条）与
+  `same_bucket_diff_full_id_with_err_slv`（低位桶相同、完整 ID 不同、其一走
+  err_slv，即**被显式排除**的那一维）。后者是 spec §5.2.6 第 2.b 条点名要求的
+  非判决 cover：没有它，"有意排除"与"忘了写"在报告上完全同形。场景 M3-OR04。
+- **`cg_default_port_tracked`（非判决，BUG-0025 第 1 层守卫）**：coverpoint「经
+  default master port 路由的事务是否已进入 `axi_xbar_stall_sva` 的在飞跟踪表」。
+  今日该数结构性恒 0；守卫兑现后须 >0。依据 spec §3.3/§5.2.6 第 1 条；场景 M3-DE02。
+- **`cg_live_addr_map`（非判决，BUG-0031 守卫的正判据）**：coverpoint「SVA 侧对
+  **重配之后**命中被改动 rule 的事务算出的目标端口」，须能区分新表版本的 `idx` 与
+  旧表版本的 `idx`——命中新版 bin **当且仅当**判决路径真的用上了活值表。依据
+  spec §3.4；场景 M3-CFG02。
+- **`cg_cfg_point`（非判决）**：coverpoint「本次运行 elaborate 生效的配置点」，
+  维度取 spec §0 行 3 的矩阵（拓扑 × `LatencyMode` × `UniqueIds` × `ATOPs` ×
+  `Connectivity` 是否稀疏），每个已注册配置点一个 bin。目的：让"哪些配置点真的
+  跑过"成为覆盖数据库里的**事实**，而不是回归清单里的**声明**（呼应 tb_top C5.2
+  对沉默通过的防线）。依据 spec §0 行 3；场景 M3-CF01~CF04 + 基线各场景。
+
+**BUG-0018 相关（不新增 bin）**：AW/AR 接受时刻观测事件流补齐后，`cg_stall`/
+`cg_w_order`/`cg_tx_limit` 的既有 bin 须在**各自对口场景**（M2-OR01/OR02、
+M2-WO01、M2-TL01/TL02）内命中，复验**逐 test 看、不看 merged 报告**——"合并后
+100%"正是该缺陷此前被掩盖的方式。
+
+## 5. M4 收敛口径的占位
+
+§2/§4 登记的 bin 分别是 M2 与 M3 场景对应的最小集合，用于证明"该里程碑新增的判决
+机制不是靠空转/偶然通过"。M4 六类 ≥90% 收敛时若发现缺口，遵照
+`workflow/dispatch/coverage_hole.md` 的流程处理（先问"testplan 场景是否存在"，而非
+直接派 DV 试图硬凑激励命中）；本文不预判 M4 的具体缺口。
 
 ## 引用的 spec 章节
 
-§0（行 4）、§2.1、§3.4、§5.2、§5.4、§5.5、§6.3、§6.5。
+§0（行 3/4）、§2.1、§3.2、§3.3、§3.4、§4.2、§4.3、§5.2、§5.2.6、§5.4、§5.5、
+§6.3、§6.5。
