@@ -6,11 +6,11 @@
 #   python3 kernel/fwsync.py --init <dir> --profile learning [--columns en]
 #   python3 kernel/fwsync.py --pull --into <project-dir>
 #
-# From a PROJECT (vendored copy at <proj>/scripts/fwsync.py):
+# From a PROJECT (pinned copy at <proj>/scripts/fwsync.py):
 #   python3 scripts/fwsync.py --check
 #   python3 scripts/fwsync.py --pull <path-to-framework-clone>
 #
-# The vendored snapshot = scripts/ (kernel + make fragments) + workflow/
+# The pinned snapshot = scripts/ (kernel + make fragments) + workflow/
 # (reference docs), hash-recorded in scripts/iverif.manifest.json. Hashes are
 # computed over CRLF-normalized bytes so Windows working trees and the Linux
 # VM agree. Projects never edit the snapshot: improve the framework, bump,
@@ -19,6 +19,7 @@
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import stat
 import sys
@@ -29,10 +30,10 @@ from iverif_config import COLUMN_PRESETS
 
 HERE = Path(__file__).resolve().parent
 
-VENDOR_REF_DIRS = ("schema", "taxonomy", "dispatch", "signoff")
+SNAPSHOT_REF_DIRS = ("schema", "taxonomy", "dispatch", "signoff")
 MANIFEST = "iverif.manifest.json"
 
-# Skills vendored into <proj>/.claude/skills/ (hash-pinned like workflow/).
+# Skills pinned into <proj>/.claude/skills/ (hash-pinned like workflow/).
 # dispatch is the orch operating manual — copilot only; a learning repo
 # carrying it would invite the main session to start dispatching de/dv
 # cards, which is exactly what the learning profile forbids.
@@ -77,7 +78,8 @@ def framework_root(arg=None):
         return p
     if is_framework(HERE.parent):
         return HERE.parent
-    die("run from a framework checkout, or pass the framework path")
+    die("run from a framework checkout, pass the framework path, or set "
+        "framework_repo in iverif.json")
 
 
 def project_root(arg=None):
@@ -98,7 +100,7 @@ def fw_version(fw):
     return (fw / "VERSION").read_text(encoding="utf-8").strip()
 
 
-def vendor_pairs(fw, profile=None):
+def snapshot_pairs(fw, profile=None):
     """(source file, dest path relative to project root) for the snapshot.
     profile "all" = framework-side full manifest; "copilot" adds the
     copilot-only skills; "learning"/None (unknown, e.g. a legacy repo's
@@ -108,13 +110,24 @@ def vendor_pairs(fw, profile=None):
         pairs.append((py, Path("scripts") / py.name))
     for mk in sorted((fw / "make").glob("*.mk")):
         pairs.append((mk, Path("scripts") / "make" / mk.name))
-    for d in VENDOR_REF_DIRS:
+    for d in SNAPSHOT_REF_DIRS:
         for f in sorted((fw / d).rglob("*.md")):
             pairs.append((f, Path("workflow") / f.relative_to(fw)))
-    for name in ("profiles", "discipline"):
-        f = fw / "docs" / ("%s.md" % name)
+    f = fw / "docs" / "discipline.md"
+    if f.exists():
+        pairs.append((f, Path("workflow") / "discipline.md"))
+    # Profile contract: a project receives only its own profile's file, as
+    # workflow/profile.md. "all" (framework-side manifest) lists both
+    # sources under their canon names.
+    if profile == "all":
+        for p in ("learning", "copilot"):
+            f = fw / "docs" / ("profile.%s.md" % p)
+            if f.exists():
+                pairs.append((f, Path("workflow") / ("profile.%s.md" % p)))
+    elif profile in ("learning", "copilot"):
+        f = fw / "docs" / ("profile.%s.md" % profile)
         if f.exists():
-            pairs.append((f, Path("workflow") / ("%s.md" % name)))
+            pairs.append((f, Path("workflow") / "profile.md"))
     skills = SKILLS_COMMON + (SKILLS_COPILOT
                               if profile in ("all", "copilot") else ())
     for name in skills:
@@ -139,7 +152,7 @@ def render(text, ctx):
 def cmd_gen_manifest():
     fw = framework_root()
     files = {rel_key(dest): norm_sha(src)
-             for src, dest in vendor_pairs(fw, profile="all")}
+             for src, dest in snapshot_pairs(fw, profile="all")}
     manifest = {"version": fw_version(fw), "files": files}
     out = fw / "kernel" / "kernel.manifest.json"
     out.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n",
@@ -155,6 +168,9 @@ def cmd_check():
         die("no %s — this project has no framework snapshot yet "
             "(run --pull <framework-clone>)" % mpath.relative_to(proj))
     manifest = json.loads(mpath.read_text(encoding="utf-8"))
+    dpath = proj / "scripts" / "iverif.divergence.json"
+    div = (json.loads(dpath.read_text(encoding="utf-8")).get("files", {})
+           if dpath.exists() else {})
     missing, modified = [], []
     for rel, sha in sorted(manifest["files"].items()):
         p = proj / rel
@@ -162,26 +178,41 @@ def cmd_check():
             missing.append(rel)
         elif norm_sha(p) != sha:
             modified.append(rel)
-    if not missing and not modified:
-        print("fw-check passed (framework %s, %d files pinned)"
-              % (manifest.get("framework", "?"), len(manifest["files"])))
+    undeclared = [f for f in modified if f not in div]
+    declared = [f for f in modified if f in div]
+    for f in declared:
+        print("[DECLARED] %s — %s (upstream: %s)"
+              % (f, div[f].get("reason", "?"),
+                 div[f].get("upstream_ref", "none")))
+    for f in sorted(set(div) - set(modified)):
+        print("[STALE] declared but pristine — drop from "
+              "iverif.divergence.json: %s" % f)
+    if not missing and not undeclared:
+        if declared:
+            print("fw-check: %d declared divergence(s) — a loan, not a "
+                  "state: feed back upstream (doc/fw-feedback.md) or make "
+                  "your upstream a fork (framework_repo)" % len(declared))
+        else:
+            print("fw-check passed (framework %s, %d files pinned)"
+                  % (manifest.get("framework", "?"),
+                     len(manifest["files"])))
         return 0
     for f in missing:
-        print("[FAIL] vendored file missing: %s" % f)
-    for f in modified:
-        print("[FAIL] vendored file modified locally: %s" % f)
-    print("\nfw-check failed: the framework snapshot must stay pristine.\n"
-          "Improve the framework repo instead, then: "
-          "python3 scripts/fwsync.py --pull <framework-clone>\n"
-          "(emergency local fixes may stay temporarily — flow them back "
-          "within a day)")
+        print("[FAIL] pinned file missing: %s" % f)
+    for f in undeclared:
+        print("[FAIL] pinned file modified locally (undeclared): %s" % f)
+    print("\nfw-check failed. Either revert / re-pull (make fw-pull), or\n"
+          "declare the divergence in scripts/iverif.divergence.json:\n"
+          '  {"files": {"<rel>": {"reason": "...", "upstream_ref": '
+          '"FB-x|fork"}}}\n'
+          "Silent drift is the enemy; declared divergence is auditable.")
     return 1
 
 
 def do_pull(fw, proj):
     ver = fw_version(fw)
 
-    # Profile decides the vendor set and the agent suite, so read the
+    # Profile decides the snapshot set and the agent suite, so read the
     # config first (a legacy repo's very first pull may predate it).
     cfg_path = proj / "iverif.json"
     profile = None
@@ -195,7 +226,7 @@ def do_pull(fw, proj):
         project_name = cfg.get("project_name", proj.name)
 
     files = {}
-    for src, dest in vendor_pairs(fw, profile=profile):
+    for src, dest in snapshot_pairs(fw, profile=profile):
         target = proj / dest
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(str(src), str(target))
@@ -220,8 +251,8 @@ def do_pull(fw, proj):
         print("rendered .claude/agents/%s" % out_name)
     if profile is None:
         print("note: no iverif.json yet — pulled the common set only; "
-              "create iverif.json (see workflow/profiles.md) and re-pull "
-              "to render the agent suite")
+              "create iverif.json (profile: learning|copilot) and re-pull "
+              "to get the profile contract + agent suite")
 
     print("pulled framework %s: %d files into scripts/ + workflow/ + "
           ".claude/skills/" % (ver, len(files)))
@@ -334,6 +365,7 @@ def cmd_init(target, profile, columns, project_name):
     ver = fw_version(fw)
 
     cfg = {"framework": ver, "profile": profile, "project_name": name,
+           "framework_repo": os.path.relpath(str(fw), str(proj)),
            "columns_preset": columns,
            "delivery": {"glob": "tb/{name}.sv"},
            "sim_log": "sim/out/{test}_{seed}.log",
@@ -407,7 +439,7 @@ def main():
     ap.add_argument("--gen-manifest", action="store_true",
                     help="(framework) regenerate kernel.manifest.json")
     ap.add_argument("--check", action="store_true",
-                    help="(project) verify the vendored snapshot hashes")
+                    help="(project) verify the pinned snapshot hashes")
     ap.add_argument("--pull", nargs="?", const="", metavar="FW",
                     help="refresh the snapshot (from a project: pass the "
                          "framework clone path)")
@@ -426,8 +458,18 @@ def main():
     elif args.check:
         sys.exit(cmd_check())
     elif args.pull is not None:
-        fw = framework_root(args.pull or None)
         proj = project_root(args.into)
+        src = args.pull or None
+        if src is None and HERE.name == "scripts":
+            # One-command pull: resolve the upstream from iverif.json.
+            cfg_path = proj / "iverif.json"
+            if cfg_path.exists():
+                repo = json.loads(cfg_path.read_text(
+                    encoding="utf-8")).get("framework_repo")
+                if repo:
+                    src = repo if Path(repo).is_absolute() \
+                        else str((proj / repo).resolve())
+        fw = framework_root(src)
         if not (proj / "iverif.json").exists() and HERE.name != "scripts":
             die("target has no iverif.json — for a brand-new project use "
                 "--init")

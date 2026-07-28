@@ -3,7 +3,7 @@ name: closeout
 description: Close a work cycle — bump the skeleton, fill semantics, pass the gates, commit. Run at the end of every substantive work cycle, before committing.
 ---
 
-<!-- Canonical: iverif-workflow/skills/closeout/SKILL.md — vendored, hash-pinned. -->
+<!-- Canonical: iverif-workflow/skills/closeout/SKILL.md — pinned snapshot. -->
 
 # Closeout flow (fixed order, no skipping)
 

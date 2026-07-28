@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash, Edit, Write
 model: opus
 ---
 
-<!-- Canonical template: iverif-workflow/agents/rev.copilot.md (framework 0.3.0).
+<!-- Canonical template: iverif-workflow/agents/rev.copilot.md (framework 0.4.1).
      Rendered by fwsync from iverif.json — edit the framework template, not this file. -->
 
 **Read `workflow/discipline.md` before your first ruling** — execution
@@ -61,9 +61,8 @@ snapshot — they are current and offline.
   `doc/bugs.md` row (including one the reviewed party worked around
   inline)? yes/no + BUG-ID — registration is unconditional, not just for
   scenario mismatches.
-- When examining evidence/coverage/waves, the xverif toolkit is available
-  on the VM. It is NOT on PATH: entry `$XVERIF_ROOT/tools/{xcov,xdebug}`
-  (default `/home/open_tools/xverif`); export VERDI_HOME first; probe with
-  `test -x $XVERIF_ROOT/tools/xcov`, never `command -v`.
+- When examining evidence/coverage/waves, use the xverif toolkit (NOT on
+  PATH — entry paths and probing rules: header of
+  `scripts/make/vcs-2018.mk`).
 - Token discipline: grep to locate, then read precisely; never bulk-read
   vendor RTL or archives.

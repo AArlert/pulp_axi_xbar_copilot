@@ -36,8 +36,17 @@ PLAIN_MARK = "V C S   S i m u l a t i o n"
 # upstream `tb_axi_xbar`'s "Simulation has ended!" / "Tests Failed: 0" —
 # these previously matched none of the UVM-shaped patterns above, leaving
 # `## Key check lines` empty despite a sound verdict (pulp_axi_xbar FB-6).
+# `[FCOV_SUMMARY]` is the canon convention for functional-coverage summary
+# lines (schema/evidence_record.md: the tb prints one line per covergroup,
+# `[FCOV_SUMMARY] <cg> samples=<n> inst_cov=<pct>`) so coverage numbers land
+# in the excerpt and signoff never re-opens source logs. Promoted from
+# pulp_axi_xbar's project tag (FB-9) by user ruling 2026-07-28: adopting
+# projects must be correct with zero config. Genuinely project-specific
+# extra tags still ride the `key_line_extra` regex list in iverif.json —
+# never edits to this file.
 KEY_LINE_RE = re.compile(r"(?i)\b(pass|match|compare ok|check ok"
-                         r"|running test|tests failed|ended|mismatch)\b")
+                         r"|running test|tests failed|ended|mismatch)\b"
+                         r"|\[FCOV_SUMMARY\]")
 KEY_LINES_MAX = 30
 
 
@@ -81,7 +90,15 @@ def extract(log_path, rid):
     # Archive the native assertion-count lines with the excerpt so the
     # evidence itself stays independently re-judgeable by svacheck.py.
     sva_lines = [l for l in lines if svacheck.SUMMARY_RE.match(l)]
-    keys = [l for l in lines if KEY_LINE_RE.search(l) or rid in l]
+    extra = []
+    for i, pat in enumerate(CFG.key_line_extra):
+        try:
+            extra.append(re.compile(pat))
+        except re.error as exc:
+            sys.exit("iverif.json key_line_extra[%d] is not a valid regex "
+                     "(%s): %r" % (i, exc, pat))
+    keys = [l for l in lines if KEY_LINE_RE.search(l) or rid in l
+            or any(rx.search(l) for rx in extra)]
     return summary, sva_lines, keys[:KEY_LINES_MAX]
 
 

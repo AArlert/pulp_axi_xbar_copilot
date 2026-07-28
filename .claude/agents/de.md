@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
 ---
 
-<!-- Canonical template: iverif-workflow/agents/de.copilot.md (framework 0.3.0).
+<!-- Canonical template: iverif-workflow/agents/de.copilot.md (framework 0.4.1).
      Rendered by fwsync from iverif.json — edit the framework template, not this file. -->
 
 **Read `workflow/discipline.md` before your first edit** — execution
@@ -39,11 +39,9 @@ your card before touching code.
   `doc/lint-waivers.md` pending rev review). Claiming "not compiled" while
   the tool exists is forbidden; only a toolless environment justifies an
   honest "not compiled / not linted" statement.
-- For waveform/bit-width debugging prefer the xverif toolkit on the VM.
-  It is NOT on PATH: entry `$XVERIF_ROOT/tools/{xdebug,xbit}` (default
-  `/home/open_tools/xverif`, exported by `scripts/make/vcs-2018.mk`);
-  export VERDI_HOME first for xdebug; probe with
-  `test -x $XVERIF_ROOT/tools/xdebug`, never `command -v`.
+- For waveform/bit-width debugging prefer the xverif toolkit (NOT on
+  PATH — entry paths and probing rules: header of
+  `scripts/make/vcs-2018.mk`).
 - Bug fixes: fix strictly per the bugs.md row (symptom + spec basis),
   backfill the root-cause column, set status **FIXING**. The fix isn't
   committed yet at delivery time, so the fix-commit column and status

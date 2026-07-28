@@ -38,6 +38,8 @@ over speed; on a trivial task, use judgment.
   for impossible scenarios.
 - If you wrote 200 lines and it could be 50, rewrite it. Ask: *would a
   senior engineer call this overcomplicated?*
+- Prose follows the same rule: state the rule and its check, one line of
+  why at most; the backstory belongs in the CHANGELOG, not the doc.
 - The framework's own version of this rule is the deferred ledger — a
   mechanism ships when its trigger fires, not when it seems useful.
 - **The one exception is a gate.** A check that refuses to pass without
@@ -58,7 +60,7 @@ over speed; on a trivial task, use judgment.
 - "Mention it" is not a chat remark: if what you noticed matches a
   `failure_taxonomy.md` class, it gets a `doc/bugs.md` row. Registration is
   unconditional.
-- **The vendored snapshot is not surgically editable at all.** `scripts/`,
+- **The pinned snapshot is not surgically editable at all.** `scripts/`,
   `workflow/`, `.claude/skills/` and the rendered `.claude/agents/` come
   from the framework; a fix goes to the framework first, then comes back by
   `fwsync --pull`. `make fw-check` is watching.

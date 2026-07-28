@@ -546,7 +546,13 @@ def report(errors, warns):
 
 
 # --next action wording per profile: learning speaks to the human doing the
-# work; copilot speaks to orch dispatching cards.
+# work; copilot speaks to orch dispatching cards. The deliverable-owning
+# role in the copilot wording (%(role)s) is derived from the project's own
+# delivery config (tb/-rooted glob → DV-owned tb code, else DE-owned RTL;
+# explicit delivery.owner wins) so vendored-DUT repos are correct with zero
+# config (pulp_axi_xbar FB-8). `next_phrases_override` in iverif.json stays
+# as the escape hatch for genuinely project-specific wording; overrides must
+# keep the original phrase's %(...)s placeholders.
 NEXT_PHRASES = {
     "learning": {
         "bug_open_spec": "%(bid)s OPEN (spec issue) → request rev arbitration",
@@ -582,12 +588,13 @@ NEXT_PHRASES = {
                          "--bug %(bid)s after the re-run",
         "tp_fail": "testplan %(rid)s ❌ → DV checks stimulus/checker first; "
                    "still RTL-suspect → file in bugs.md",
-        "undelivered": "%(mod)s RTL not delivered (%(ids)s, design prompt "
-                       "ready) → dispatch DE card",
+        "undelivered": "%(mod)s deliverable missing (%(ids)s, design prompt "
+                       "ready) → dispatch %(role)s card",
         "unverified": "%(mod)s scenarios %(scenes)s not ✅ → dispatch DV "
                       "scenario card",
         "prompt_missing": "%(mod)s lacks doc/design-prompt/%(mod)s.md → "
-                          "dispatch arch card (rev gate before any DE card)",
+                          "dispatch arch card (rev gate before any "
+                          "%(role)s card)",
     },
 }
 
@@ -597,7 +604,13 @@ def cmd_next():
     Pure state-machine derivation — semantic decisions (ownership calls,
     card contents) stay with the human/orch."""
     version, milestone = read_version()
-    P = NEXT_PHRASES[CFG.profile]
+    P = dict(NEXT_PHRASES[CFG.profile])
+    bad = sorted(set(CFG.next_phrases_override) - set(P))
+    if bad:
+        sys.exit("iverif.json next_phrases_override: unknown key(s) %s — "
+                 "valid keys: %s (a typo here would otherwise silently "
+                 "no-op)" % (", ".join(bad), ", ".join(sorted(P))))
+    P.update(CFG.next_phrases_override)
     acts = []  # (priority, text): 0=guard debt, 1=bugs+milestone, 2=progress
 
     # 0) guard debt
@@ -650,7 +663,8 @@ def cmd_next():
         unverif = sorted({s for r in rows for s in linked_scenes(r)
                           if s not in tp_pass})
         ctx = {"mod": mod, "ids": " ".join(ids),
-               "scenes": " ".join(unverif)}
+               "scenes": " ".join(unverif),
+               "role": CFG.delivery_owner.upper()}
         prompt = CFG.doc / "design-prompt" / ("%s.md" % mod)
         if deliv is False and P["prompt_missing"] and not prompt.exists():
             acts.append((2, P["prompt_missing"] % ctx))
@@ -811,8 +825,8 @@ def cmd_signoff():
           "workflow/signoff/rubric.md):")
     print("  4. coverage closure ≠ risk closure: verify 2-3 hit bins were "
           "hit by the intended scenario; re-read 1 waived hole")
-    print("  5. guard falsification: re-introduce one FL's original defect, "
-          "confirm the guard fires")
+    print("  5. guards: make guards FILES=<touched> lists the review "
+          "scope; falsify at least one (re-introduce its defect, see red)")
     print("  6. open SPEC_ISSUE list empty, or each entry has a written "
           "acceptance rationale")
     return 1 if fails else 0
@@ -881,6 +895,35 @@ def cmd_repro(rid):
     sys.exit("scenario %s not found in testplan" % rid)
 
 
+def cmd_guards(paths):
+    """Print every registered regression_guard whose `paths:` globs match
+    any given file path. Consumed at card assembly (dispatch self-check)
+    and by rubric #5 — constraint propagation by registered fact, which is
+    what the instance-isolation rules cannot carry (pulp BUG-0015: a guard
+    named the next victim file and nothing consumed it)."""
+    import fnmatch
+    hits = 0
+    for page in sorted(CFG.bug_pages.glob("*.md")):
+        text = page.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r"^## regression_guard\s*\n(.*?)(?=^## |\Z)", text,
+                      re.M | re.S)
+        if not m:
+            continue
+        block = m.group(1).strip()
+        pm = re.search(r"^paths:\s*(.+)$", block, re.M)
+        if not pm:
+            continue
+        globs = [g for g in re.split(r"[,\s]+", pm.group(1).strip()) if g]
+        matched = [p for p in paths
+                   if any(fnmatch.fnmatch(p, g) for g in globs)]
+        if matched:
+            hits += 1
+            print("== %s guard (hit: %s) ==" % (page.stem,
+                                                " ".join(matched)))
+            print(block + "\n")
+    print("%d guard(s) matched" % hits)
+
+
 def main():
     global CFG
     parser = argparse.ArgumentParser(
@@ -901,6 +944,8 @@ def main():
                         help="print a scenario's full evidence chain")
     parser.add_argument("--repro", metavar="SCEN",
                         help="print a scenario's replay command")
+    parser.add_argument("--guards", nargs="+", metavar="PATH",
+                        help="print regression_guards binding these paths")
     args = parser.parse_args()
     CFG = load_config()
     if args.pin_spec:
@@ -915,6 +960,8 @@ def main():
         cmd_chain(args.chain)
     if args.repro:
         cmd_repro(args.repro)
+    if args.guards:
+        cmd_guards(args.guards)
     if args.handover:
         cmd_handover()
     if args.next:

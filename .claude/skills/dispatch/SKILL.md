@@ -3,7 +3,7 @@ name: dispatch
 description: Dispatch-card assembly (copilot profile, orch only) — assemble inputs per the fixed card templates, pick a model tier, pass the isolation self-check. Run before every subagent dispatch.
 ---
 
-<!-- Canonical: iverif-workflow/skills/dispatch/SKILL.md — vendored, hash-pinned. -->
+<!-- Canonical: iverif-workflow/skills/dispatch/SKILL.md — pinned snapshot. -->
 
 # Dispatch flow (orch only)
 
@@ -43,6 +43,10 @@ card by type:
       dispatch).
 - [ ] The card states its acceptance criteria (rev gate passed /
       compile+lint clean / scenario PASS + evidence / review record path).
+- [ ] `make guards FILES="<the card's file list>"` run; every matched
+      guard block pasted into the card verbatim (registered fact, no
+      reasoning attached — this is how constraints cross the isolation
+      boundary).
 
 ## 4. Collection check
 

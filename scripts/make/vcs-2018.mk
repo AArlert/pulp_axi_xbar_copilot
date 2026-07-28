@@ -1,5 +1,5 @@
 # VCS/Verdi O-2018 environment + known-workaround fragment.
-# Vendored to scripts/make/vcs-2018.mk; include near the top of sim/Makefile,
+# Pinned into scripts/make/vcs-2018.mk; include near the top of sim/Makefile,
 # after defining OUT (default provided). Everything uses ?=/:= so the
 # environment or the including Makefile can override.
 #
@@ -52,7 +52,7 @@ NOVAS  := -P $(VERDI_HOME)/share/PLI/VCS/LINUX64/novas.tab \
           $(VERDI_HOME)/share/PLI/VCS/LINUX64/pli.a
 
 # Common 2018-era flags: -assert svaext is required for elaboration system
-# tasks ($error/$fatal inside generate) used heavily by pulp libraries.
+# tasks ($error/$fatal inside generate) used heavily by vendored IP libraries.
 VCS_FLAGS_2018 := -full64 -sverilog -timescale=1ns/1ps -ntb_opts uvm-1.2 \
                   -assert svaext -debug_access+all -kdb +vcs+lic+wait \
                   $(LD_FIX) $(NOVAS)

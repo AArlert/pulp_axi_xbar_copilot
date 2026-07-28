@@ -102,7 +102,31 @@ class Config:
                      % "/".join(sorted(COLUMN_PRESETS)))
         self.C = dict(COLUMN_PRESETS[preset])
         self.C.update(raw.get("columns_override", {}))
+        # Advisory-surface hooks, same spirit as columns_override: a project
+        # tunes snapshot-script wording/extraction via config, never by
+        # editing scripts/. next_phrases_override remaps `--next` phrases
+        # whose role assumptions don't fit (e.g. a vendored-DUT project whose
+        # feature-matrix deliverables are DV-owned tb code, not DE RTL —
+        # pulp_axi_xbar FB-8); key_line_extra is a list of extra regexes for
+        # evidence key-line extraction (project-specific summary tags such as
+        # a tb's own [FCOV_SUMMARY] — FB-9). Both are validated at use time.
+        self.next_phrases_override = raw.get("next_phrases_override", {})
+        self.key_line_extra = raw.get("key_line_extra", [])
         self.delivery_glob = raw.get("delivery", {}).get("glob", "rtl/{name}.sv")
+        # Who owns feature-matrix deliverables — drives `--next` card wording
+        # in the copilot profile. Explicit `delivery.owner` ("de"|"dv") wins;
+        # the default derives from the glob the project already declares:
+        # tb/-rooted deliverables are DV-owned tb code (vendored-DUT repos),
+        # anything else is DE-owned RTL. Zero-config correctness for both
+        # ecosystem shapes (pulp_axi_xbar FB-8; user ruling 2026-07-28:
+        # turnkey beats per-project wording patches).
+        owner = raw.get("delivery", {}).get("owner")
+        if owner is None:
+            owner = "dv" if self.delivery_glob.startswith("tb/") else "de"
+        if owner not in ("de", "dv"):
+            sys.exit("iverif.json delivery.owner must be 'de' or 'dv', "
+                     "got %r" % owner)
+        self.delivery_owner = owner
         self.sim_log = raw.get("sim_log", "sim/out/{test}_{seed}.log")
         self.signoff_glob = raw.get("signoff_glob", "signoff-M{m}*.md")
         self.fl_enforce = raw.get("fl_schema_enforce", True)
@@ -110,7 +134,7 @@ class Config:
         # UVM_ERROR, so they are judged independently of log_verdict.
         # sva_enforce: a log without the native '-assert verbose' Summary
         # line is FAIL (fail-closed); legacy flows set false until they
-        # adopt the vendored run pattern. sva_baseline: optional path to a
+        # adopt the pinned run pattern. sva_baseline: optional path to a
         # registered total_min/attempted_min floor file (layer 3).
         self.sva_enforce = raw.get("sva_enforce", True)
         self.sva_baseline = raw.get("sva_baseline")

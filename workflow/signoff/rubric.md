@@ -24,10 +24,11 @@ It is read-only — it never edits state.
    in the waves/logs that they were hit by the *intended* scenario, not
    incidentally. Pick 1 waived hole and re-read the unreachability
    argument.
-5. **Guard falsification.** Pick 1 failure record with a regression guard;
-   re-introduce the original defect (locally, throwaway branch) and confirm
-   the guard actually fires. A guard that has never been seen red is a
-   hypothesis, not a guard.
+5. **Guard consumption + falsification.** `make guards FILES="<files this
+   milestone touched>"` — every hit is review scope: confirm it was
+   honored. Falsify at least one: re-introduce the original defect
+   (locally, throwaway branch) and confirm the guard fires. A guard that
+   has never been seen red is a hypothesis, not a guard.
 6. **Spec debt is zero or accepted.** The open SPEC_ISSUE list is empty, or
    each entry has a written acceptance rationale.
 
@@ -37,7 +38,7 @@ It is read-only — it never edits state.
   is the thing `docs.py --next` checks for milestone completion.
 - **Signoff ≠ review.** The signoff record *cites* the process reviews
   (`REV-xxx`) plus the spot-check results and states the verdict; it is
-  never a copy of a review file. (Boundary made explicit after
-  floo_axi_chimney's M0, where the two were byte-identical.)
+  never a copy of a review file (one adopter's M0 signoff once turned out
+  byte-identical to its review — that is the failure mode).
 - Contents: machine-condition printout (pasted), spot-check details with
   citations, residual-risk list, verdict.

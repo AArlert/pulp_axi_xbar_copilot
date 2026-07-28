@@ -16,7 +16,7 @@ derive project state from it live — status is never cached anywhere else.
   Write it so a failure is conceivable; "runs without error" is not a
   scenario.
 - `config` — DUT parameterization this scenario runs under (e.g.
-  `NoRoB+XY`, `baseline`). One scenario id per config point that matters.
+  `dualport`, `baseline`). One scenario id per config point that matters.
 - `status` — `🔲` planned / `⚠️` partial / `❌` failing / `✅` passed.
 - `evidence`, `repro` — **script-owned columns.** evidence.py fills them;
   humans and agents leave them as `-`.
@@ -35,12 +35,3 @@ derive project state from it live — status is never cached anywhere else.
 4. **Descriptions carry the spec.** Where a scenario enforces a specific
    spec clause, name it (`SPEC-4.2.1`) in the description; the evidence
    record's `spec_ref` header should match.
-
-## Relation to the design doc's YAML frontmatter
-
-The design doc proposed per-scenario YAML frontmatter
-(`status: evidence_collected`, `evidence: [EV-0042]`). The canon keeps the
-proven markdown table instead: same machine-readability (the kernel's
-`parse_table()` reads it), one file to scan for a human, and the
-`planned → asset_ready → evidence_collected → signed_off` ladder maps onto
-`🔲/⚠️ → ❌/✅ → milestone signoff` plus the signoff record file.

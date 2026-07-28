@@ -1,5 +1,5 @@
 # iverif evidence-chain targets.
-# Vendored to scripts/make/evidence.mk; include from the project root
+# Pinned into scripts/make/evidence.mk; include from the project root
 # Makefile after core.mk.
 .PHONY: evidence replay chain signoff-check
 

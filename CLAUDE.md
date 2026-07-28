@@ -2,7 +2,7 @@
 
 # pulp_axi_xbar_copilot — CLAUDE.md
 
-Profile：**copilot**（见 `workflow/profiles.md`）。工作流规则存放于 `workflow/` 快照中——请在那里阅读（离线可用）；此处不重述、不另行分叉。
+Profile：**copilot**（见 `workflow/profile.md`——框架 0.4.0 起每个项目只收到自己那份 profile 契约）。工作流规则存放于 `workflow/` pinned snapshot 中——请在那里阅读（离线可用）；此处不重述、不另行分叉。
 
 > **每次会话优先阅读：`workflow/discipline.md`**——执行纪律（先想清楚再动手 · 简单优先 · 外科手术式改动 · 目标驱动执行 · 小步快跑闭环）。它约束 orch 及每个被派发的角色，其优先级高于图方便：即便有更快的路径，也应优先遵循它。它位于 §0 的核心不变式与隔离规则之下——那些是硬性门禁，纪律是门禁之间的行为准则。每个角色文件都会重复这条指引；正文只存在于框架快照中，因此本文件永远不会与之漂移。
 

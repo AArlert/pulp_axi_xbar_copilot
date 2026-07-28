@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 model: opus
 ---
 
-<!-- Canonical template: iverif-workflow/agents/dv.copilot.md (framework 0.3.0).
+<!-- Canonical template: iverif-workflow/agents/dv.copilot.md (framework 0.4.1).
      Rendered by fwsync from iverif.json — edit the framework template, not this file. -->
 
 **Read `workflow/discipline.md` before your first edit** — execution
@@ -52,13 +52,16 @@ named in your card first.
   TEST+SEED plus the relevant regression; on PASS,
   `make evidence BUG=<id> TEST=<t> SEED=<n>` closes mechanically
   (closer ≠ fixer).
+- Functional-coverage reporting convention: at end of test, print one line
+  per covergroup tagged `[FCOV_SUMMARY]` — e.g.
+  `[FCOV_SUMMARY] cg_tx_limit samples=60 inst_cov=80.00` — so evidence.py
+  archives the coverage numbers into the excerpt's key-line section
+  (`workflow/schema/evidence_record.md` row 6) and coverage evidence stays
+  self-sufficient at signoff.
 - For waveform chasing, log location, and coverage triage prefer the xverif
-  toolkit on the VM. It is NOT on PATH: entry
-  `$XVERIF_ROOT/tools/{xdebug,xloc,xcov}` (default
-  `/home/open_tools/xverif`, exported by `scripts/make/vcs-2018.mk`);
-  export VERDI_HOME first for xdebug/xcov; probe with
-  `test -x $XVERIF_ROOT/tools/xdebug`, never `command -v`. Failure triage
-  follows `workflow/dispatch/*.md`.
+  toolkit (NOT on PATH — entry paths and probing rules: header of
+  `scripts/make/vcs-2018.mk`). Failure triage follows
+  `workflow/dispatch/*.md`.
 
 ## Exclusion zone
 

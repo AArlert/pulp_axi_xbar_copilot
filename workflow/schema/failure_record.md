@@ -36,13 +36,13 @@ Fixed `##` sections; a checker validates presence + non-emptiness when
 `fl_schema_enforce` is true in `iverif.json` (new repos: on).
 
 ```markdown
-# BUG-0007 — B responses reordered under NoRoB config
+# BUG-0007 — write responses reordered under back-pressure
 
 ## symptom
 One-paragraph observable behavior, with the failing check's message.
 
 ## first_anomaly
-signal: dut.i_rob_wrapper.rsp_valid
+signal: dut.i_rsp_fifo.rsp_valid
 time: 12450ns
 how_found: xdebug trace from the scoreboard mismatch backwards
 (The earliest point where reality diverges from spec — the heart of the
@@ -64,9 +64,14 @@ Evidence records proving the fix: original failing TEST+SEED now passing,
 plus neighboring scenarios re-checked.
 
 ## regression_guard
-type: sva | covergroup | directed_test | checklist
+type: sva | covergroup | directed_test | script | checklist
+paths: tb/sva/*.sv         <- binding globs, machine-matched (make guards)
 ref: tb/sva/per_id_order_check.sv
 note: what future regression this blocks.
+(Guards are consumed mechanically — `make guards FILES=...` at card
+assembly and at signoff; a guard without `paths:` can never be injected.
+A checklist guard is a mechanization TODO, not a terminus: note what
+script/SVA it should become, or why it cannot.)
 
 ## similar
 FL ids of related historical failures, or "none searched-on: <keywords>".

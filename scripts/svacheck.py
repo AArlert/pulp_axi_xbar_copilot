@@ -254,7 +254,7 @@ def judge(text, cfg, baseline=None):
     increment UVM_ERROR, hence the independent leg — never merge them.
 
     With cfg.sva_enforce (default on), a log lacking the native Summary line
-    is FAIL: the vendored run pattern pins `-assert verbose`, so its absence
+    is FAIL: the pinned run pattern pins `-assert verbose`, so its absence
     means the log came from a different flow (or the option was bypassed) —
     assertion cleanliness cannot be proven, fail-closed. Legacy repos whose
     flow predates `-assert verbose` set "sva_enforce": false until they

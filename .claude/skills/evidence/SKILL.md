@@ -3,7 +3,7 @@ name: evidence
 description: Register simulation evidence — evidence.py mechanically extracts from the sim log and auto-backfills testplan/bugs. Run before any scenario goes ✅ or any bug goes CLOSED.
 ---
 
-<!-- Canonical: iverif-workflow/skills/evidence/SKILL.md — vendored, hash-pinned. -->
+<!-- Canonical: iverif-workflow/skills/evidence/SKILL.md — pinned snapshot. -->
 
 # Evidence registration (mechanical — hand-written evidence is forbidden)
 
