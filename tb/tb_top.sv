@@ -47,6 +47,20 @@ module tb_top;
   slvport_if slv_if [xbar_types_pkg::NO_SLV_PORTS] (.clk_i(clk), .rst_ni(rst_n));
   mstport_if mst_if [xbar_types_pkg::NO_MST_PORTS] (.clk_i(clk), .rst_ni(rst_n));
 
+  // ---- runtime-reconfiguration config bus (C4.2, spec §2.3/§3.4) --------
+  // Holds addr_map / en_default_mst_port / default_mst_port as runtime-drivable
+  // signals wired straight to the DUT below. Initialised once to the baseline
+  // (V0) at time 0 here; M2-CFG01's env later overrides it in an all-idle
+  // window (m2_cfg01_reconfig_vseq). Every other test leaves it at baseline,
+  // so their behaviour is unchanged from the previous hard-wired constants.
+  xbar_cfg_if cfg_if (.clk_i(clk), .rst_ni(rst_n));
+
+  initial begin
+    cfg_if.addr_map            = xbar_types_pkg::ADDR_MAP;
+    cfg_if.en_default_mst_port = '0;
+    cfg_if.default_mst_port    = '0;
+  end
+
   xbar_types_pkg::slv_req_t  [xbar_types_pkg::NO_SLV_PORTS-1:0] slv_req;
   xbar_types_pkg::slv_resp_t [xbar_types_pkg::NO_SLV_PORTS-1:0] slv_resp;
   xbar_types_pkg::mst_req_t  [xbar_types_pkg::NO_MST_PORTS-1:0] mst_req;
@@ -59,6 +73,18 @@ module tb_top;
   for (genvar j = 0; j < xbar_types_pkg::NO_MST_PORTS; j++) begin : gen_mst_conn
     `AXI_ASSIGN_FROM_REQ(mst_if[j], mst_req[j])
     `AXI_ASSIGN_TO_RESP(mst_resp[j], mst_if[j])
+  end
+
+  // ---- all-ports-silent window (C4.2 / uvm_env.md C5.1, spec §3.4) -------
+  // High on a cycle where NO slave port drives AW or AR valid — the window the
+  // env waits for before applying the one runtime reconfiguration (so the
+  // change never overlaps any port's AW/AR valid). TB-internal sync aid only.
+  always_comb begin
+    logic idle;
+    idle = 1'b1;
+    for (int unsigned s = 0; s < xbar_types_pkg::NO_SLV_PORTS; s++)
+      if (slv_req[s].aw_valid || slv_req[s].ar_valid) idle = 1'b0;
+    cfg_if.all_ax_idle = idle;
   end
 
   // ---- DUT instance (C1.1-C1.4, C2.3, C2.4, C2.5) -----------------------
@@ -88,9 +114,9 @@ module tb_top;
     .slv_ports_resp_o      (slv_resp),
     .mst_ports_req_o       (mst_req),
     .mst_ports_resp_i      (mst_resp),
-    .addr_map_i            (xbar_types_pkg::ADDR_MAP),
-    .en_default_mst_port_i ('0),
-    .default_mst_port_i    ('0)
+    .addr_map_i            (cfg_if.addr_map),
+    .en_default_mst_port_i (cfg_if.en_default_mst_port),
+    .default_mst_port_i    (cfg_if.default_mst_port)
   );
 
   // ---- SVA bind attachment (C4.1) ---------------------------------------
@@ -112,6 +138,12 @@ module tb_top;
       uvm_config_db#(int)::set(
           null, $sformatf("uvm_test_top.env.mst_agent[%0d]*", j), "port_idx", j);
     end
+  end
+
+  // Config bus handle for the scoreboard's version tracker (C1.5) and the
+  // M2-CFG01 reconfiguration test/vseq (C5.1).
+  initial begin
+    uvm_config_db#(virtual xbar_cfg_if)::set(null, "*", "cfg_vif", cfg_if);
   end
 
   initial begin

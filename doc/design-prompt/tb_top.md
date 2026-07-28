@@ -73,6 +73,15 @@ M1 的静态验证顶层 `tb_top`：例化**单个** `axi_xbar` DUT + 时钟/复
   `doc/design-prompt/sva_bind.md`。tb_top 只提供 `bind` 语句与信号可见性，不在
   tb_top 内联写断言。依据：CLAUDE.md §6（SVA 经 bind 挂接）、spec §1（DUT 实现完整
   AXI4，协议为基线）。
+- **C4.2（M2 新增挂接点）**：`sva_bind.md` §3 的 C3.1/C3.2（配置稳定性、同 ID
+  跨端口 stall）观测范围超出单一 AXI 通道接口——除该 slave 端口自身的 AW/AR/B/R
+  信号外，还需读取**全局共享**的 `addr_map_i`，以及**该 slave 端口一位/一索引**
+  的 `en_default_mst_port_i[i]`/`default_mst_port_i[i]`。tb_top 需在其 slave 端口
+  挂接点（既有 generate 循环内）额外把这三路信号接给新增的 SVA 实例；`addr_map_i`
+  对 6 个实例是同一句柄（无需复制），`en_default_mst_port_i[i]`/
+  `default_mst_port_i[i]` 按下标传入。master 端口侧挂点（C4.1 既有）不需要这三路
+  信号，不受影响。依据：spec §2.3（`addr_map_i`/`en_default_mst_port_i`/
+  `default_mst_port_i` 端口定义）、§3.4。
 
 ## 5. 交付形态与验收锚点
 

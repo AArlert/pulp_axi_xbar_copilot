@@ -73,13 +73,53 @@ scoreboard（含参考模型）+ virtual sequencer + config。M1 只做**骨架 
     即 smoke 只验响应路由正确性，不验 stall 行为。依据：spec §5.2.1（stall 触发条件）、
     §0 行 3（功能场景归 M2）。
 
-## 5. 交付形态与验收锚点
+## 5. M2 驱动纪律新增（激活运行时重配置/保序/事务上限/W 次序/ATOP 场景）
+
+以下均为 env 侧**驱动能力/时序纪律**新增（不新增 DUT 外部可见行为断言，判决仍
+落在 `scoreboard_refmodel.md`/`sva_bind.md`）：
+
+- **C5.1 运行时重配置窗口（M2-CFG01，spec §3.4）**：env 提供一个"全端口静默"
+  同步点（等待全部 6 个 slave 端口的 AW 与 AR 均非 valid 的一拍），仅在该窗口内
+  更新一次 `addr_map_i`/`en_default_mst_port_i`/`default_mst_port_i`；变更前/
+  变更后各发一批命中新旧表不同路由结果的事务，供 scoreboard（scoreboard_refmodel
+  C1.5）区分。
+- **C5.2 同 ID 跨端口构造原语（M2-OR01/OR02，spec §5.2）**：master agent 序列
+  需能对指定 slave 端口连发两笔请求，独立控制四个维度：(a) 低
+  `AxiIdUsedSlvPorts` 位是否相同、(b) 方向是否相同、(c) 地址译码目标是否落在
+  不同 master 端口、(d) 两笔间隔（背靠背 or 有意分离）。M2-OR01（stall 触发）取
+  相同+相同+不同；M2-OR02（非 stall 对照）取相同+相同+相同，以及相同+不同+任意
+  两组。同一套原语覆盖两个场景，不重复开发。
+- **C5.3 持续压测原语（M2-TL01/TL02，spec §5.4.1/§5.4.2/§5.4.3）**：master agent 需支持"背靠背
+  连发 N 笔、不等待逐笔完成"的非阻塞发送模式（M1 smoke 的发送节奏未验证是否能
+  连续压满在飞计数）。M2-TL01 要求这 N 笔低位 ID、方向、目标 master 端口三者
+  全部相同（避免与 C5.2 的跨端口 stall 构造混淆——目标一变就落入那条判据而非
+  本条的计数上限判据，见 scoreboard_refmodel C5.3 的同一说明）。slave
+  agent responder 需能按需**有界拖延** B/R（不违反协议的合法延迟）以维持在飞
+  计数处于目标值附近，避免"响应过快、上限从未真正被顶到"的空转（呼应
+  `workflow/dispatch/coverage_hole.md` 的可证伪性要求）。
+  M2-TL02 的压测目标已由 REV-005 裁决确定为**弱化上界**：向同一 master 端口连发
+  同（前缀后）ID、同方向事务压满 `MaxSlvTrans`，供其已解锁的可观测上界 checker
+  监视（分组「每 master 端口 × 每可观测前缀后 ID × 每方向」，方向分开计）；机制级
+  拒收触发点仍为 spec §5.4.3 上游确认项、不构造针对性激励。
+- **C5.4 多源汇聚（M2-WO01，spec §5.5）**：virtual sequencer 需能同步启动 ≥2 个
+  不同 slave 端口的写序列，令它们的 AW 落在同一 master 端口且时间上交错到达，
+  制造真实仲裁竞争（而非各自独立、先后不重叠的写——那样不会比 M1-02 的偶然
+  汇聚更有效）。
+- **C5.5 ATOP 序列（M2-AT01，spec §6.3/§6.4）**：复用 C2.4 已有的 ATOP 驱动纪律
+  （ID 唯一性），新增一条显式发起"要求读响应的 atop 编码"的序列；slave agent
+  responder（C3.4）确认该 AW 收到后走通 B+R 双通道。
+
+## 6. 交付形态与验收锚点
 
 - 产物：`tb/` 下 UVM env、master/slave agent、virtual sequencer、smoke sequence，
   收录于 `sim/flist/tb.f`（CLAUDE.md §6）。
 - 弹起判据：env build/connect/run phase 无 `UVM_ERROR`/`UVM_FATAL`；smoke 场景由
   M1-01/M1-02 承载并经 `make evidence` 产出 PASS 日志（评审门后 DV 落地）。
+- M2 判据：§5 驱动原语支撑的场景（M2-CFG01/OR01/OR02/TL01/WO01/AT01）经
+  `make evidence` 产出 PASS 日志；M2-TL02 落地为已解锁的弱化可观测上界 checker
+  （spec §5.4.2；机制级断言仍为 §5.4.3 上游确认项、不派发）。
 
 ## 引用的 spec 章节
 
-§0（行 1/2/3）、§1、§2.2、§2.3、§3.1、§3.2、§4、§5.1、§5.2、§6.3、§6.4、§7.4。
+§0（行 1/2/3）、§1、§2.2、§2.3、§3.1、§3.2、§3.4、§4、§5.1、§5.2、§5.4、§5.5、
+§6.3、§6.4、§7.4。

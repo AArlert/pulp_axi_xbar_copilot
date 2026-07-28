@@ -8,6 +8,12 @@
 +incdir+../tb
 ../tb/xbar_types_pkg.sv
 ../tb/axi_if.sv
+../tb/cfg_if.sv
 ../tb/tb_pkg.sv
 ../tb/sva/axi_chan_sva.sv
+../tb/sva/axi_xbar_stall_sva.sv
+../tb/sva/axi_xbar_atop_sva.sv
+../tb/sva/axi_xbar_worder_sva.sv
+../tb/sva/axi_xbar_txlimit_sva.sv
+../tb/sva/axi_xbar_route_sva.sv
 ../tb/tb_top.sv

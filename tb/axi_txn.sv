@@ -18,6 +18,12 @@ class axi_seq_item extends uvm_sequence_item;
   axi_pkg::size_t         size; // fixed full-width beats (BEAT_SIZE)
   axi_pkg::burst_t        burst; // fixed INCR
   rand xbar_types_pkg::id_slv_t id;
+  // aw.atop encoding (spec §6.1: an ATOP transaction is an AW with
+  // aw.atop != '0; encodings from vendor/axi/src/axi_pkg.sv ATOP_*, the DV
+  // parameter-definition source). '0 for every ordinary write; M2-AT01
+  // sequences set an ATOP_ATOMICLOAD encoding (read response required,
+  // aw.atop[ATOP_R_RESP], spec §6.3).
+  axi_pkg::atop_t         atop;
   xbar_types_pkg::data_t  wdata[$];
   xbar_types_pkg::strb_t  wstrb[$];
 
@@ -32,6 +38,45 @@ class axi_seq_item extends uvm_sequence_item;
     super.new(name);
     size  = xbar_types_pkg::BEAT_SIZE;
     burst = axi_pkg::BURST_INCR;
+    atop  = '0;
+  endfunction
+endclass
+
+// M2-OR01/OR02 same-ID cross-port ordering constructive primitive
+// (uvm_env.md C5.2). Carries a *second* sub-transaction alongside the base
+// axi_seq_item fields (which serve as sub-transaction "A"); the driver
+// (slvport_agent.sv drive_pair()) presents B's own AW/AR immediately after
+// (an optional gap past) A's own AW/AR handshake accepted, never waiting
+// for A's B/R first — the only way to observe whether the DUT defers
+// acceptance of a same-ID-bucket request (spec §5.2.1) or accepts it
+// promptly (§5.2.4/differing direction).
+class axi_pair_item extends axi_seq_item;
+  axi_seq_item  second_item;
+  int unsigned  gap_cycles;
+
+  `uvm_object_utils(axi_pair_item)
+
+  function new(string name = "axi_pair_item");
+    super.new(name);
+  endfunction
+endclass
+
+// M2-TL01/TL02 sustained-pressure primitive (uvm_env.md C5.3). Carries an
+// ordered list of same-direction sub-transactions the driver presents
+// back-to-back WITHOUT waiting for each one's B/R first (slvport_agent.sv
+// drive_burst()): the only way to build the per-(bucket|id) in-flight count
+// up to the DUT's transaction-number ceiling (spec §5.4). Every sub-item is
+// the same direction so a single completion counter (B for writes, R-last
+// for reads) tallies the burst; all sub-items live on one slave port and one
+// burst runs to completion before the next (the sequence serialises them),
+// so no other traffic aliases the count.
+class axi_burst_item extends axi_seq_item;
+  axi_seq_item items[$];
+
+  `uvm_object_utils(axi_burst_item)
+
+  function new(string name = "axi_burst_item");
+    super.new(name);
   endfunction
 endclass
 
@@ -49,10 +94,21 @@ class axi_req_obs extends uvm_object;
   axi_pkg::burst_t        burst;
   xbar_types_pkg::data_t  wdata[$]; // populated for writes only
   xbar_types_pkg::strb_t  wstrb[$];
+  // aw.atop as observed at the AW handshake ('0 for reads and ordinary
+  // writes) — lets the scoreboard register the M2-AT01 B+R pair expectation
+  // (spec §6.3) and check atop pass-through to the master port (spec §1/§6.1).
+  axi_pkg::atop_t         atop;
+  // AW/AR handshake (valid&&ready) instant — reusable accept-timestamp
+  // infrastructure (scoreboard_refmodel.md C5.5(a)); populated by the
+  // monitor at the actual handshake cycle (writes: captured at AW accept,
+  // carried through to the req_obs built at the burst's w_last; reads: the
+  // req_obs itself is already built at the AR accept instant).
+  time                    accept_time;
 
   `uvm_object_utils(axi_req_obs)
   function new(string name = "axi_req_obs");
     super.new(name);
+    atop = '0;
   endfunction
 endclass
 
@@ -69,6 +125,10 @@ class axi_resp_obs extends uvm_object;
   axi_pkg::burst_t        burst;
   xbar_types_pkg::data_t  rdata[$];  // read only
   axi_pkg::resp_t         resp[$];   // per-beat (read) or single-entry (write B)
+  // B or R-last handshake instant — reusable completion-timestamp
+  // infrastructure (scoreboard_refmodel.md C5.5(a)); both are already built
+  // exactly at their completion instant, so this is a plain `$time` stamp.
+  time                    complete_time;
 
   `uvm_object_utils(axi_resp_obs)
   function new(string name = "axi_resp_obs");

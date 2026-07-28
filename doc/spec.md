@@ -52,8 +52,8 @@
 | --- | --- | --- |
 | `NoSlvPorts` | `int unsigned` | crossbar 的 AXI slave 端口数（可挂接的外部 master 模块数） |
 | `NoMstPorts` | `int unsigned` | crossbar 的 AXI master 端口数（可挂接的外部 slave 模块数） |
-| `MaxMstTrans` | `int unsigned` | 每个 slave 端口最多同时 in-flight 的事务数上限 |
-| `MaxSlvTrans` | `int unsigned` | 每个 master 端口**每 ID** 最多同时 in-flight 的事务数上限（"每 ID" 限定见 xbar.md 表；axi_pkg 注释仅述"每挂接 slave 的上限"） |
+| `MaxMstTrans` | `int unsigned` | 每个 slave 端口按（低 `AxiIdUsedSlvPorts` 位 ID 桶 × 方向）独立计数的在飞事务数上限：每个（ID 桶、方向）计数器独立封顶于**计数器满量程**（有效上限 = `2^idx_width(MaxMstTrans)−1`，本值仅经 `cf_math_pkg::idx_width()` 定计数器位宽、从不进比较器；基线 `MaxMstTrans=10 ⇒ 有效上限 15`——见 §5.4.1、BUG-0016/REV-007），并各带一个记录当前绑定目标 master 端口的寄存器；该同一组计数器/寄存器机制同时是 §5.2 保序 stall 的底层实现（换目标落 §5.2，封顶落 §5.4.1，二者为同一底层机制的两面）**（分桶口径，纠正此前"每 slave 端口一个扁平上限"表述——BUG-0010 裁决，REV-005 §3：依据 axi_demux.md §Ordering and Stalls→Implementation L70-74 + axi_pkg L510"See axi_demux for details"指针；基线 `AxiIdUsedSlvPorts=3<AxiIdWidthSlvPorts=5` 下扁平读法即被机制违反）** |
+| `MaxSlvTrans` | `int unsigned` | 经 `axi_xbar.sv` L141 映射到 `axi_mux` 的 `MaxWTrans`——AW→W 之间保存 ID 高位的 **FIFO 深度**（mux.md L29），**非**每 master 端口每 ID 在飞事务数上限；mux 侧**无**按 ID 分桶的在飞计数机制，故不构成每 ID 在飞可断言上界（每 ID 在飞由 §5.4.1 上游 demux 每桶有效上限主导、可超本值）**（撤销此前"每 ID ≤ MaxSlvTrans"表述——BUG-0016 裁决，REV-007 §5(2)：来源 RTL——上游文档 xbar.md L47 "per ID in flight" 与实现不符；复核 BUG-0011）** |
 | `FallThrough` | `bit` | AW 通道的路由决策直通（fall through）到 W 通道：=1 时允许 W beat 与对应 AW beat 同拍被接受，代价是 W 通道组合路径叠加 AW 逻辑；=0 无直通 |
 | `LatencyMode` | `bit [9:0]`（doc 记 `enum logic [9:0]`） | 各端口各通道的 spill register 配置，详见 §7；`xbar_latency_e` 提供常用配置 |
 | `PipelineStages` | `int unsigned` | 内部连线交叉（line cross）上例化的 `axi_multicut` 级数；多级会显著增加 FF 数（axi_pkg L503-505 注释）。**延迟不敏感插桩（BUG-0004 裁决，REV-001 §5）**：在 demux–mux 间 line-cross 上插入 `PipelineStages` 级 `axi_multicut`，增加流水延迟但**不改变功能响应、不损吞吐**（与 §7.1.2 spill register 同类）；**精确每通路（端到端）周期数许可来源未定义，详见 §7.4** **（来源：RTL——上游文档未载：xbar.md §Configuration 表无此字段）** |
@@ -169,8 +169,21 @@
 依据：xbar.md §Ordering and Stalls。
 
 1. 同一 slave 端口收到**两个同 ID、同方向**（同读或同写）、但目标为**不同
-   master 端口**的事务时，第二个事务在第一个完成前不被接受；期间该 slave
-   端口的 AW（写）或 AR（读）通道被 stall。
+   master 端口**的事务时，第二个事务在第一个完成前**不被转发到其目标
+   master 端口**；期间核心判决逻辑 stall 该方向的 AW（写）或 AR（读）。其
+   **外部可锁定后果**是响应保序：第二笔的响应（B/rlast）不早于第一笔的
+   响应返回（§5.2.3）。
+   **接受边界即时性说明（BUG-0013 裁决，REV-006 §2.2/§3）**：基线
+   `LatencyMode=CUT_ALL_AX`（§7.2）在核心判决逻辑**之前**启用
+   `SpillAw`/`SpillAr` 弹性缓冲（demux.md §Configuration："one spill
+   register ... before the demultiplexer"；§Pipelining：每通道加一拍、
+   不损吞吐）。因此第二笔在外部 slave 端口的 **AW/AR 握手接受时刻**可早于
+   核心判决逻辑比对第一笔——"接受握手被即时 stall"**不是可锁定的外部行为**，
+   属 §7.4 延迟不敏感插桩的时序表现（窗口深度随启用的 `LatencyMode` 位变化、
+   许可来源未给固定拍数）。故 checker/SVA 的保序 stall 判决门**必须锚定
+   完成序**（§5.2.3：同一低位 ID 桶、同方向、不同目标的两笔若均被接受，
+   其 B/rlast 完成顺序须与接受顺序一致），**不得断言第二笔的接受握手迟于
+   第一笔的完成**。
 2. "同 ID" 的判定只比较 ID 的低 `AxiIdUsedSlvPorts` 位：取满
    `AxiIdWidthSlvPorts` 可消除假冲突；取小则以更多假冲突（假 stall）换取
    面积/延迟收益。假冲突只影响性能，不影响正确性。
@@ -179,6 +192,10 @@
 4. 同 ID、同方向、目标**相同** master 端口的事务不受此 stall 约束（保序由
    下游及 AXI 协议本身维持）**（派生条款：由 §5.2.1"目标为不同 master 端口"
    约束的逻辑逆否推导得出，非直接 RTL/文档来源——C5，REV-001 §3.4）**。
+5. **跨方向旁路（派生条款，BUG-0012 裁决，REV-005 §3；详见 §6.5）**：原子读
+   （ATOP）经 §6.5 所述机制可能引发一次由**写方向**事件（ATOP 的 AW）触发的
+   **读方向** stall——不落在本节 1-4 条"仅同方向配对"的字面框架内，属正常
+   设计行为（非退化）。
 
 ### 5.3 UniqueIds
 
@@ -196,10 +213,42 @@
 
 ### 5.4 事务数上限
 
-1. 每 slave 端口 in-flight 事务数 ≤ `MaxMstTrans`（§2.1）。
-2. 每 master 端口每 ID in-flight 事务数 ≤ `MaxSlvTrans`（§2.1）。
-3. 达到上限时对应端口不再接受新事务（由"至多 in flight"语义推导；上游未
-   规定超限时的具体通道行为细节，按 AXI 握手反压理解）。
+1. 每 slave 端口按（低 `AxiIdUsedSlvPorts` 位 ID 桶 × 方向）独立计数，每桶
+   in-flight 事务数的**有效上限 = demux 每桶计数器满量程 =
+   `2^idx_width(MaxMstTrans) − 1 = 2^⌈log₂(MaxMstTrans)⌉ − 1`**（`IdCounterWidth
+   = cf_math_pkg::idx_width(MaxMstTrans)` 位、"full" 判据为计数器全一
+   `&in_flight`、**无 `== MaxMstTrans` 比较**）；基线 `MaxMstTrans=10 ⇒ 有效
+   上限 15`（非字面 10）。`MaxMstTrans` 是**计数器定宽参数**（保证计数器至少
+   能表示该值），**非精确在飞上限**；仅当 `MaxMstTrans = 2ᵏ−1` 时有效上限恰
+   等于 `MaxMstTrans`（2 的幂取值下有效上限**低于** `MaxMstTrans`，如
+   `MaxTrans=8 ⇒ 7`）**（来源：RTL——上游文档 demux.md L72 "up to and
+   including MaxTrans" 与实现不符；有效上限公式为 BUG-0016 裁决，
+   REV-007 §5(1)）**
+   **（分桶口径，BUG-0010 裁决，
+   REV-005 §3：与 §5.2 保序 stall 共用同一组计数器/目标绑定寄存器——见
+   axi_demux.md §Ordering and Stalls→Implementation L70-74；纠正此前"每
+   slave 端口一个扁平上限"表述）**。
+2. **`MaxSlvTrans` 不构成每 ID 在飞可断言上界（撤销此前"每 ID ≤
+   MaxSlvTrans"表述）**：`MaxSlvTrans` 经 `axi_xbar.sv` L141 映射到 `axi_mux`
+   的 `MaxWTrans`——AW→W 之间保存 ID 高位的 **FIFO 深度**（mux.md L29），
+   **非**每 ID 在飞事务上限；mux 侧**无**按 ID 分桶的在飞计数机制（复核
+   BUG-0011）。故 master 端口每 ID 在飞数由**上游 demux 每桶有效上限
+   （§5.4.1）主导，可超 `MaxSlvTrans`**（基线见证达 8>6）。**此条同时正式
+   收回 REV-005 为 M2-TL02 解锁的"每端口×每 ID×每方向 ≤ MaxSlvTrans、
+   绝不假红"可观测上界监视器**——其前提（mux 存在 per-ID 上界机制）不成立、
+   会假红，**不得升格为 assert** **（来源：RTL——上游文档 xbar.md L47 "per
+   ID in flight" 与实现不符；BUG-0016 裁决，REV-007 §5(2)）**。
+3. 达到上限时对应端口不再接受新事务（由"至多 in flight"语义推导）：
+   `MaxMstTrans` 侧机制明确——同桶计数达**有效上限（§5.4.1 满量程公式
+   `2^⌈log₂MaxMstTrans⌉−1`，基线 15 非字面 10）**即拒收，目标绑定寄存器同 §5.2
+   （demux.md L70-74 支撑）；该"拒收"的**外部边界即时性**同 §7.4.5 为延迟
+   不敏感表现（`SpillAw`/`SpillAr` 在核心计数之前缓冲），判决须锚定延迟
+   不敏感观测量、不得断言第 N+1 笔在外部边界某具体时点被拒（BUG-0013/
+   REV-006）；**`MaxSlvTrans` 侧无 mux 端每 ID 在飞机制——该参数经
+   `axi_xbar.sv` L141 实为 `axi_mux` 的 `MaxWTrans`（AW→W ID 高位 FIFO 深度、
+   非在飞上限，§5.4.2）；此前"上游确认项/机制未定义"表述据此升级为"mux 侧
+   在飞机制根本不存在"的已定结论（BUG-0016 裁决，REV-007 §5(2)(3)；复核
+   BUG-0011）**。
 
 ### 5.5 W 通道次序（下层部件佐证）
 
@@ -235,6 +284,16 @@
 4. 环境约束（AXI5 协议要求，mux.md/demux.md 同述）：master 必须保证 ATOP
    事务的 ID 与当前**所有**（读+写）在飞事务的 ID 不同；ATOP 亦因此在读写
    通道间引入 AXI4 中不存在的依赖。验证侧激励必须满足此约束。
+5. **原子读对读方向的跨方向假冲突 stall（派生条款，BUG-0012 裁决，REV-005
+   §3）**：原子读（atomic load）从不发出 AR，故 AR 方向的 §5.2/§5.4 计数/
+   比较机制若对其读响应（R beat）一无所知就会下溢；为防止这一下溢，AW 发起
+   要求读响应的原子操作时，其 ID 被同时注入 AR 方向的该计数/比较机制（demux.md
+   §Atomic Transactions→Implementation L83-87）。该机制仍只比较 ID 的低
+   `AxiIdUsedSlvPorts` 位，故一笔原子读可能使同一 slave 端口上另一笔低位
+   ID 相同、目标不同 master 端口的**普通读**依 §5.2.1 被 stall——这是一次
+   由 ATOP 写事件引发的读方向 stall（交叉引用 §5.2.5），超出 §5.2.1 字面
+   "仅同方向配对"框架，但属正常设计行为，非退化。验证侧：该交互只影响是否
+   被 stall（性能/时序），不影响功能正确性。
 
 ## 7. Latency 模式（`LatencyMode` / `xbar_latency_e`）
 
@@ -301,6 +360,21 @@
 4. 基线 `PipelineStages=1`、`LatencyMode=CUT_ALL_AX`（§0）因此**不影响** M1
    smoke 功能 checker 的落地。若将来确需 cycle-accurate 时序核查，须另行**上游
    确认**后再补 spec（上游确认项，不阻塞里程碑）。
+5. **接受/拒收边界的即时性是延迟不敏感表现（BUG-0013 裁决，REV-006）**：
+   slave 端口侧 spill register（`SpillAw`/`SpillAr`，基线 `CUT_ALL_AX`
+   启用）位于核心判决逻辑（demux 计数/比较，demux.md L70-74）**之前**
+   （demux.md §Configuration L31、`axi_demux.sv` L89-209 结构），会在核心
+   判决之前对 AW/AR 提供弹性缓冲。故**外部 slave 端口 AW/AR 握手的接受
+   （或拒收）时刻本身**——无论是 §5.2 的保序 stall、还是 §5.4.3 的"达到
+   上限即拒收"——均为延迟不敏感时序表现，**不得作为 checker/SVA 的判决
+   锚点**。判决须落在延迟不敏感的可观测量上：保序 stall 落**完成序**
+   （§5.2.3）；事务上限落"**限内不假 stall**（弹性缓冲只会使接受更早、
+   不会更晚，故限内的边界 stall 仍是真失败）**＋上限最终被守**（此处"上限"
+   特指 §5.4.1 的**有效上限 `2^⌈log₂MaxMstTrans⌉−1`**（基线 15），**非**
+   `MaxMstTrans`/`MaxSlvTrans` 字面值；容忍弹性缓冲窗口深度，不断言第 N+1
+   笔在某具体时点被拒于外部边界）"。**越过 `MaxMstTrans` 字面值不构成本条的
+   接受边界 ±spill 效应，而是计数器位宽取整效应（BUG-0016/REV-007 §5(3)）**。
+   窗口深度随 `LatencyMode` 变化、许可来源未给固定拍数（§7.4.3）。
 
 ## 8. Connectivity 稀疏连接矩阵语义
 
@@ -328,3 +402,6 @@
 | --- | --- | --- | --- | --- | --- |
 | 1 | 2026-07-27 | 0.0.0 | 全文 | v0 初稿（草稿 spec-draft-v0.md，待 rev 评审后应用至 spec.md 并重 pin） | vendor/axi/doc/{axi_xbar,axi_demux,axi_mux}.md、src/axi_pkg.sv 定义段、src/axi_xbar.sv 声明段 @ v0.39.9（SHA a256a3b8） |
 | 2 | 2026-07-27 | 0.0.1 | §0(item 2/4/5)、§2.1、§3.1、§4、§5.2、§5.5、§6、§7.4、§8 | v0 修订（依据 REV-001）：C1 补齐 §0 基线全 13 Cfg 字段 + ATOPs/Connectivity 钉定值；C2 修正 §0 item 4/5 子模块层次（axi_xbar_unmuxed/addr_decode 列为强制内部核心子模块，移出范围外清单）；C3 应用 BUG-0002~0005 四条裁决（§8 构造性环境约束 / §6 无-ATOP 环境约束 / §2.1·§7.4 延迟不敏感+周期数未定义 / §2.1·§3.1 采信 xbar.md NoAddrRules 口径）；C4 §5.5 加固 round-robin 措辞；C5 §4 补写路 B(DECERR)、§5.2.4 标注派生条款 | REV-001（doc/review/REV-001.md）；基线数值来源：上游 tb 默认（REV-001 核对） |
+| 3 | 2026-07-27 | 0.2.0 | §2.1、§5.2、§5.4、§6 | M2 蒸馏三条新发现 SPEC_ISSUE 裁决应用（依据 REV-005，仅落地 REV-005 §3 逐条列明的"orch 应用范围"，不外溢）：BUG-0010 `MaxMstTrans` 由扁平口径改为按（约简 ID 桶×方向）分桶计数口径（§2.1、§5.4.1），并标注其与 §5.2 保序 stall 共用同一底层计数器/目标绑定寄存器机制；BUG-0011 保留 §5.4.2 可观测上界 + "per ID"采 xbar.md 口径澄清，执行机制列上游确认项、不阻塞里程碑（§5.4.3）——§2.1 `MaxSlvTrans` 字段行未改动（REV-005 该条裁决未授权此行）；BUG-0012 补 ATOP 原子读注入 AR 计数器可致读方向跨方向假冲突 stall 的派生条款（§6.5），并在 §5.2 加交叉引用（§5.2.5） | REV-005（doc/review/REV-005.md）；来源：vendor/axi/doc/axi_demux.md §Ordering and Stalls→Implementation（L70-74）、§Atomic Transactions→Implementation（L83-87）、axi_xbar.md L46/L47、axi_pkg.sv L489-494/L510、axi_mux.md（全篇核验，无对应按 ID 分桶计数机制段落）@ v0.39.9（SHA a256a3b8） |
+| 4 | 2026-07-28 | 0.2.0 | §5.2、§7.4、§5.4 | M2-OR01 仿真新发现 BUG-0013 裁决应用（依据 REV-006，仅落地 REV-006 §3 逐条列明的"orch 应用范围"）：收窄 §5.2.1"接受边界"字面表述为"不早于完成、判决锚完成序（§5.2.3）"，消除与基线 `CUT_ALL_AX` spill register 弹性缓冲的假红；§7.4 新增第 5 条，把"接受/拒收边界即时性"通用归入延迟不敏感表现（同时覆盖 §5.2 stall 与 §5.4.3 拒收，预防 M2-TL01 独立撞见同类交互）；§5.4.3 MaxMstTrans 侧句尾加交叉指针至 §7.4.5。§5.2.3 正文未改动（现文已充分表述功能目的，surgical） | REV-006（doc/review/REV-006.md）；来源：vendor/axi/doc/axi_xbar.md §Ordering and Stalls（L84/L86）、vendor/axi/doc/axi_demux.md §Configuration（L31）/§Pipelining and Latency（L37）/§Implementation（L70-74）、vendor/axi/src/axi_demux.sv（L89-116/L189-209 spill-register 结构） @ v0.39.9（SHA a256a3b8） |
+| 5 | 2026-07-28 | 0.2.0 | §2.1、§5.4、§7.4 | M2-TL01/TL02 仿真新发现 BUG-0016 裁决应用（依据 REV-007，taxonomy 终判 SPEC_ISSUE，改判 DUT_BUG——DUT 未产生错误输出、`MaxTrans` 为 `idx_width` 定宽提示而非精确上限，许可来源三方矛盾；仅落地 REV-007 §5 逐条列明的"orch 应用范围"，不外溢）：§5.4.1 把每桶在飞上限由字面 `≤MaxMstTrans` 改为**有效上限 `2^idx_width(MaxMstTrans)−1 = 2^⌈log₂MaxMstTrans⌉−1`**（基线 10⇒15；`MaxTrans` 从不进比较器、full 判据为 `&in_flight` 全一）；§5.4.2 **撤销**"每 ID ≤ MaxSlvTrans"可断言上界（`MaxSlvTrans`→`axi_mux.MaxWTrans` = AW→W ID 高位 FIFO 深度、mux 无 per-ID 在飞计数机制），并正式收回 REV-005 为 M2-TL02 解锁的"≤MaxSlvTrans 绝不假红"可观测上界监视器；§5.4.3 把 MaxMstTrans 侧拒收门改锚有效上限、MaxSlvTrans 侧由"上游确认项"升级为"mux 侧机制不存在"已定结论；§7.4.5 把"上限最终被守"绑定 §5.4.1 有效上限公式、明确越字面值为位宽取整效应非 spill；§2.1 `MaxMstTrans`/`MaxSlvTrans` 字段行同步收口。§5.2 保序机制与 BUG-0010 分桶口径措辞未动 | REV-007（doc/review/REV-007.md）；来源：vendor/axi/src/axi_demux_simple.sv（L69 `IdCounterWidth=idx_width(MaxTrans)`、L168/L322 full 门、L557/L615 `&in_flight` 判满、L460-508 无 MaxTrans 合法性检查）、vendor/common_cells/src/cf_math_pkg.sv（L57-58 `idx_width`）、vendor/common_cells/src/delta_counter.sv（`overflow_o` 语义）、vendor/axi/src/axi_xbar.sv（L141 `MaxWTrans←MaxSlvTrans`）、axi_xbar_unmuxed.sv（L175 `MaxTrans←MaxMstTrans`）、axi_mux.sv（L46/L319 `MaxWTrans` FIFO 深度）、vendor/axi/doc/{axi_xbar.md L46/L47,axi_demux.md L72,axi_mux.md L29}、axi_pkg.sv L489-494（四处散文互相矛盾）@ v0.39.9（SHA a256a3b8） |

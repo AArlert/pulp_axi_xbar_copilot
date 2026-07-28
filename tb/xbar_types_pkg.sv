@@ -91,21 +91,69 @@ package xbar_types_pkg;
   endfunction
   localparam rule_t [NO_ADDR_RULES-1:0] ADDR_MAP = gen_addr_map();
 
-  // Reference-model decode function shared with the scoreboard
-  // (doc/design-prompt/scoreboard_refmodel.md C1.2/C1.3, spec §3.2/§3.1.3).
-  // Rules here are constructed non-overlapping (see REGION_SIZE above), so
-  // "highest-position rule wins on overlap" (§3.1.3) is never exercised by
-  // M1-01 — first (only) match found wins, scanned low-index-first.
+  // ---- M2-CFG01 runtime-reconfiguration target table (spec §3.4) ---------
+  // A single alternate table version the env switches to at runtime (only in
+  // an all-ports-AW/AR-idle window). Two independent kinds of routing change
+  // so batch 2 exercises both spec §3.1/§3.2 (rule move) and §3.3 (default
+  // master port):
+  //   (1) rule CFG01_MOVED_RULE's target idx is moved to CFG01_MOVED_IDX, so
+  //       the SAME region-CFG01_MOVED_RULE address routes to a *different*
+  //       master port before vs after the change (rule move, §3.1/§3.2);
+  //   (2) every slave port's default master port is enabled (EN_DEFAULT_V1)
+  //       with a per-port index (DEFAULT_MST_V1), so an address matching NO
+  //       rule is routed to that default port instead of a decode error
+  //       (default master port, §3.3). Baseline (V0) has default disabled, so
+  //       the same unmapped address would be a decode error under V0 — batch 1
+  //       never sends it (stays entirely on rule hits).
+  localparam int unsigned CFG01_MOVED_RULE = 0;
+  localparam int unsigned CFG01_MOVED_IDX  = 5;
+
+  function automatic rule_t [NO_ADDR_RULES-1:0] gen_addr_map_v1();
+    gen_addr_map_v1 = gen_addr_map();
+    gen_addr_map_v1[CFG01_MOVED_RULE].idx = CFG01_MOVED_IDX;
+  endfunction
+  localparam rule_t [NO_ADDR_RULES-1:0] ADDR_MAP_V1 = gen_addr_map_v1();
+
+  localparam logic [NO_SLV_PORTS-1:0] EN_DEFAULT_V1 = '1;
+
+  function automatic logic [NO_SLV_PORTS-1:0][MST_PORT_IDX_W-1:0]
+      gen_default_mst_v1();
+    for (int unsigned i = 0; i < NO_SLV_PORTS; i++)
+      gen_default_mst_v1[i] = i[MST_PORT_IDX_W-1:0];
+  endfunction
+  localparam logic [NO_SLV_PORTS-1:0][MST_PORT_IDX_W-1:0] DEFAULT_MST_V1 =
+      gen_default_mst_v1();
+
+  // Reference-model decode function shared with the scoreboard and the
+  // protocol SVA (doc/design-prompt/scoreboard_refmodel.md C1.2/C1.3/C1.5,
+  // sva_bind.md §3 "译码复用", spec §3.2/§3.1.3/§3.3/§3.4). The address table
+  // and this slave port's default-master-port configuration are *inputs*
+  // (not a compile-time localparam) so the one decode implementation serves
+  // both the fixed-baseline scenarios and M2-CFG01's runtime-variable table
+  // (single source of truth — no second decode logic, no second snapshot).
+  // Returns 1 when the address routes to a real master port (a rule hit, or
+  // the enabled default master port), 0 on decode error (no rule + no
+  // default — spec §4, only reached in M3 error-path scenarios).
+  // Rules are constructed non-overlapping (see REGION_SIZE above), so
+  // "highest-position rule wins on overlap" (§3.1.3) is never exercised —
+  // first (only) match found wins, scanned low-index-first.
   function automatic bit decode_mst_port(input addr_t addr,
+                                          input rule_t [NO_ADDR_RULES-1:0] amap,
+                                          input bit en_def,
+                                          input logic [MST_PORT_IDX_W-1:0] def_port,
                                           output int unsigned mst_port);
     for (int unsigned r = 0; r < NO_ADDR_RULES; r++) begin
-      if (addr >= ADDR_MAP[r].start_addr && addr < ADDR_MAP[r].end_addr) begin
-        mst_port = ADDR_MAP[r].idx;
+      if (addr >= amap[r].start_addr && addr < amap[r].end_addr) begin
+        mst_port = amap[r].idx;
         return 1'b1;
       end
     end
+    if (en_def) begin
+      mst_port = int'(def_port); // §3.3 default master port
+      return 1'b1;
+    end
     mst_port = '0;
-    return 1'b0; // no match — M1-01 never sends outside the map (uvm_env.md C2.4)
+    return 1'b0; // decode error — never reached before batch2 uses default (§4, M3)
   endfunction
 
   // Deterministic predictable read-data generator shared by the mst-port

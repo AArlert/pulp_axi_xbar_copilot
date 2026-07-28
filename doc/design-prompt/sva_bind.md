@@ -1,4 +1,4 @@
-# Design prompt — `sva_bind`（协议/时序 SVA bind 挂接，M1 骨架）
+# Design prompt — `sva_bind`（协议/时序 SVA bind 挂接，M1 骨架 + M2 断言/覆盖点激活）
 
 > 约束层：规定 SVA 模块的**结构与挂接方式**；断言内容一律引用 `doc/spec.md`。SVA 是
 > DV checker 的一种，期望只准从 spec 推导（spec §0 行 6）；本文**不**在 SVA 里编码
@@ -53,25 +53,142 @@ spec §1；具体条目：
 - **C2.5 禁断言仲裁序**：SVA **不得**断言任一条特定 round-robin 发生序或某拍具体
   被授权端口。依据：spec §5.5.4（C4 裁决）。
 
-## 3. 后续里程碑挂接位（成文，M2+ 激活；M1 不实现）
+## 3. M2 断言与覆盖点激活集（C3.1-C3.5 具体设计，替代 M1 期占位）
 
-以下为已知需 SVA 表达但属后续里程碑的时序约束，此处登记挂接位以便 M2 直接扩展，
-**M1 不落地断言**：
+**结构性前提（本节新增内容对 C1.1"独立模块"原则的延伸，供 DV 参考、非文件边界强制）**：
 
-- **C3.1** 地址表/ default port 不在 AW/AR valid 期间变更（§3.4）——env 侧约束，
-  可用 SVA 兜底监视。
-- **C3.2** 同 ID 同向跨 master 端口保序 stall（§5.2）——M2 功能场景配合参考模型。
-- **C3.3** W-burst 随 AW 同序、burst 内不与他源交织（§5.5.1）——master 端口侧。
-- **C3.4** 事务在飞上限 `MaxMstTrans`/`MaxSlvTrans`（§5.4）。
-- **C3.5** ATOP 读写通道成对响应与 ID 唯一性约束（§6.3/§6.4）。
+- **新增可见性**：C3.1/C3.2 需要观测**全局共享**的 `addr_map_i` 与**逐 slave 端口**
+  一位/一索引的 `en_default_mst_port_i[i]`/`default_mst_port_i[i]`——这些不是任一
+  AXI 通道接口（`slvport_if`/`mstport_if`）本身携带的信号，现有 `axi_chan_sva` 的
+  泛型 `interface axi` 端口覆盖不到。tb_top 需为此新增一条挂接点信号（见 tb_top
+  C4.2），把这三路信号接给新增的 SVA 实例；`addr_map_i` 对 6 个 slave 端口是同一
+  句柄，`en_default_mst_port_i[i]`/`default_mst_port_i[i]` 按下标传入。依据：
+  spec §2.3、§3.4。
+- **译码复用（单一事实源）**：任何需要"某笔事务目标 master 端口 idx"的属性
+  （C3.2）一律复用 `xbar_types_pkg::decode_mst_port()`（scoreboard_refmodel C1.2
+  已在用的同一份译码函数），不得另写第二套译码逻辑。该函数当前把地址表读作
+  编译期 `localparam`（M1 假设）；M2-CFG01 场景要求地址表运行时可变，函数签名需
+  改为把地址表结构当**输入参数**传入（scoreboard_refmodel C1.5 同步要求此
+  项），使 SVA 与 scoreboard 对同一个"运行时活值"表译码，而非各自假设其恒定。
+- **实例范围**：C3.1/C3.2/C3.5 只适用于 **slave 端口**（6 个）；C3.4 适用于**两类
+  端口**（细节见该条）；C3.3 不新增独立断言实例（见该条）。是否新增一个姊妹模块
+  （如 `axi_xbar_route_sva.sv`，6 实例）承载 C3.1/C3.2/C3.5，或改为扩展现有
+  `axi_chan_sva`（加端口/加参数区分 slave-only 逻辑）承载 C3.4，由 DV 实现选择；
+  本节只约束**必须具备的可见性与判定内容**，不锁定文件边界。
+- **cover property 配套（呼应 `functional_coverage.md` §3 的 assert 覆盖类）**：
+  下列每条新增 `assert property` 均须配一条**同触发前提**的 `cover property`，
+  用以在覆盖数据库中留痕"该属性的前提条件被真实激励到过"，而不仅是"从未失败"——
+  区分非空转通过与空转通过（呼应 `workflow/dispatch/coverage_hole.md` 的可证伪性
+  要求）。各条目下方逐条点出对应 cover 目标与哪个 M2 场景提供该激励。
+
+### C3.1 地址表/default port 运行时稳定性（依据 spec §3.4）
+
+- 属性：对每个 slave 端口 `i`，在 `(aw_valid[i] || ar_valid[i])` 为真的相邻两拍
+  之间，`addr_map_i`、`en_default_mst_port_i[i]`、`default_mst_port_i[i]` 均须
+  `$stable`。对 6 个 slave 端口各自独立检查即覆盖 spec §3.4"任一 slave 端口
+  AW/AR valid 期间不得更改"的全局约束（对每个端口分别断言"更改与我自己的 valid
+  重叠不发生"，其析取形式恰是原始的全局约束，无需跨端口共享状态）。
+- cover：`$changed(addr_map_i)`（或 en/default 相应 changed）在仿真中至少发生
+  一次——M1 从未变更过地址表（tb_top C2.6：M1 smoke 取恒定表），若不补这条 cover，
+  该 assert 此前只是"从不改变故从不违反"式空转通过。激励来源：M2-CFG01。
+- 适用端口：仅 slave 端口。
+
+### C3.2 同 ID 跨 master 端口保序 stall（依据 spec §5.2.1/§5.2.2/§5.2.4）
+
+- 状态：每个 slave 端口维护一张按低 `AxiIdUsedSlvPorts` 位 keyed 的"未决记录"表，
+  每条记录 = `{方向, 目标 master 端口 idx}`；AW/AR 握手（`valid&&ready`）发生时用
+  `decode_mst_port()` 算出本笔目标并登记（若该 key **同方向**已有记录则不重复登记，
+  只在配对完成后清除）；对应 B（写方向）或 `rlast`（读方向）握手发生时清除同 key
+  同方向记录。**方向是匹配条件的一部分**：只在"新请求方向 == 已有记录方向"时才
+  比较目标是否相同——异向的同低位 ID 不落在本属性范围内（5.2.1 明文"同方向"）。
+- 主属性（5.2.1/5.2.2）：若某 key 已存在**同方向**未决记录且其目标 `!=` 本次新到
+  达同 key 同方向请求的目标，则本次 AW/AR 的 `valid&&ready` **不得**在旧记录清除
+  前为真。
+- 配套属性（5.2.4，澄清"不误伤"）：若某 key 已存在**同方向**未决记录且其目标
+  **等于** 本次新到达同 key 同方向请求的目标，则本次握手**不因该记录的存在**被
+  上一条属性推迟（用于捕获 stall 逻辑矫枉过正这类假想缺陷）。
+- **范围边界说明（依据 spec §5.2.5 + §6.5，非阻塞）**：以上两条属性只从**外部
+  可观测的 AW/AR/B/R 握手**建模未决记录，不感知 demux 内部"原子读 ID 注入 AR
+  计数器"的影子机制。spec §6.5（+ §5.2.5 交叉引用）已把该机制蒸馏为派生条款：
+  一笔原子读可能使同一 slave 端口上另一笔低位 ID 相同、目标不同 master 端口的
+  普通读依 §5.2.1 被 stall——由 ATOP 写事件引发的读方向 stall，属**正常设计行为、
+  非退化**（spec §6.5 明述）。若该跨方向 stall 在仿真中出现，因其不满足"同 key
+  同方向已有记录"的前提，以上两条属性均不会因此报告违反——这是**有意的范围
+  边界**（spec §5.2.5/§6.5 把该现象定为正常行为、不作 §5.2.1 违反判据），不是
+  遗漏；亦即 spec §6.5 末句"本条登记前撞见此现象不得判 DUT_BUG"的对应实现侧落点。
+- cover：主属性前提发生 ≥1 次（激励来源 M2-OR01）；配套属性前提发生 ≥1 次（激励
+  来源 M2-OR02）。
+- 适用端口：仅 slave 端口。
+
+### C3.3 W 通道次序（依据 spec §5.5.1/§5.5.2）——沿用既有机制，只新增 cover
+
+- 现有 `axi_chan_sva` C2.3 的 `aw_len_q`/beat 计数机制已隐含"同接口上前后 W burst
+  不交织"（该文件顶部注释原话："assumes bursts on this interface are not
+  interleaved across sources"）；`mstport_agent.sv` 的 monitor（BUG-0009 修复后）
+  用 `aw_q[$]` FIFO 按 AW 接受序配对 W burst，其配对顺序本身即复现 spec §5.5.2
+  "select 信号存入 FIFO、按 AW 接受序 pop"的机制。**M2 不新增独立 assert**——若
+  交织/错序真的发生，现有 C2.3 的长度校验与 scoreboard 的 burst 归属判定会失配。
+- M2 新增的是**非空转证据**：一条 `cover property`（挂在 master 端口侧，紧邻
+  `axi_chan_sva` 或其 monitor 逻辑）记录"某 W burst 起始时，该 master 端口存在
+  ≥2 个不同源 slave 端口贡献的 AW 处于未决"，用以证明 C2.3 这条既有断言不是只在
+  "从未真正竞争"的场景下平凡通过。激励来源：M2-WO01。
+- 时序判据的颗粒度新增需求（不落在 SVA，落在 scoreboard）：需要跨 slave 端口的
+  AW 接受时间戳，用于校验"master 端口侧观测到的 burst 完成序 == 各源 AW 接受的
+  先后序"——见 scoreboard_refmodel C5.5。
+- 适用端口：master 端口（复用既有挂点，不新增实例）。
+
+### C3.4 事务在飞上限（依据 spec §2.1 `MaxMstTrans` 行 + §5.4.1/§5.4.2/§5.4.3；开放机制依赖见 §5.4.3 `MaxSlvTrans` 侧上游确认项）
+
+- 状态：每端口维护一个按（约简 ID、方向）分桶的计数器数组，每桶额外带一个"当前
+  绑定目标 master 端口"寄存器——依据 spec §2.1 `MaxMstTrans` 行（分桶口径 + 目标
+  绑定寄存器机制，spec 该条款自身出处标注为 demux.md §Ordering and Stalls→
+  Implementation L70-74）与 §5.4.1；**不用单一扁平计数器**（§2.1/§5.4.1 已把
+  此前的扁平表述纠正为分桶口径）。AW/AR 握手时对应桶 `+1`，B/`rlast` 握手时对应桶
+  `-1`。同桶计数非零期间只能绑定一个目标——换目标属于 C3.2 的 stall 判据范围
+  （spec §5.2），不属本条计数上限判据（spec §5.4.1），二者为同一底层机制的两面
+  （spec §2.1 `MaxMstTrans` 行明述），构造激励时须分清楚（呼应
+  scoreboard_refmodel C5.3 的同一说明）。
+- slave 端口侧比较（`MaxMstTrans`，依据 spec §5.4.1；M2-TL01 场景收窄到单一
+  ID 桶×方向×目标 master 端口三元组）：该桶计数 `> MaxMstTrans` 不得发生（即
+  计数已达上限时，同桶下一次 `valid&&ready` 不得为真，直到一次完成使计数回落）。
+- master 端口侧比较（`MaxSlvTrans`，依据 spec §5.4.2）：REV-005 裁决已**解锁**一条
+  **弱化的可观测上界 checker**——「每 master 端口 × 每可观测（前缀后）ID × 每方向
+  在飞事务数 ≤ `MaxSlvTrans`」（分组见 `doc/bugs/BUG-0011.md` ## regression_guard
+  的不假红约束：方向须分开计，该分组在任何未决机制读法下都只会是真实上界的保守
+  下侧、绝不假红）。但**机制级断言**（spec §5.4.3 列为上游确认项的具体拒收触发点/
+  是否硬性反压）**仍不落地、不派发**——不得断言"第 7 笔在某具体通道/时点被拒收"。
+- cover：slave 端口侧，某桶计数达到（且不超过）`MaxMstTrans` 至少发生一次（激励
+  来源 M2-TL01）；master 端口侧的对应 cover 随 M2-TL02 的弱化上界 checker 一并
+  落地（每 master 端口 × 每可观测前缀后 ID × 每方向计数达到 `MaxSlvTrans` 至少
+  一次；机制级触发点仍为上游确认项、不落地）。
+- 适用端口：两类端口（同一"分桶计数器"结构的两种读出方式）。
+
+### C3.5 ATOP 读写通道成对响应与 ID 唯一性（依据 spec §6.3/§6.4）
+
+- 属性 1（成对响应，§6.3）：每个 slave 端口上，`aw_valid&&aw_ready` 且 `aw_atop`
+  编码要求读响应时，登记一条"待验证"记录；该记录须等到 B 与 `rlast`（同 ID）都
+  出现才清除——只断言"两者最终都出现"，**不得**断言二者的相对到达顺序或间隔拍数
+  （延迟不敏感红线，C2.4/spec §7.4）。
+- 属性 2（ID 唯一性 SVA 兜底，§6.4）：每个 slave 端口上，一笔 ATOP AW 握手发生
+  时，其 ID 不得与该端口当前任何（读或写方向）未决事务的 ID 相同。这是**环境应
+  遵守**的约束（uvm_env C2.4/C5.5 已在驱动纪律层面保证）；本属性只作 SVA
+  兜底监视——若被触发，指向 **env 违反了自身约束**（TB_BUG），不得先入为主判
+  DUT_BUG。
+- cover：属性 1 前提（原子读发起）至少发生一次（激励来源 M2-AT01）。
+- 适用端口：仅 slave 端口。
 
 ## 4. 交付形态与验收锚点
 
-- 产物：`tb/sva/` 下协议 SVA 模块 + tb_top 内 `bind` 语句（tb_top C4.1），收录于
+- 产物：`tb/sva/` 下协议 SVA 模块（+ M2 新增的挂点/姊妹模块，文件边界见 §3 结构
+  性前提）+ tb_top 内 `bind`/直接例化语句（tb_top C4.1/C4.2），收录于
   `sim/flist/tb.f`。
 - M1 判据：编译弹起、smoke（M1-01/M1-02）期间 assert 类覆盖有采样且**零 assertion
   失败**（SVA passive 通过）。
+- M2 判据：C3.1/C3.2/C3.3(cover)/C3.4(slave 侧)/C3.5 随对应场景（M2-CFG01/OR01/
+  OR02/WO01/TL01/AT01）落地、assert 零失败**且**配套 cover 均非零命中（非空转
+  证据）；C3.4 master 侧断言受 spec §5.4.3 上游确认项约束、随 M2-TL02 弱化范围
+  确认后另行落地，不阻塞其余五条。
 
 ## 引用的 spec 章节
 
-§1、§2.3、§3.4、§4.3、§4.5、§5.2、§5.4、§5.5、§6.3、§6.4、§7.4。
+§1、§2.1、§2.3、§3.1、§3.2、§3.4、§4.3、§4.5、§5.2、§5.4、§5.5、§6.3、§6.4、§6.5、§7.4。
