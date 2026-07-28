@@ -1,3 +1,4 @@
+{"date": "2026-07-28", "version": "0.3.0", "summary": "M2 里程碑签核 PASS（doc/evidence/v0.2.5/signoff-M2.md）：八行场景 ✅、regress 11/11 独立重跑、rubric #5 真做证伪（BUG-0027 缺陷放回见 336 条红后复原）、rubric #7 首次实战——四条 ACCEPTED@M3 带推翻意图复核全数通过；新登 FB-20（终态行的未兑现义务对条件 3 不可见）。转入 M3"}
 {"date": "2026-07-28", "version": "0.2.5", "summary": "拉框架 0.5.3：FB-18 当日闭环（rubric 条件 3 同步 + 新增人工抽查第 7 条，本仓库 REV-011 §4 G3 入 canon）、FB-11 fixed@0.5.2；BUG-0030 上游订正落页但不关闭（「恰为」判据未经实测，登记为待兑现守卫义务）。M2 签核卡解除暂停"}
 {"date": "2026-07-28", "version": "0.2.4", "summary": "FB-18（blocking）登记并当日送达框架侧：0.5.0 的 ACCEPTED@M<n> 只落到机器侧，signoff/rubric.md 机器条件 3 措辞未同步、且无任何条目要求复核 ACCEPTED 的 rationale。M2 签核卡按指令暂停派发，待框架闭环后 fwsync --pull 再派"}
 {"date": "2026-07-28", "version": "0.2.3", "summary": "REV-011 台账落地：0018/0024/0025 转 ACCEPTED@M3（0024 择 G4 (b)、0018 由 M4 提前至 M3）+ 新登 BUG-0031（stall_sva 用编译期地址表、误差双向）并由 rev 补裁 ACCEPTED@M3；signoff-check 条件 3 转 PASS，仅余签核文件"}
@@ -5,4 +6,3 @@
 {"date": "2026-07-28", "version": "0.2.1", "summary": "M2 场景全部 ✅（新增 M2-OR03 守卫场景，共 8 条）+ F-M2-08 功能覆盖落地；框架 0.3.0→0.4.5 五版回流（FB-10 guard 注入进 canon 并复验闭环）；bug active 12→4；signoff-check 条件 1/2 转绿，M2 未签核"}
 {"date": "2026-07-27", "version": "0.2.0", "summary": "M1 里程碑签核 PASS（doc/evidence/v0.1.2/signoff-M1.md）：M1-02 落地 ✅，落地期发现修复 BUG-0009（TB monitor AW/W 配对缺陷，TB_BUG CLOSED，守卫经签核亲验见红），REV-004 裁决 BUG-0008→WONTFIX，regress.list 补全至 3/3 PASS；转入 M2"}
 {"date": "2026-07-27", "version": "0.1.2", "summary": "框架 0.2.0 → 0.3.0 两轮回流闭环：FB-1~FB-7 全部 fixed@0.2.1，0.3.0 带来 workflow/discipline.md（执行纪律五条，本仓库的\"小步快跑\"被上收为其 rule 5）；两处本地重述收成指针防漂移；补登 BUG-0008（TOOL_ENV，M0 三条证据 Key check lines 段为空，存量是否重生成待 rev 裁决）；M1-02 未动"}
-{"date": "2026-07-27", "version": "0.1.1", "summary": "M1 首个场景落地：UVM env 骨架 + M1-01 smoke ✅（evidence v0.1.0/M1-01.log），REV-002 design-prompt 放行，REV-003 核验 VCS-2018 bind 限制的直接例化替代方案；M1-02 待做，FB 回流仍欠账"}

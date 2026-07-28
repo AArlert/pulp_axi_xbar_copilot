@@ -1,3 +1,4 @@
+{"date": "2026-07-27", "version": "0.1.1", "summary": "M1 首个场景落地：UVM env 骨架 + M1-01 smoke ✅（evidence v0.1.0/M1-01.log），REV-002 design-prompt 放行，REV-003 核验 VCS-2018 bind 限制的直接例化替代方案；M1-02 待做，FB 回流仍欠账"}
 {"date": "2026-07-27", "version": "0.1.0", "summary": "M0 里程碑签核 PASS（doc/evidence/v0.0.2/signoff-M0.md），基建+sanity+spec v0 收官；R1 回流 fw-feedback FB-6；转入 M1"}
 {"date": "2026-07-27", "version": "0.0.2", "summary": "DV 复验闭环：M0-01 ✅，BUG-0001/0006 CLOSED，signoff-check 机器条件全过；待 rev 里程碑签核"}
 {"date": "2026-07-27", "version": "0.0.1", "summary": "M0 基建首循环收官：vendor pin(axi v0.39.9)+sim 基建+P-001/P-002 编译排雷(compile 全过)+spec v0 评审应用重 pin；M0-01 待 DV 复验，FB-1~5 待回流"}
