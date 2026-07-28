@@ -960,6 +960,75 @@ def cmd_repro(rid):
     sys.exit("scenario %s not found in testplan" % rid)
 
 
+SPEC_REF_RE = re.compile(r"SPEC-(\d+(?:\.\d+)*)")
+SPEC_SEC_RE = re.compile(r"(?:^#{1,6}\s*|§)(\d+(?:\.\d+)*)", re.M)
+
+
+def cmd_chain_audit():
+    """Whole-graph break-link audit: spec ↔ testplan ↔ feature-matrix ↔
+    evidence. Hard-fails only on dangling spec refs (cited section absent
+    from spec.md, ancestors included); other break classes are reported
+    for review — convention layers (spec_ref headers) are counted, not
+    enforced, until adoption catches up."""
+    secs = set(SPEC_SEC_RE.findall(
+        CFG.spec.read_text(encoding="utf-8", errors="replace")))
+    tp_rows = parse_table(CFG.testplan)
+    linked = {s for r in parse_table(CFG.feature_matrix)
+              for s in linked_scenes(r)}
+
+    dangling, parented, sourceless, orphans, all_refs = [], [], [], [], set()
+    ev_missing_specref, ev_checked = 0, 0
+    for r in tp_rows:
+        rid = r.get(CFG.C["tp_id"], "?").strip()
+        refs = set(SPEC_REF_RE.findall(" ".join(r.values())))
+        all_refs |= refs
+        if not refs:
+            sourceless.append(rid)
+        for ref in sorted(refs):
+            if ref in secs:
+                continue
+            anc, hit = ref, False
+            while "." in anc:
+                anc = anc.rsplit(".", 1)[0]
+                if anc in secs:
+                    parented.append("%s SPEC-%s→§%s" % (rid, ref, anc))
+                    hit = True
+                    break
+            if not hit:
+                dangling.append("%s SPEC-%s" % (rid, ref))
+        if rid not in linked:
+            orphans.append(rid)
+        if "✅" in r.get(CFG.C["tp_status"], ""):
+            ev = r.get(CFG.C["tp_evidence"], "").strip("` ")
+            p = CFG.root / ev
+            if ev.startswith("doc/evidence/") and p.exists():
+                ev_checked += 1
+                if "# spec_ref:" not in p.read_text(encoding="utf-8",
+                                                    errors="replace"):
+                    ev_missing_specref += 1
+    uncited = sorted(
+        s for s in secs if "." in s and s not in all_refs
+        and not any(ref == s or ref.startswith(s + ".") for ref in all_refs))
+
+    print("== chain audit ==")
+    print("[%s] dangling spec refs (cited, no such section): %d%s"
+          % ("FAIL" if dangling else "PASS", len(dangling),
+             " — " + ", ".join(dangling) if dangling else ""))
+    for label, items in (("scenarios citing no spec clause", sourceless),
+                         ("scenarios in no feature-matrix row", orphans),
+                         ("refs anchored only at a parent section",
+                          parented)):
+        print("[gap] %s: %d%s" % (label, len(items),
+                                  " — " + ", ".join(items) if items else ""))
+    print("[gap] spec subsections cited by no scenario: %d%s"
+          % (len(uncited),
+             " — §" + ", §".join(uncited[:15]) if uncited else ""))
+    print("[gap] ✅ evidence without a spec_ref header: %d/%d "
+          "(convention, not yet enforced)"
+          % (ev_missing_specref, ev_checked))
+    return 1 if dangling else 0
+
+
 def cmd_guards(paths):
     """Print every registered regression_guard whose `paths:` globs match
     any given file path. Consumed at card assembly (dispatch self-check)
@@ -1011,6 +1080,9 @@ def main():
                         help="print a scenario's replay command")
     parser.add_argument("--guards", nargs="+", metavar="PATH",
                         help="print regression_guards binding these paths")
+    parser.add_argument("--chain-audit", action="store_true",
+                        help="whole-graph break-link audit "
+                             "(spec↔testplan↔matrix↔evidence)")
     args = parser.parse_args()
     CFG = load_config()
     if args.pin_spec:
@@ -1027,6 +1099,8 @@ def main():
         cmd_repro(args.repro)
     if args.guards:
         cmd_guards(args.guards)
+    if args.chain_audit:
+        sys.exit(cmd_chain_audit())
     if args.handover:
         cmd_handover()
     if args.next:

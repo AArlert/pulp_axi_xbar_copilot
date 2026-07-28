@@ -2,6 +2,72 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.1] 2026-07-28 拉框架 0.6.0（chain-audit 毕业）+ 登记 FB-21/FB-22
+
+**Done**
+- **`make fw-pull` → 框架 0.6.0**，`fw-check`（26 files pinned）/ `docs-check`
+  双绿。0.6.0 的主体是 **`make chain-audit` 从 deferred 毕业**——spec ↔ testplan
+  ↔ feature-matrix ↔ evidence 的断链审计，**其触发器就是本仓库的 signoff-M2**
+  （框架 CHANGELOG 记为"生态首次覆盖驱动签核"）。同时 0.5.4 的 FB-19 例外条款
+  原样落地在 `.claude/skills/dispatch/SKILL.md`，验收无异议
+- **chain-audit 首次运行**（本仓库 M2 文档）：`0 dangling / 1 sourceless(M0-01)
+  / 0 orphans / 5 parent-anchored / 19 uncited / 11-of-11 evidence 缺
+  spec_ref header`。工具本身有价值——**§5.2.6**（REV-011 当天新增的条款）被
+  正确标为"尚无场景引用"，正是该审计存在的意义（M3 缺口）
+- **登记 FB-21**（annoyance）：**chain-audit 没有任何门禁或判据来源消费它**。
+  实测 grep `chain.audit` / `chain_audit` 于 `rubric.md`、`workflow/*.md`、
+  所有 skill = **空集**；`signoff-check` 机器条件 1-3 与人工抽查 4-7 均未提及；
+  `docs-check` 不调用；`make next` 不提示。而 0.6.0 CHANGELOG 自己写明它的
+  触发器是"the first coverage-driven milestone signoff"——**为签核而生的工具，
+  签核却不调用它**。与 FB-11 判例 (a) 逐字同构（`make lint` 从 M0 起就是坏的，
+  正因为它不在任何门禁清单里）。本仓库第三次撞同一家族。建议**明确不做成硬
+  门禁**（`spec_ref` 采纳率 0/23，硬失败会立刻制造豁免压力），诉求是"签核时
+  必须**被看见**"而非"必须绿"
+- **登记 FB-22**（annoyance）：**uncited 行静默截断，且截断方向系统性偏向编号
+  最大的章节**。`docs.py:1023-1025` 是 `uncited[:15]`，无省略号/无 "+N more"；
+  本仓库实测**计数 19、列出 15、静默丢 4**，而同一报告另外四行全量打印 ⇒
+  报告内部自相矛盾。排序用 `sorted()` **字符串序** ⇒ 砍掉的恒是编号最大的
+  一批：本仓库丢的是 **§7.4.3 / §7.4.4 / §8.3 / §8.4**，即延迟不敏感原则与
+  Connectivity 稀疏矩阵，**正好是 M3 的主题地盘**；且 §7.4.4 与 §8.4 恰是
+  spec §5.2.6 第 2.b 条引作"上游确认项、不阻塞里程碑"先例的两节。
+  ⇒ **一个为发现里程碑缺口而生的审计工具，其静默截断优先隐藏下一个里程碑的
+  缺口。**违反框架 0.4.3 为 FB-13/14 立的"可见截断"约定，属本仓库 BUG-0028
+  "分母静默缩水"同族
+- FB-21/22 + 一条附带观察（**`docs-check` 的表格列数校验只覆盖 `doc/bugs.md`**
+  ——写 FB-21 时误打一个字面量 `|` 使该行变 7 列，门禁照样通过）当日送达
+  iverif-workflow 侧
+
+**Not done**
+- 三条反馈均未闭环（不阻塞本仓库任何工作）
+- chain-audit 报出的 gap 一条未处置：1 sourceless（M0-01，上游 tb sanity，
+  本就无 spec 条款可引）、5 parent-anchored、19 uncited、11/11 缺 spec_ref
+  header。**这些是 M3 的输入，不是本 chunk 的欠账**——尤其 §5.2.6 无场景引用，
+  正是 M3 错误路径场景要填的
+- M3 场景清单未设计；四条 `ACCEPTED@M3` 债务未修
+
+**Next**
+- 派 **arch 设计输入卡：M3 场景清单**（错误路径 / decode error / 多配置回归）。
+  输入已齐：spec §5.2.6 三层判据、chain-audit 的 uncited 清单（**含被截断的
+  §7.4.3/§7.4.4/§8.3/§8.4——手工补回，不能只看工具输出**）、四条 ACCEPTED@M3
+  的到期验收形态、REV-011 §4 G4（BUG-0025+0031 同卡修、守卫场景与 M3
+  decode-error 场景同卡注册）
+- M3 大概率需要引入真正的 constrained-random：配置矩阵（spec §0 #3）铺开后
+  纯定向激励组合数会爆炸，而"激励到不了硬情形导致旧绿灯空过"正是本仓库已栽
+  过四次的地方（BUG-0018/0023/0024/0031）。附带效果：`CONSTRAINT_BUG` 这一
+  taxonomy 类目前是**结构上不可能**（全仓无一个 `constraint` 块、无一处
+  `randomize()` 调用，`axi_txn.sv:15-20` 的 `rand` 限定符是死装饰）
+
+**How verified**
+- `make fw-check` 绿（0.6.0，26 files pinned）；`make docs-check` 绿
+- FB-21 的"空集"是**实测**而非印象：grep 两式于三处判据来源载体，无命中；
+  并逐行读 `make signoff-check` 全部输出（机器 1-3 + 人工 4-7）确认未提及
+- FB-22 的 4 条丢失项是**独立复算**得到的，不是从工具输出反推：用与
+  `docs.py` 同构的正则重算 `uncited`，得 19 条、前 15 条与工具输出逐字相同、
+  尾 4 条为 §7.4.3/§7.4.4/§8.3/§8.4
+- 0.6.0 的 pull 范围逐 diff 核对：`docs.py`(+74) / `evidence.mk`(+7，新增
+  `chain-audit` target) / `dispatch/SKILL.md`（FB-19 例外条款）/ manifest /
+  iverif.json + 4 个重新渲染的 agent 文件，无外溢
+
 ## [0.3.0] 2026-07-28 M2 里程碑签核 PASS，收官转入 M3
 
 **Done**
@@ -135,48 +201,4 @@ rationale 无人复核，FB-19 是 orch 自行裁量要不要遵守派卡规则�
   fragment 的临时 Makefile，父变量为空时结果恰为单一路径；对照 `sim/Makefile`
   完整链的实测值带 VCS lib 前缀——正是这个对照支撑了"不采信绕法退役"的判断
 - `make guards FILES="sim/Makefile"` 7 条命中，含 BUG-0030 的新增待兑现义务
-
-## [0.2.4] 2026-07-28 FB-18 回流并阻塞 M2 签核：ACCEPTED 只落到机器侧，rubric 两处未同步
-
-**Done**
-- 组 M2 签核卡时核对判据来源，发现 **FB-18（blocking）** 并登记 +
-  当日送达 iverif-workflow 侧（session「工作流反馈审查」）。两半：
-  - **(a) 字面矛盾**：`workflow/signoff/rubric.md:14` 机器条件 3 仍写
-    "All bug rows are in terminal states (`CLOSED / TB_BUG / SPEC_CHANGED /
-    WONTFIX`)"，而 `scripts/docs.py:877` 已是 "all bugs terminal **or
-    ACCEPTED-unexpired**"。0.5.0 改了 `failure_record.md` / `docs.py` /
-    `evidence.mk`，**漏了 `rubric.md`**。本仓库正好有四行 `ACCEPTED@M3`
-    ⇒ 认真读判据来源的 rev 会判条件 3 不满足，与它自己跑出的 `[PASS]` 冲突。
-    按工具走则判据来源形同虚设（连带贬值 rubric #5"必须真做一次证伪"那类
-    **只存在于 rubric、无机器背书**的条目）；按 rubric 走则里程碑签不掉
-  - **(b) 更实质**：rubric **没有任何条目**要求签核人复核 ACCEPTED 的
-    rationale。机器只验两件形式——行内含 `REV-`（`docs.py:489`）、目标里程碑
-    未过期（`docs.py:855`）；那份 rationale 是否真的存在、是否可证伪、上一轮
-    到期判据是否兑现，**无人查**。而 rubric #6 对 spec debt 恰有同构条目，
-    FB-17 提案时正是引它作先例，落地时没推广到 bug debt 这一侧
-- 建议两条：机器条件 3 同步措辞；新增人工抽查第 7 条（与 #6 同构，要求
-  rationale 存在 + 给出可证伪判据 + 顺延须说明上次判据为何未兑现）。并把
-  `doc/review/REV-011.md` §5.4 作为合格形状的参考实现一并送出
-
-**Not done**
-- **M2 签核卡按用户指令暂停派发**，待框架闭环 FB-18 → `fwsync --pull` 后再派。
-  理由：拿一份已知会误导的判据来源去派签核卡，与 FB-11 那句"没看见错 ≠
-  查过了"是同一族错误。绕法（在卡里写明"以 docs.py:877 为准"）存在但没用——
-  那等于让项目侧口头覆盖框架文档，不是项目该有的权限
-- 四条 ACCEPTED@M3 债务本身未修（语义即如此）；M3-TL01 未落地
-
-**Next**
-- 等 iverif-workflow 侧闭环 FB-18 → `make fw-pull` → `make fw-check` 复绿
-- 然后派 M2 签核卡（REV-011 交下的两条硬性交接条件不变：rubric #4 明确挑
-  BUG-0018；不得把 `axi_xbar_stall_sva` 的通过计为 M2-CFG01 的独立证据，
-  84/84 零命中即其空转的机械证明）
-
-**How verified**
-- 漂移是逐行比对确认的，非印象：`rubric.md:14` 与 `docs.py:877` 两处原文并列
-- `make docs-check` 绿（FB-18 行 6 列）；`make fw-check` 绿（0.5.2，26 files
-  pinned——**框架文件一字未改**，本条只走回流，不本地修补）
-- `make signoff-check` 条件 1/2/3 仍全 PASS、仅余 `[not yet] signoff file`
-  ——即本次暂停**不是**因为机器条件退化，而是因为人工判据来源不可用
-- 自 `594bf94`（0.2.1）以来 `tb/`、`sim/` 一字未动，11/11 回归证据与当前树
-  逐字节一致，签核恢复时条件 2 无需重跑
 

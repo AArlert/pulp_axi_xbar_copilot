@@ -47,6 +47,12 @@ card by type:
       guard block pasted verbatim (registered fact, no reasoning).
       Above ~6 hits split **hard** (paths match files this card edits)
       from **context** (boundary hits — help, not noise); both verbatim.
+      **Exception** — when the card's criteria source itself orders the
+      dispatchee to run the same query (signoff cards: rubric #5), paste
+      no bodies: give the deterministic FILES list + the command that
+      computed it + the hit index lines + a count self-check ("your
+      count/id set differs → stop and report"). The dispatchee executing
+      and proving it beats relaying a snapshot that can go stale.
 
 ## 4. Collection check
 

@@ -1,16 +1,16 @@
 {
   "files": {
     ".claude/skills/closeout/SKILL.md": "6ae415eb3b4b2dc8330a0783e4228311c7c53c0c1c7f023f92497b19729476d8",
-    ".claude/skills/dispatch/SKILL.md": "231675ddf00aa7bb83661fef6484eae648204d449f6e444cc1198d54481aa5d0",
+    ".claude/skills/dispatch/SKILL.md": "b0bd02193a1915cca13d0dddeb28ca18f611a1f5c742e004d748d517f3e66f6b",
     ".claude/skills/evidence/SKILL.md": "2bfb192baf895e1f8be45468294229f4ab867f5b18f9e06d7c98263fe746dca7",
     ".claude/skills/handover/SKILL.md": "5f67d490b4e2d1210f3b1c30c25b6f0d175dfcb2625f8b1ddfb79d499ed1c1f1",
     "scripts/bump.py": "cd2a2172f5b46ebbdbc2907d3f5098d647249148b3e4721ba470580ee94aa581",
-    "scripts/docs.py": "bf369322a7c727a9f5ebb82aab9a21b7eab35be64d2867d19ac7bcb995c3d53e",
+    "scripts/docs.py": "031d7e570771c30a29853bb623690662d8cf6d3f186c5e20689ba800988b4caf",
     "scripts/evidence.py": "16fab9c29191f451b12126254eab7c6247820cee2fe07b7bd8d1d263573aff24",
     "scripts/fwsync.py": "039327244ef85ead22934d9481c26856a50a0714b40f5e6747afef6d9bc40b0a",
     "scripts/iverif_config.py": "aee3aba997f18fdb3c60416a1537916aeb5ae3e5dec455f1d3216d64c63a1452",
     "scripts/make/core.mk": "fb044094fda659c34086005ef6ee2f778802d8c7d79ea06abf56aa0ec3c4c3b2",
-    "scripts/make/evidence.mk": "b84eadfacaa119dede802e871316070eeea4777efebb3f3aa42b12aa86e81752",
+    "scripts/make/evidence.mk": "bbead09f0d1682352450fbe4da3cc0c7d944098078c03076a0b2777488158475",
     "scripts/make/vcs-2018.mk": "3c6578e7185b264b7250fdb825d16315145fc12a21b3471f8d7fbbf4f7a10337",
     "scripts/regress.py": "cd9b1ebfca6a848e85358d1e7dc6cdd27648f2972fd5235279c1d6cd4a187673",
     "scripts/svacheck.py": "d4ba680dfd202c750e23e0030e3d803d56e09f5b918f2358c644ba1a6298a17c",
@@ -27,5 +27,5 @@
     "workflow/taxonomy/failure_taxonomy.md": "c94e5340a19e2afcae0eeffb322a1f2d03d631a7799abefc3d763230fa2d5be6",
     "workflow/taxonomy/rca_template.md": "58ea28f44f6777197131983afbb4065ec43788df0c0a0aaa509681711ada0a88"
   },
-  "framework": "0.5.3"
+  "framework": "0.6.0"
 }

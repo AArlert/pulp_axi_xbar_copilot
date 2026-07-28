@@ -1,4 +1,48 @@
 # Work log archive
+## [0.2.4] 2026-07-28 FB-18 回流并阻塞 M2 签核：ACCEPTED 只落到机器侧，rubric 两处未同步
+
+**Done**
+- 组 M2 签核卡时核对判据来源，发现 **FB-18（blocking）** 并登记 +
+  当日送达 iverif-workflow 侧（session「工作流反馈审查」）。两半：
+  - **(a) 字面矛盾**：`workflow/signoff/rubric.md:14` 机器条件 3 仍写
+    "All bug rows are in terminal states (`CLOSED / TB_BUG / SPEC_CHANGED /
+    WONTFIX`)"，而 `scripts/docs.py:877` 已是 "all bugs terminal **or
+    ACCEPTED-unexpired**"。0.5.0 改了 `failure_record.md` / `docs.py` /
+    `evidence.mk`，**漏了 `rubric.md`**。本仓库正好有四行 `ACCEPTED@M3`
+    ⇒ 认真读判据来源的 rev 会判条件 3 不满足，与它自己跑出的 `[PASS]` 冲突。
+    按工具走则判据来源形同虚设（连带贬值 rubric #5"必须真做一次证伪"那类
+    **只存在于 rubric、无机器背书**的条目）；按 rubric 走则里程碑签不掉
+  - **(b) 更实质**：rubric **没有任何条目**要求签核人复核 ACCEPTED 的
+    rationale。机器只验两件形式——行内含 `REV-`（`docs.py:489`）、目标里程碑
+    未过期（`docs.py:855`）；那份 rationale 是否真的存在、是否可证伪、上一轮
+    到期判据是否兑现，**无人查**。而 rubric #6 对 spec debt 恰有同构条目，
+    FB-17 提案时正是引它作先例，落地时没推广到 bug debt 这一侧
+- 建议两条：机器条件 3 同步措辞；新增人工抽查第 7 条（与 #6 同构，要求
+  rationale 存在 + 给出可证伪判据 + 顺延须说明上次判据为何未兑现）。并把
+  `doc/review/REV-011.md` §5.4 作为合格形状的参考实现一并送出
+
+**Not done**
+- **M2 签核卡按用户指令暂停派发**，待框架闭环 FB-18 → `fwsync --pull` 后再派。
+  理由：拿一份已知会误导的判据来源去派签核卡，与 FB-11 那句"没看见错 ≠
+  查过了"是同一族错误。绕法（在卡里写明"以 docs.py:877 为准"）存在但没用——
+  那等于让项目侧口头覆盖框架文档，不是项目该有的权限
+- 四条 ACCEPTED@M3 债务本身未修（语义即如此）；M3-TL01 未落地
+
+**Next**
+- 等 iverif-workflow 侧闭环 FB-18 → `make fw-pull` → `make fw-check` 复绿
+- 然后派 M2 签核卡（REV-011 交下的两条硬性交接条件不变：rubric #4 明确挑
+  BUG-0018；不得把 `axi_xbar_stall_sva` 的通过计为 M2-CFG01 的独立证据，
+  84/84 零命中即其空转的机械证明）
+
+**How verified**
+- 漂移是逐行比对确认的，非印象：`rubric.md:14` 与 `docs.py:877` 两处原文并列
+- `make docs-check` 绿（FB-18 行 6 列）；`make fw-check` 绿（0.5.2，26 files
+  pinned——**框架文件一字未改**，本条只走回流，不本地修补）
+- `make signoff-check` 条件 1/2/3 仍全 PASS、仅余 `[not yet] signoff file`
+  ——即本次暂停**不是**因为机器条件退化，而是因为人工判据来源不可用
+- 自 `594bf94`（0.2.1）以来 `tb/`、`sim/` 一字未动，11/11 回归证据与当前树
+  逐字节一致，签核恢复时条件 2 无需重跑
+
 ## [0.2.3] 2026-07-28 REV-011 台账落地：四条债务转 ACCEPTED@M3 + 新登 BUG-0031，signoff-check 条件 3 转绿
 
 **Done**

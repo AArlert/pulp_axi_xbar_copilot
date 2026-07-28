@@ -1,7 +1,7 @@
 # iverif evidence-chain targets.
 # Pinned into scripts/make/evidence.mk; include from the project root
 # Makefile after core.mk.
-.PHONY: evidence replay chain signoff-check
+.PHONY: evidence replay chain chain-audit signoff-check
 
 # After a sim run in the VM:
 #   make evidence SCEN=M1-01 TEST=<t> SEED=<n> [SPEC_REF=SPEC-x.y] [LOG=<p>]
@@ -26,6 +26,11 @@ replay:
 #   make chain SCEN=M1-01
 chain:
 	@python3 scripts/docs.py --chain $(SCEN)
+
+# Whole-graph break-link audit (spec <-> testplan <-> matrix <-> evidence);
+# fails only on dangling spec refs, reports every other gap class.
+chain-audit:
+	@python3 scripts/docs.py --chain-audit
 
 # Milestone signoff pre-check (machine conditions + human checklist).
 signoff-check:
