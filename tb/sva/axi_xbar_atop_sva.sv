@@ -153,7 +153,7 @@ module axi_xbar_atop_sva
     (aw_valid && aw_ready && (aw_atop != '0)) |-> !aw_id_busy_now)
     else `uvm_error("SVA_ATOP_ID_UNIQ",
       $sformatf("ATOP AW id 'h%0h accepted while the same id is in flight (read or write) on this slave port — env violated its own spec §6.4 discipline (TB_BUG suspect first, sva_bind.md C3.5)",
-                 aw_id))
+                 $sampled(aw_id)))
   ;
 
   // ---- cover: property-1 premise — an atomic read initiated at least once

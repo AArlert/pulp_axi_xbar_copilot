@@ -138,8 +138,42 @@ module axi_xbar_stall_sva
         r_id_seq[ar_id]  <= r_seq_ctr;
         r_seq_ctr        <= r_seq_ctr + 1;
       end
-      if (b_valid && b_ready) w_id_open[b_id] <= 1'b0;
-      if (r_valid && r_ready && r_last) r_id_open[r_id] <= 1'b0;
+      // Same-edge accept+complete on one full ID would otherwise clobber:
+      // two NBAs to the same element, the later one (the clear) wins (IEEE
+      // 1800 §10.4.2), swallowing the *new* transaction's open record and
+      // silently retiring that ID from the reorder check (BUG-0023). Each
+      // clear therefore stands down when this same edge already registered
+      // the same ID — the net effect is "old one closed, new one open",
+      // which is what the tgt/seq writes above assume. Same guard shape as
+      // axi_xbar_atop_sva.sv's pair-flag clears.
+      if (b_valid && b_ready
+          && !(aw_valid && aw_ready && aw_hit && (aw_id == b_id)))
+        w_id_open[b_id] <= 1'b0;
+      if (r_valid && r_ready && r_last
+          && !(ar_valid && ar_ready && ar_hit && (ar_id == r_id)))
+        r_id_open[r_id] <= 1'b0;
+    end
+  end
+
+  // ---- BUG-0023 regression witness: remembers a same-edge "accept + complete
+  // on one full ID" collision and the ID it hit, so the covers at the bottom
+  // can observe, one cycle later, whether that new transaction's open record
+  // actually survived the collision. Falsifying by construction: with the
+  // unguarded clear the record is swallowed and the "survived" cover can
+  // never match.
+  bit      w_collide_q, r_collide_q;
+  id_slv_t w_collide_id_q, r_collide_id_q;
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      w_collide_q <= 1'b0;
+      r_collide_q <= 1'b0;
+    end else begin
+      w_collide_q    <= aw_valid && aw_ready && aw_hit
+                        && b_valid && b_ready && (aw_id == b_id);
+      w_collide_id_q <= aw_id;
+      r_collide_q    <= ar_valid && ar_ready && ar_hit
+                        && r_valid && r_ready && r_last && (ar_id == r_id);
+      r_collide_id_q <= ar_id;
     end
   end
 
@@ -205,36 +239,55 @@ module axi_xbar_stall_sva
     end
   endfunction
 
+  // All tracking-state predicates are folded into combinational *signals*
+  // referenced directly by the properties below, so they get preponed
+  // (pre-clock-edge) sampling. Calling the functions inside the property
+  // expression instead evaluates them in the observed region — *after* this
+  // same edge's NBA updates — i.e. against the in-flight set as it stands
+  // *after* this very handshake registers, which is not what spec §5.2.3
+  // constrains (BUG-0015 regression_guard; BUG-0021 F1/F2).
+  logic w_reorder_now, r_reorder_now;
+  always_comb w_reorder_now = w_reorder(b_id);
+  always_comb r_reorder_now = r_reorder(r_id);
+  logic aw_sib_diff_now, ar_sib_diff_now, aw_sib_same_now, ar_sib_same_now;
+  always_comb aw_sib_diff_now = w_sibling_open(aw_id, aw_tgt, 1'b0);
+  always_comb ar_sib_diff_now = r_sibling_open(ar_id, ar_tgt, 1'b0);
+  always_comb aw_sib_same_now = w_sibling_open(aw_id, aw_tgt, 1'b1);
+  always_comb ar_sib_same_now = r_sibling_open(ar_id, ar_tgt, 1'b1);
+  logic w_collide_kept_now, r_collide_kept_now;
+  always_comb w_collide_kept_now = w_collide_q && w_id_open[w_collide_id_q];
+  always_comb r_collide_kept_now = r_collide_q && r_id_open[r_collide_id_q];
+
   // ---- main judgement (spec §5.2.3, BUG-0013-safe anchor): a completing
   // B/rlast must not overtake an older, still-open, same-bucket/direction,
   // different-target request — no cross-master-port response reordering.
   assert property (@(posedge clk_i) disable iff (!rst_ni)
-    (b_valid && b_ready) |-> !w_reorder(b_id))
+    (b_valid && b_ready) |-> !w_reorder_now)
     else `uvm_error("SVA_OR_W_REORDER",
       $sformatf("B id 'h%0h completed ahead of an older, still-open, same-bucket different-target write — spec §5.2.1/§5.2.3 response reordering",
-                 b_id))
+                 $sampled(b_id)))
   ;
   assert property (@(posedge clk_i) disable iff (!rst_ni)
-    (r_valid && r_ready && r_last) |-> !r_reorder(r_id))
+    (r_valid && r_ready && r_last) |-> !r_reorder_now)
     else `uvm_error("SVA_OR_R_REORDER",
       $sformatf("R(last) id 'h%0h completed ahead of an older, still-open, same-bucket different-target read — spec §5.2.1/§5.2.3 response reordering",
-                 r_id))
+                 $sampled(r_id)))
   ;
 
   // ---- covers: main-property precondition actually exercised (激励来源
   // M2-OR01) — a request is *presented* against a live conflicting record.
   cover property (@(posedge clk_i) disable iff (!rst_ni)
-    aw_valid && aw_hit && w_sibling_open(aw_id, aw_tgt, 1'b0));
+    aw_valid && aw_hit && aw_sib_diff_now);
   cover property (@(posedge clk_i) disable iff (!rst_ni)
-    ar_valid && ar_hit && r_sibling_open(ar_id, ar_tgt, 1'b0));
+    ar_valid && ar_hit && ar_sib_diff_now);
 
   // ---- covers: companion-property precondition actually exercised
   // (激励来源 M2-OR02) — a matching-target request presented while a
   // same-bucket/direction record is open.
   cover property (@(posedge clk_i) disable iff (!rst_ni)
-    aw_valid && aw_hit && w_sibling_open(aw_id, aw_tgt, 1'b1));
+    aw_valid && aw_hit && aw_sib_same_now);
   cover property (@(posedge clk_i) disable iff (!rst_ni)
-    ar_valid && ar_hit && r_sibling_open(ar_id, ar_tgt, 1'b1));
+    ar_valid && ar_hit && ar_sib_same_now);
 
   // ---- cover: BUG-0013's literal boundary-level precondition — a request
   // is *accepted* (not just presented) while an older, different-target,
@@ -242,8 +295,18 @@ module axi_xbar_stall_sva
   // OPEN): proves the exact symptom precondition is reproducible, ready to
   // promote to an assert the moment rev arbitrates that reading.
   cover property (@(posedge clk_i) disable iff (!rst_ni)
-    aw_valid && aw_ready && aw_hit && w_sibling_open(aw_id, aw_tgt, 1'b0));
+    aw_valid && aw_ready && aw_hit && aw_sib_diff_now);
   cover property (@(posedge clk_i) disable iff (!rst_ni)
-    ar_valid && ar_ready && ar_hit && r_sibling_open(ar_id, ar_tgt, 1'b0));
+    ar_valid && ar_ready && ar_hit && ar_sib_diff_now);
+
+  // ---- covers: BUG-0023 regression guard. The first of each pair proves the
+  // same-edge accept+complete corner is reached at all (else the second is
+  // vacuous); the second proves the newly accepted transaction is still
+  // registered one cycle later, i.e. the collision did not retire that ID
+  // from the reorder check above.
+  cover property (@(posedge clk_i) disable iff (!rst_ni) w_collide_q);
+  cover property (@(posedge clk_i) disable iff (!rst_ni) w_collide_kept_now);
+  cover property (@(posedge clk_i) disable iff (!rst_ni) r_collide_q);
+  cover property (@(posedge clk_i) disable iff (!rst_ni) r_collide_kept_now);
 
 endmodule

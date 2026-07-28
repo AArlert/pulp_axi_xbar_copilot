@@ -23,7 +23,10 @@ Summary: 2143 assertions, 870 with attempts, 0 with failures
 
 ## Key check lines
 UVM_INFO @ 0: reporter [RNTST] Running test m2_wo01_worder_test...
+UVM_INFO ../tb/functional_coverage.sv(217) @ 2075000: uvm_test_top.env.sb.fcov [FCOV_SUMMARY] cg_addr_reconfig: samples=48 inst_cov=66.67% | cg_stall: samples=48 inst_cov=16.67% | cg_tx_limit: samples=48 inst_cov=6.67% | cg_w_order: samples=48 inst_cov=50.00% | cg_atop: samples=0 inst_cov=0.00% | cg_atop_read_interaction: samples=0 inst_cov=0.00%
+UVM_INFO ../tb/functional_coverage.sv(226) @ 2075000: uvm_test_top.env.sb.fcov [FCOV_SUMMARY] cg_stall coverpoints: cp_stall_state=0.00% cp_dir=50.00% x_state_dir=0.00% | cg_tx_limit cp_inflight=6.67% | cg_addr_reconfig cp_table_version=50.00% cp_src_port=100.00% x_version_src=50.00% | cg_w_order cp_w_contention=50.00% | cg_atop cp_src=0.00% cp_r_resp=0.00% x_src_rresp=0.00% | cg_atop_read_interaction cp=0.00%
 UVM_INFO ../tb/scoreboard_refmodel.sv(711) @ 2075000: uvm_test_top.env.sb [SB_SUMMARY] route: match=48 mismatch=0 | resp: match=48 mismatch=0 | resp-route(C3.2): match=48 mismatch=0 | pending(unmatched at end)=0 | stall(C5.1/C5.2): violations=0 open(unmatched at end)=0 | atop(C6.3): pairs=0 open(unpaired at end)=0 | worder(C5.4): match=48 mismatch=0 open(unmatched at end)=0
+[FCOV_SUMMARY]     2
 "../tb/sva/axi_xbar_txlimit_sva.sv", 252: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_23, 207 attempts, 0 match
 "../tb/sva/axi_xbar_txlimit_sva.sv", 254: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_24, 207 attempts, 0 match
 "../tb/sva/axi_xbar_txlimit_sva.sv", 256: tb_top.gen_mst_txlimit_sva[7].u_axi_xbar_txlimit_sva.unnamed$$_25, 207 attempts, 0 match
@@ -49,6 +52,3 @@ UVM_INFO ../tb/scoreboard_refmodel.sv(711) @ 2075000: uvm_test_top.env.sb [SB_SU
 "../tb/sva/axi_xbar_txlimit_sva.sv", 267: tb_top.gen_mst_txlimit_sva[5].u_axi_xbar_txlimit_sva.unnamed$$_29, 207 attempts, 0 match
 "../tb/sva/axi_xbar_txlimit_sva.sv", 269: tb_top.gen_mst_txlimit_sva[5].u_axi_xbar_txlimit_sva.unnamed$$_30, 207 attempts, 0 match
 "../tb/sva/axi_xbar_txlimit_sva.sv", 252: tb_top.gen_mst_txlimit_sva[4].u_axi_xbar_txlimit_sva.unnamed$$_23, 207 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 254: tb_top.gen_mst_txlimit_sva[4].u_axi_xbar_txlimit_sva.unnamed$$_24, 207 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 256: tb_top.gen_mst_txlimit_sva[4].u_axi_xbar_txlimit_sva.unnamed$$_25, 207 attempts, 0 match
-"../tb/sva/axi_xbar_txlimit_sva.sv", 258: tb_top.gen_mst_txlimit_sva[4].u_axi_xbar_txlimit_sva.unnamed$$_26, 207 attempts, 0 match
