@@ -4,8 +4,8 @@ A failure record (FL) is the project's medical chart for one defect: what
 was observed, where the first anomaly is, what class of failure it was, how
 it was fixed, how it was re-verified, and what now guards against its
 return. Future debugging greps `doc/bugs/` before analyzing from scratch.
-Escape literal `|` in any table cell as `\|` — RTL or-expressions
-otherwise shift every later column, and docs-check fails the row.
+Escape literal `|` in cells as `\|` — an unescaped one shifts every
+later column (docs-check fails the row).
 
 Two carriers, one record:
 
@@ -26,6 +26,8 @@ Columns (en preset — zh preset in `config/presets/columns.zh.json`):
 - `suspect` ∈ `TB / DUT / spec` — the coarse triage guess. The precise
   taxonomy class lives in the detail page.
 - `min_repro` must contain `TEST=` and `SEED=`.
+- `fix_commit` — any *traceable* fix reference: `<sha>` / `<repo>@<sha>` /
+  `env: <change>` (environment fixes produce no local commit).
 - `CLOSED` requires `verify_evidence` to reference an evidence record, and
   the re-runner must not be the fixer (core invariant #3).
 
@@ -55,7 +57,7 @@ Causal chain from first_anomaly to symptom, ≤5 links
 (taxonomy/rca_template.md).
 
 ## fix
-commit: <sha>
+commit: <sha | repo@sha | env: change>
 what: one sentence.
 
 ## rerun
@@ -67,8 +69,8 @@ type: sva | covergroup | directed_test | script | checklist
 paths: tb/sva/*.sv         <- binding globs, machine-matched (make guards)
 ref: tb/sva/per_id_order_check.sv
 note: what future regression this blocks.
-(Guards are consumed mechanically — `make guards FILES=...` at card
-assembly and at signoff; no `paths:`, no injection. `paths:` = the note's
+(Consumed mechanically by `make guards FILES=...` at card assembly and
+signoff; no `paths:`, no injection. `paths:` = the note's
 *scope*, not `ref:`'s location — a constraint is usually wider than its
 birth file. A checklist guard is a mechanization TODO: note what
 script/SVA it should become, or why it cannot.)
@@ -85,11 +87,11 @@ VERIFYING → CLOSED
    ↘ TB_BUG / SPEC_CHANGED / WONTFIX  (terminal reclassifications)
 ```
 
-- Anyone may open. The **fixer never sets CLOSED** — closing happens via
-  `make evidence BUG=<ID> TEST=... SEED=...`, which writes the
-  re-verification evidence and flips the status itself.
+- Anyone may open. The **fixer never sets CLOSED**:
+  `make evidence BUG=<ID> TEST=... SEED=...` writes the re-verification
+  evidence and flips the status itself.
 - `SPEC_CHANGED` requires a rev arbitration record and triggers the spec
   change flow (change-record entry + re-pin).
-- In a learning repo with a vendored DUT, confirmed DUT bugs are recorded,
-  worked around via a `P-xxx` patch (see `templates/VENDOR.md`), and
-  optionally reported upstream — the vendored snapshot itself is read-only.
+- With a vendored DUT, confirmed DUT bugs are recorded, worked around via
+  a `P-xxx` patch (`templates/VENDOR.md`), optionally reported upstream —
+  the vendored snapshot itself is read-only.

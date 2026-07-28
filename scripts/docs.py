@@ -487,8 +487,9 @@ def cmd_check():
                           % (bid, st, "/".join(BUG_STATES)))
         if st in BUG_STATES_NEED_COMMIT and \
                 not r.get(CFG.C["bug_fix_commit"], "").strip("-` "):
-            errors.append("bugs.md %s is %s but the fix-commit column is "
-                          "empty" % (bid, st))
+            errors.append("bugs.md %s is %s but its fix reference "
+                          "(fix_commit column) is empty — local sha, "
+                          "repo@sha, or env: <change>" % (bid, st))
         if st == "CLOSED":
             check_evidence(r.get(CFG.C["bug_verify"], ""),
                            "bugs.md %s closure" % bid, errors)

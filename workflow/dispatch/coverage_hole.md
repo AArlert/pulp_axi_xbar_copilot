@@ -7,7 +7,7 @@ mapping; use it to name the hole precisely before dispatching.
 
 | # | Question | Finding | Learning-line action | Copilot-line action |
 |---|---|---|---|---|
-| 1 | Does a testplan scenario cover this bin's situation? | no → **planning gap** | Do not write a test yet. Register the scenario row first (id + description + spec clause). A hole without a scenario is a testplan defect | planner registers the row; only then may a coder card exist |
+| 1 | Does a testplan scenario cover this bin's situation? | no → **planning gap** | Do not write a test yet. Register the scenario row first (id + description + spec clause). A hole without a scenario is a testplan defect | orch registers the row; only then may a dv card exist |
 | 2 | Scenario registered but test not written? | normal backlog | Write it (normal micro-loop: code → run → evidence) | dispatch dv card |
 | 3 | Test runs but the bin stays empty — do constraints exclude the combination? | `CONSTRAINT_BUG` | Loosen/fix; audit historical PASSes per taxonomy rule | dv fixes; orch schedules audit |
 | 4 | Constraints legal but still unreachable — does the DUT structure make it impossible? (e.g. bins of a feature the current config excludes) | unreachable | Write the unreachability analysis into `doc/coverage-waivers.md` and request rev signoff. **Silent excludes are forbidden** — an exclude file entry without a waiver row fails review | same; rev signs every exclude |

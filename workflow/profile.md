@@ -27,7 +27,7 @@ must-include/forbidden matrix, isolation self-check. `--next` speaks to orch
   reasoning; rev reads primary material itself — no verbal conclusions.
 - Closer ≠ fixer, enforced mechanically by `make evidence BUG=`.
 - Design prompts (`doc/design-prompt/`, one per module) pass the rev gate
-  before any coder card. Full docs-check set is on.
+  before any de/dv card. Full docs-check set is on.
 
 ## Handoffs are records, not conversation
 
