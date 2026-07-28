@@ -57,6 +57,9 @@ BUG_STATES = ("OPEN", "FIXING", "FIX_READY", "VERIFYING", "CLOSED",
               "TB_BUG", "SPEC_CHANGED", "WONTFIX")
 # Terminal = lifecycle over, archivable; active bugs are never archived.
 BUG_DONE_STATES = ("CLOSED", "TB_BUG", "SPEC_CHANGED", "WONTFIX")
+# ACCEPTED@M<n>: analyzed, rev-signed rationale, scheduled to milestone n.
+# Not terminal (never archived); signoff passes it only while unexpired.
+BUG_ACCEPTED_RE = re.compile(r"^ACCEPTED@M(\d+)$")
 # Once a bug reaches these states, the fix-commit column must be filled.
 BUG_STATES_NEED_COMMIT = ("FIX_READY", "VERIFYING", "CLOSED")
 

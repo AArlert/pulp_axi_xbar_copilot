@@ -17,6 +17,16 @@ into git (enforced by the `.gitignore` template).
 | 5 | Result excerpt | body | yes | evidence.py | must show zero `UVM_ERROR`/`UVM_FATAL` (UVM logs) or the VCS completion marker with zero `Error`/`Fatal` lines (plain logs) |
 | 6 | Coverage summary lines: the tb prints one line per covergroup, `[FCOV_SUMMARY] <cg> samples=<n> inst_cov=<pct>` | body, `## Key check lines` | when functional coverage exists | tb prints, evidence.py captures | canon `KEY_LINE_RE` knows the tag (no project config needed); further project-specific tags ride `key_line_extra` in `iverif.json`. Rationale: the coverage **numbers** must live in the evidence itself, or milestone signoff has to re-open source logs — the self-sufficiency this record exists to provide |
 
+## CMD-form record (non-sim bug closure)
+
+Bugs whose re-verification criterion is compile/lint/tool output (not a
+sim run) close via `make evidence BUG=<ID> CMD='<cmd>' EXPECT='<regex>'`:
+line 1 is `CMD: <command>` (the replay command), the header carries
+`exit_code: 0` + the expect regex, the body holds the matched signature
+lines + output tail. Fail-closed twice: nonzero exit is never evidence,
+and output with no matched signature is "no visible error", not
+"checked".
+
 ## Hard rules
 
 - **FAIL logs are never evidence.** evidence.py refuses to register a log

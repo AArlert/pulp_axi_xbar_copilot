@@ -44,9 +44,9 @@ card by type:
 - [ ] The card states its acceptance criteria (rev gate passed /
       compile+lint clean / scenario PASS + evidence / review record path).
 - [ ] `make guards FILES="<the card's file list>"` run; every matched
-      guard block pasted into the card verbatim (registered fact, no
-      reasoning attached — this is how constraints cross the isolation
-      boundary).
+      guard block pasted verbatim (registered fact, no reasoning).
+      Above ~6 hits split **hard** (paths match files this card edits)
+      from **context** (boundary hits — help, not noise); both verbatim.
 
 ## 4. Collection check
 
@@ -57,3 +57,5 @@ card by type:
   script-computed (`make next`) — orch maintains no status cells.
 - Status cells (testplan/bugs) are backfilled by evidence.py; run
   `make docs-check` before closing the card.
+- Process cost exceeded the work? Log as framework feedback — two cases
+  fire the deferred risk-grading row.

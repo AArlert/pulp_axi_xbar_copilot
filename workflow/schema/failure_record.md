@@ -22,7 +22,11 @@ Columns (en preset — zh preset in `config/presets/columns.zh.json`):
 |---|---|---|---|---|---|---|---|
 
 - `status` ∈ `OPEN / FIXING / FIX_READY / VERIFYING / CLOSED / TB_BUG /
-  SPEC_CHANGED / WONTFIX` (exact spelling; docs-check validates).
+  SPEC_CHANGED / WONTFIX` (exact spelling; docs-check validates) — plus
+  `ACCEPTED@M<n>`: analyzed, scheduled debt. The row must name a REV
+  record; unexpired it passes signoff, due-or-overdue it blocks. Never
+  terminal, never archived. (WONTFIX may not mean "later"; OPEN may not
+  mean "decided".)
 - `suspect` ∈ `TB / DUT / spec` — the coarse triage guess. The precise
   taxonomy class lives in the detail page.
 - `min_repro` must contain `TEST=` and `SEED=`.
@@ -62,7 +66,9 @@ what: one sentence.
 
 ## rerun
 Evidence records proving the fix: original failing TEST+SEED now passing,
-plus neighboring scenarios re-checked.
+plus neighboring scenarios re-checked. Non-sim criteria (lint/compile/
+tool output) close via
+`make evidence BUG=<ID> CMD='<re-verify cmd>' EXPECT='<signature>'`.
 
 ## regression_guard
 type: sva | covergroup | directed_test | script | checklist

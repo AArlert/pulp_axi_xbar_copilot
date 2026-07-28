@@ -7,9 +7,14 @@
 #   make evidence SCEN=M1-01 TEST=<t> SEED=<n> [SPEC_REF=SPEC-x.y] [LOG=<p>]
 # Bug closure re-verification (closer != fixer):
 #   make evidence BUG=BUG-003 TEST=<t> SEED=<n>
+# Non-sim re-verification (lint/compile/tool criteria — runs CMD now,
+# exit 0 + EXPECT signature required, fail-closed):
+#   make evidence BUG=BUG-003 CMD='make -C sim lint' EXPECT='lint clean'
 evidence:
 	@python3 scripts/evidence.py $(if $(SCEN),--scen $(SCEN)) \
-		$(if $(BUG),--bug $(BUG)) --test $(TEST) --seed $(SEED) \
+		$(if $(BUG),--bug $(BUG)) \
+		$(if $(CMD),--cmd '$(CMD)' --expect '$(EXPECT)', \
+		--test $(TEST) --seed $(SEED)) \
 		$(if $(LOG),--log $(LOG)) $(if $(SPEC_REF),--spec-ref $(SPEC_REF))
 
 # Re-run exactly what an evidence record claims: make replay SCEN=M1-01

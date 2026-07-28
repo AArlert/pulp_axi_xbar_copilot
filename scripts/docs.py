@@ -14,7 +14,7 @@ import signal
 import subprocess
 import sys
 
-from iverif_config import (BUG_DONE_STATES, BUG_STATES,
+from iverif_config import (BUG_ACCEPTED_RE, BUG_DONE_STATES, BUG_STATES,
                            BUG_STATES_NEED_COMMIT, FL_CLASSES, FL_SECTIONS,
                            STATUS_EMOJIS, load_config)
 
@@ -236,9 +236,11 @@ def check_evidence(cell, owner, errors):
                                              errors="replace").splitlines()
                       if l.strip()), "")
         up = first.upper()
-        if "TEST" not in up or "SEED" not in up:
+        if not up.startswith("CMD:") and ("TEST" not in up
+                                          or "SEED" not in up):
             errors.append("%s evidence line 1 is not a replay command "
-                          "(needs TEST and SEED): %s" % (owner, ev))
+                          "(needs TEST and SEED, or CMD: for non-sim "
+                          "re-verification): %s" % (owner, ev))
 
 
 def check_dup_ids(rows, key, name, errors):
@@ -479,12 +481,25 @@ def cmd_check():
                           "bugs must move back to bugs.md"
                           % (r.get(CFG.C["bug_id"], "?"),
                              r.get(CFG.C["bug_status"], "")))
+    _, cur_ms = read_version()
+    cur_m = int(cur_ms.lstrip("M")) if cur_ms.lstrip("M").isdigit() else 0
     for r in bug_rows:
         bid = r.get(CFG.C["bug_id"], "?")
         st = r.get(CFG.C["bug_status"], "").strip()
-        if st not in BUG_STATES:
-            errors.append("bugs.md %s state invalid: %r (legal: %s)"
+        acc = BUG_ACCEPTED_RE.match(st)
+        if st not in BUG_STATES and not acc:
+            errors.append("bugs.md %s state invalid: %r (legal: %s or "
+                          "ACCEPTED@M<n>)"
                           % (bid, st, "/".join(BUG_STATES)))
+        if acc:
+            if "REV-" not in " ".join(r.values()):
+                errors.append("bugs.md %s is %s but the row names no REV "
+                              "record — acceptance needs a rev-signed "
+                              "rationale" % (bid, st))
+            if int(acc.group(1)) < cur_m:
+                errors.append("bugs.md %s %s expired (current %s) — "
+                              "re-adjudicate: fix now or WONTFIX via rev"
+                              % (bid, st, cur_ms))
         if st in BUG_STATES_NEED_COMMIT and \
                 not r.get(CFG.C["bug_fix_commit"], "").strip("-` "):
             errors.append("bugs.md %s is %s but its fix reference "
@@ -591,6 +606,9 @@ NEXT_PHRASES = {
                          "(closer ≠ fixer — have rev spot-check the closure)",
         "bug_verifying": "%(bid)s VERIFYING → finish closure via "
                          "make evidence BUG=%(bid)s",
+        "bug_accepted_due": "%(bid)s accepted debt due this milestone → "
+                            "fix it now, or WONTFIX with a rev-signed "
+                            "rationale",
         "tp_fail": "testplan %(rid)s ❌ → check your stimulus/checker first "
                    "(dispatch tables); still DUT-suspect → file in bugs.md",
         "undelivered": "%(mod)s not delivered (%(ids)s) → write it "
@@ -612,6 +630,8 @@ NEXT_PHRASES = {
                          "(re-run registered TEST+SEED; closer ≠ fixer)",
         "bug_verifying": "%(bid)s VERIFYING → DV closes via evidence.py "
                          "--bug %(bid)s after the re-run",
+        "bug_accepted_due": "%(bid)s accepted debt due this milestone → "
+                            "dispatch a rev re-adjudication card",
         "tp_fail": "testplan %(rid)s ❌ → DV checks stimulus/checker first; "
                    "still RTL-suspect → file in bugs.md",
         "undelivered": "%(mod)s deliverable missing (%(ids)s, design prompt "
@@ -668,6 +688,11 @@ def cmd_next():
             acts.append((1, P["bug_fix_ready"] % ctx))
         elif st == "VERIFYING":
             acts.append((1, P["bug_verifying"] % ctx))
+        else:
+            acc = BUG_ACCEPTED_RE.match(st)
+            if acc and int(acc.group(1)) <= \
+                    int(milestone.lstrip("M") or 0):
+                acts.append((1, P["bug_accepted_due"] % ctx))
 
     # 2) current-milestone progress, grouped by module/component
     tp_rows = parse_table(CFG.testplan)
@@ -822,23 +847,35 @@ def cmd_signoff():
         fails.append(2)
 
     bug_rows = parse_table(CFG.bugs)
-    active = [r.get(CFG.C["bug_id"], "?") for r in bug_rows
-              if r.get(CFG.C["bug_status"], "").strip()
-              not in BUG_DONE_STATES]
+    active, due = [], []
+    for r in bug_rows:
+        st = r.get(CFG.C["bug_status"], "").strip()
+        if st in BUG_DONE_STATES:
+            continue
+        acc = BUG_ACCEPTED_RE.match(st)
+        if acc:
+            # Unexpired accepted debt passes this signoff; due-or-overdue
+            # debt blocks it — otherwise ACCEPTED becomes the new rug.
+            if int(acc.group(1)) <= int(mnum):
+                due.append("%s %s" % (r.get(CFG.C["bug_id"], "?"), st))
+            continue
+        active.append(r.get(CFG.C["bug_id"], "?"))
     closure_errs = []
     for r in bug_rows:
         if r.get(CFG.C["bug_status"], "").strip() == "CLOSED":
             check_evidence(r.get(CFG.C["bug_verify"], ""),
                            "bug %s" % r.get(CFG.C["bug_id"], "?"),
                            closure_errs)
-    cond3 = not active and not closure_errs
+    cond3 = not active and not due and not closure_errs
     detail = ""
     if active:
         detail += " — active: " + ", ".join(active)
+    if due:
+        detail += " — accepted debt due: " + ", ".join(due)
     if closure_errs:
         detail += " — " + "; ".join(closure_errs)
-    print("[%s] 3. all bugs terminal, closures evidenced%s"
-          % ("PASS" if cond3 else "FAIL", detail))
+    print("[%s] 3. all bugs terminal or ACCEPTED-unexpired, closures "
+          "evidenced%s" % ("PASS" if cond3 else "FAIL", detail))
     if not cond3:
         fails.append(3)
 

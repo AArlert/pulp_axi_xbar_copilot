@@ -1,17 +1,17 @@
 {
   "files": {
     ".claude/skills/closeout/SKILL.md": "6ae415eb3b4b2dc8330a0783e4228311c7c53c0c1c7f023f92497b19729476d8",
-    ".claude/skills/dispatch/SKILL.md": "5df4720894dde430dd482c4cf595edc44b259b3d8b3d6c408990ad03cde2c39d",
+    ".claude/skills/dispatch/SKILL.md": "231675ddf00aa7bb83661fef6484eae648204d449f6e444cc1198d54481aa5d0",
     ".claude/skills/evidence/SKILL.md": "2bfb192baf895e1f8be45468294229f4ab867f5b18f9e06d7c98263fe746dca7",
     ".claude/skills/handover/SKILL.md": "5f67d490b4e2d1210f3b1c30c25b6f0d175dfcb2625f8b1ddfb79d499ed1c1f1",
     "scripts/bump.py": "cd2a2172f5b46ebbdbc2907d3f5098d647249148b3e4721ba470580ee94aa581",
-    "scripts/docs.py": "75a1029cc1a25f0f253af908b8cc76401d04a21511fa5f96ac6112ed210b1191",
-    "scripts/evidence.py": "896bba11dcb9b223c5d2ebaa0b6c2f139b92e6fe231d826cdfb8539e0c3a2a42",
+    "scripts/docs.py": "725ffe716cb9ee53c377dee454c24d36fcc71ccf23e32aab8323aa86855329db",
+    "scripts/evidence.py": "16fab9c29191f451b12126254eab7c6247820cee2fe07b7bd8d1d263573aff24",
     "scripts/fwsync.py": "039327244ef85ead22934d9481c26856a50a0714b40f5e6747afef6d9bc40b0a",
-    "scripts/iverif_config.py": "cefc56e471b1d738627ff90de1394c9a579f1fd67c26c0bc3e5920a83309dc31",
+    "scripts/iverif_config.py": "aee3aba997f18fdb3c60416a1537916aeb5ae3e5dec455f1d3216d64c63a1452",
     "scripts/make/core.mk": "fb044094fda659c34086005ef6ee2f778802d8c7d79ea06abf56aa0ec3c4c3b2",
-    "scripts/make/evidence.mk": "70dbf5ee41934daa7fa28ac2ad66f8e7b786ef68cdaac9fe2f986aa31a7b3d68",
-    "scripts/make/vcs-2018.mk": "aa5a57420efef7fc16a0710e83581d3850446657f259d851e12f0fa3a4ef7652",
+    "scripts/make/evidence.mk": "b84eadfacaa119dede802e871316070eeea4777efebb3f3aa42b12aa86e81752",
+    "scripts/make/vcs-2018.mk": "3c6578e7185b264b7250fdb825d16315145fc12a21b3471f8d7fbbf4f7a10337",
     "scripts/regress.py": "cd9b1ebfca6a848e85358d1e7dc6cdd27648f2972fd5235279c1d6cd4a187673",
     "scripts/svacheck.py": "d4ba680dfd202c750e23e0030e3d803d56e09f5b918f2358c644ba1a6298a17c",
     "workflow/discipline.md": "d4c03eec1c6c6a9491efa5706327070fd7d7783770910dbddb18e4338e14fd6c",
@@ -19,13 +19,13 @@
     "workflow/dispatch/coverage_hole.md": "efc74b3eb54c7a70c8c1d6630b950208d2838f431c93f13b05f651e2858ddb54",
     "workflow/dispatch/regression_failure.md": "73e15d803b6454ae64a1cc72e7dc3a864903492da3f2277251d2524a64382900",
     "workflow/profile.md": "dcc48c2db22c7c19ec50b5aaa3669f47a39053b610d83430d8404f1405d3fa98",
-    "workflow/schema/evidence_record.md": "ff583ae7e210c74365c745544c811ee0d55ac488e16c135a2689bfaa7d2a5c71",
-    "workflow/schema/failure_record.md": "a9e490a8ea141c1c20c538a56829ffbf419151cbb8aecae180ed5909fb531deb",
+    "workflow/schema/evidence_record.md": "db9f72d23e07264401e8448102403219d88f1fe0da3b4ff1d5bfd62c0bd565cf",
+    "workflow/schema/failure_record.md": "abb3353d41e92a48551d31f0a41dd4af2fd18f7dbcbc8f980dee545639bb109e",
     "workflow/schema/testplan_entry.md": "3a60ebb6f60a94ec2c84ee5683bf2e8d801ea6f3b827758bd6cd7c52e4edf61c",
     "workflow/signoff/rubric.md": "5772cee41c4f149ca05470cc240dd28cd8c41a153ec61a959187becddd8b388c",
     "workflow/signoff/six_questions.md": "3dd5df0f48ddd354910c4debe4d5907dabb321d63802943833820ab6642d9865",
     "workflow/taxonomy/failure_taxonomy.md": "c94e5340a19e2afcae0eeffb322a1f2d03d631a7799abefc3d763230fa2d5be6",
     "workflow/taxonomy/rca_template.md": "58ea28f44f6777197131983afbb4065ec43788df0c0a0aaa509681711ada0a88"
   },
-  "framework": "0.4.5"
+  "framework": "0.5.2"
 }

@@ -13,6 +13,9 @@
 #   clean-before-regress - stale .daidir/csrc from a different option set
 #               (e.g. lint) corrupts incremental builds (VFS_SDB_ERROR class);
 #               regress.py already cleans first.
+#   ld-colon  - ':$(LD_LIBRARY_PATH)' with the parent var empty leaves a
+#               trailing empty element; NPI-based tools (xdebug) refuse
+#               to initialize on it (pulp BUG-0030) => conditional append.
 #   SIM_OPTS_2018 (-assert verbose) - SVA failures do NOT increment
 #               UVM_ERROR and do not change the simv exit code; the native
 #               "Summary: N assertions, ..." line this option prints is the
@@ -33,7 +36,7 @@ export SCL_HOME        ?= /home/synopsys/scl/2018.06
 # invocation will fail against a server that doesn't exist.
 export LM_LICENSE_FILE ?= 27000@localhost
 export VCS_ARCH_OVERRIDE ?= linux
-export LD_LIBRARY_PATH := $(VERDI_HOME)/share/PLI/VCS/LINUX64:$(LD_LIBRARY_PATH)
+export LD_LIBRARY_PATH := $(VERDI_HOME)/share/PLI/VCS/LINUX64$(if $(LD_LIBRARY_PATH),:$(LD_LIBRARY_PATH))
 export PATH := $(VCS_HOME)/bin:$(VERDI_HOME)/bin:$(SCL_HOME)/linux64/bin:$(PATH)
 
 # xverif toolkit (VM instruments; NOT on PATH — call via full path).
