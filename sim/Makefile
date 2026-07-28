@@ -57,10 +57,13 @@ cov:
 	urg -full64 -dir $(OUT)/cov.vdb -report $(OUT)/urgReport
 
 # lint 判定范围 = ../tb/（本仓库交付物；vendor 与 UVM 库告警不计入）。
+# 复用 VCS_FLAGS_2018（含 -assert svaext，vendor 侧 elaboration system task
+# 需要，见 BUG-0014）而非手写第二份旗标列表，避免与 compile/run 目标失配。
+# -top $(TOP)（同 compile:/run:）：缺省时 VCS 对全量 flist 做多顶层枚举，
+# 撞上 vendor 测试专用 wrapper 模块的未约束参数（见 BUG-0019）。
 lint:
 	@mkdir -p $(OUT)
-	$(VCS) -full64 -sverilog -timescale=1ns/1ps -ntb_opts uvm-1.2 \
-	  +vcs+lic+wait $(LD_FIX) +lint=all,noVCDE $(FLISTS) \
+	$(VCS) $(VCS_FLAGS_2018) +lint=all,noVCDE $(FLISTS) -top $(TOP) \
 	  -o $(OUT)/simv_lint -l $(OUT)/lint.log
 	@if grep -A1 '^Lint-\[' $(OUT)/lint.log | grep -qE '^\.\./tb/'; then \
 	  grep -A1 '^Lint-\[' $(OUT)/lint.log | grep -B1 -E '^\.\./tb/'; exit 1; \
