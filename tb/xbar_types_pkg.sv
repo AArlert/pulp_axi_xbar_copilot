@@ -71,6 +71,14 @@ package xbar_types_pkg;
     AxiDataWidth:       DATA_W,
     NoAddrRules:        NO_ADDR_RULES
   };
+  // Transaction-number ceiling constants used by the M2 functional-coverage
+  // bins (functional_coverage.md §2 cg_tx_limit). Values come from the pinned
+  // baseline Cfg above; the *effective* per-(bucket,direction) ceiling is
+  // spec §5.4.1's formula 2**ceil(log2(MaxMstTrans))-1 (baseline 15, not the
+  // literal 10 — BUG-0016/REV-007), not a value observed in RTL/waveform.
+  localparam int unsigned MAX_MST_TRANS     = Cfg.MaxMstTrans;                // 10
+  localparam int unsigned MAX_MST_TRANS_EFF = (1 << $clog2(MAX_MST_TRANS)) - 1; // 15
+
   localparam bit ATOPS = 1'b1; // spec §0 row 2 / §2.2 — M1-01 issues no ATOP (uvm_env.md C2.4 note)
   localparam bit [Cfg.NoSlvPorts-1:0][Cfg.NoMstPorts-1:0] CONNECTIVITY = '1;
 

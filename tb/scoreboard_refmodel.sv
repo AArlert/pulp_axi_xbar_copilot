@@ -44,6 +44,11 @@ class xbar_scoreboard extends uvm_scoreboard;
     axi_pkg::atop_t         atop; // spec §6.1 pass-through expectation
     xbar_types_pkg::data_t  wdata[$];
     xbar_types_pkg::strb_t  wstrb[$];
+    // Functional coverage only (functional_coverage.md §2 cg_addr_reconfig,
+    // spec §3.4): was this transaction's own accept instant after the first
+    // runtime address-table/default-port change? Recorded at accept, sampled
+    // when this record's routing judgement lands. Never a judgement input.
+    bit                     post_change;
   } pend_rec_t;
 
   // Keyed by {direction, expected master-side id}. A *FIFO queue* per key (not
@@ -123,6 +128,11 @@ class xbar_scoreboard extends uvm_scoreboard;
     int unsigned              mst_port;
     xbar_types_pkg::id_slv_t  slv_id;
     time                      accept_time;
+    // Functional coverage only (functional_coverage.md §2 cg_stall, spec
+    // §5.2): this request's situation w.r.t. §5.2.1 at its own accept
+    // instant, classified once here and sampled when the completion-time
+    // judgement below lands. Never a judgement input.
+    xbar_functional_coverage::stall_class_e stall_cls;
   } or_open_rec_t;
   local or_open_rec_t or_open_q[int unsigned][$];
   int unsigned         or_stall_violation_cnt;
@@ -179,6 +189,13 @@ class xbar_scoreboard extends uvm_scoreboard;
   typedef struct {
     bit b_seen;
     bit r_seen;
+    // Functional coverage only (functional_coverage.md §2
+    // cg_atop_read_interaction, spec §6.5 + §5.2.5): was a normal read with
+    // the same low-ID bucket in flight on this port when the atomic load was
+    // issued? Recorded at accept, sampled when the pair completes. Explicitly
+    // non-decisional — spec §6.5 declares the resulting cross-direction stall
+    // normal design behaviour.
+    bit collide_read;
   } atop_pend_t;
   local atop_pend_t atop_pend[int unsigned];
   int unsigned      atop_pair_cnt;
@@ -234,6 +251,13 @@ class xbar_scoreboard extends uvm_scoreboard;
     return r;
   endfunction
 
+  // ---- M2 functional coverage collector (functional_coverage.md C1.1) -----
+  // Owned by the scoreboard so every sample can be taken at the exact instant
+  // this scoreboard's own judgement for that transaction lands (C1.2), from
+  // the very objects/state the judgement used — no second decode path, no bus
+  // re-parsing. Coverage never feeds back into any check.
+  xbar_functional_coverage fcov;
+
   function new(string name, uvm_component parent);
     super.new(name, parent);
     slv_req_imp = new("slv_req_imp", this);
@@ -245,6 +269,7 @@ class xbar_scoreboard extends uvm_scoreboard;
     super.build_phase(phase);
     if (!uvm_config_db#(virtual xbar_cfg_if)::get(this, "", "cfg_vif", cfg_vif))
       `uvm_fatal("NOCFGVIF", "xbar_scoreboard: cfg_vif not set")
+    fcov = xbar_functional_coverage::type_id::create("fcov", this);
   endfunction
 
   // Live-observe the config bus and append a timestamped snapshot whenever it
@@ -306,6 +331,14 @@ class xbar_scoreboard extends uvm_scoreboard;
       return;
     end
 
+    // Coverage bookkeeping (cg_addr_reconfig, spec §3.4): entry 0 of cfg_hist
+    // is the baseline table recorded at reset release, so "a later entry is
+    // already in effect at this accept instant" is exactly "this transaction
+    // belongs to a post-change batch".
+    rec.post_change = 1'b0;
+    foreach (cfg_hist[i])
+      if (i > 0 && cfg_hist[i].eff_time <= ro.accept_time) rec.post_change = 1'b1;
+
     rec.exp_mst_port = exp_port;
     rec.is_write      = ro.is_write;
     rec.addr          = ro.addr;
@@ -333,12 +366,21 @@ class xbar_scoreboard extends uvm_scoreboard;
     // ties the two halves together.
     if (ro.is_write && ro.atop[axi_pkg::ATOP_R_RESP]) begin
       int unsigned ak;
+      int unsigned rd_k;
+      bit          collide;
       ak = atop_key(ro.port_idx, ro.id[xbar_types_pkg::ID_W_SLV-1:0]);
       if (atop_pend.exists(ak))
         `uvm_error("SB_ATOP_OVERLAP",
           $sformatf("slv port %0d issued atomic load id 'h%0h while a previous atomic load with the same id is still awaiting B/R — env violated its own spec §6.4 ID-uniqueness discipline (TB_BUG suspect first)",
                      ro.port_idx, ro.id))
-      atop_pend[ak] = '{b_seen: 1'b0, r_seen: 1'b0};
+      // Coverage bookkeeping (cg_atop_read_interaction, spec §6.5 + §5.2.5):
+      // a normal READ still open on this port in the same low-ID bucket is the
+      // situation in which the atomic load's shadow-AR can produce a
+      // cross-direction false-conflict stall. Observation only.
+      rd_k = or_key(ro.port_idx, 1'b0,
+                    id_bucket(ro.id[xbar_types_pkg::ID_W_SLV-1:0]));
+      collide = or_open_q.exists(rd_k) && or_open_q[rd_k].size() != 0;
+      atop_pend[ak] = '{b_seen: 1'b0, r_seen: 1'b0, collide_read: collide};
       resp_expect[resp_key(ro.port_idx, 1'b0,
                            ro.id[xbar_types_pkg::ID_W_SLV-1:0])]++;
     end
@@ -349,10 +391,34 @@ class xbar_scoreboard extends uvm_scoreboard;
     begin
       int unsigned bucket;
       int unsigned k;
+      int unsigned k_opp;
+      xbar_functional_coverage::stall_class_e cls;
       bucket = id_bucket(ro.id[xbar_types_pkg::ID_W_SLV-1:0]);
-      k = or_key(ro.port_idx, ro.is_write, bucket);
+      k     = or_key(ro.port_idx, ro.is_write,  bucket);
+      k_opp = or_key(ro.port_idx, !ro.is_write, bucket);
+      // Coverage classification (cg_stall, spec §5.2) — read off the very
+      // open-record table the §5.2.3 completion check uses, so bin and verdict
+      // can never disagree. Priority: a same-direction different-target
+      // sibling is §5.2.1's precondition even if an opposite-direction one
+      // also happens to be open.
+      cls = xbar_functional_coverage::SC_NONE;
+      if (or_open_q.exists(k) && or_open_q[k].size() != 0) begin
+        cls = xbar_functional_coverage::SC_SAME_TGT; // §5.2.4
+        foreach (or_open_q[k][idx])
+          if (or_open_q[k][idx].mst_port != exp_port)
+            cls = xbar_functional_coverage::SC_STALLED; // §5.2.1
+      end else if (or_open_q.exists(k_opp) && or_open_q[k_opp].size() != 0) begin
+        cls = xbar_functional_coverage::SC_DIFF_DIR; // §5.2.1 direction scope
+      end
       or_open_q[k].push_back('{exp_port, ro.id[xbar_types_pkg::ID_W_SLV-1:0],
-                                ro.accept_time});
+                                ro.accept_time, cls});
+      // cg_tx_limit (spec §2.1 MaxMstTrans row / §5.4.1): the in-flight count
+      // of this (slave port, bucket, direction) group right after this
+      // observed accept. Sampled here — not at completion — because an
+      // in-flight count only exists at the accept instant; the event is the
+      // monitor's observed AW/AR handshake (what actually happened, C1.2's
+      // intent), never a driver-side intent.
+      fcov.sample_tx_limit(or_open_q[k].size());
     end
 
     // ---- C5.4/C5.5(b) (spec §5.5.1): register this write's expected master-
@@ -446,6 +512,24 @@ class xbar_scoreboard extends uvm_scoreboard;
           end
           if (this_found) begin
             bit reordered;
+            // cg_w_order (spec §5.5, M2-WO01): at the instant this burst's
+            // §5.5.1 order judgement lands, do >= 2 distinct SOURCE slave
+            // ports have write bursts open towards this master port? Counted
+            // from worder_pend (keys are {src, tgt}) before this entry is
+            // removed. This records the cross-source convergence situation
+            // itself; it asserts nothing about arbitration order (spec §5.5.4
+            // red line). The cycle-exact "at W burst START" counterpart lives
+            // in tb/sva/axi_xbar_worder_sva.sv's compete_start cover — the
+            // scoreboard only observes a master-side write burst at its
+            // w_last, so this is the burst-scoped image of the same situation.
+            begin
+              int unsigned n_src;
+              n_src = 0;
+              foreach (worder_pend[wk_i])
+                if ((wk_i & 32'hff) == ro.port_idx
+                    && worder_pend[wk_i].size() != 0) n_src++;
+              fcov.sample_w_order(n_src >= 2);
+            end
             reordered = 1'b0;
             foreach (worder_pend[wk][idx]) begin
               if (idx != this_idx
@@ -467,6 +551,17 @@ class xbar_scoreboard extends uvm_scoreboard;
           end
         end
       end
+    end
+
+    // ---- functional coverage at the routing-judgement instant (this
+    // transaction matched its expectation: port/attrs/payload all agree).
+    // Source slave port = the master-side ID prefix (spec §5.1.1).
+    begin
+      int unsigned src_port;
+      src_port = ro.id[xbar_types_pkg::ID_W_MST-1:xbar_types_pkg::ID_W_SLV];
+      fcov.sample_addr_reconfig(rec.post_change, src_port); // spec §3.4
+      if (ro.is_write && ro.atop != '0)                     // spec §6.3/§6.1
+        fcov.sample_atop(src_port, ro.atop[axi_pkg::ATOP_R_RESP]);
     end
     route_match_cnt++;
   endfunction
@@ -507,6 +602,10 @@ class xbar_scoreboard extends uvm_scoreboard;
         if (ro.is_write) ap.b_seen = 1'b1;
         else             ap.r_seen = 1'b1;
         if (ap.b_seen && ap.r_seen) begin
+          // cg_atop_read_interaction (spec §6.5 + §5.2.5): the §6.3 pair
+          // judgement for this atomic load has just landed — record the
+          // situation captured at its issue. Observation only.
+          fcov.sample_atop_read_interaction(ap.collide_read);
           atop_pend.delete(ak);
           atop_pair_cnt++;
         end else begin
@@ -554,6 +653,10 @@ class xbar_scoreboard extends uvm_scoreboard;
                            or_open_q[k][idx].mst_port))
             end
           end
+          // cg_stall (spec §5.2): the §5.2.3 ordering judgement for this
+          // transaction has just landed — sample the situation classified at
+          // its own accept instant, crossed with its direction.
+          fcov.sample_stall(or_open_q[k][this_idx].stall_cls, ro.is_write);
           or_open_q[k].delete(this_idx);
         end
         if (or_open_q[k].size() == 0) or_open_q.delete(k);

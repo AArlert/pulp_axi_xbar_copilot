@@ -97,10 +97,16 @@ scoreboard（含参考模型）+ virtual sequencer + config。M1 只做**骨架 
   agent responder 需能按需**有界拖延** B/R（不违反协议的合法延迟）以维持在飞
   计数处于目标值附近，避免"响应过快、上限从未真正被顶到"的空转（呼应
   `workflow/dispatch/coverage_hole.md` 的可证伪性要求）。
-  M2-TL02 的压测目标已由 REV-005 裁决确定为**弱化上界**：向同一 master 端口连发
-  同（前缀后）ID、同方向事务压满 `MaxSlvTrans`，供其已解锁的可观测上界 checker
-  监视（分组「每 master 端口 × 每可观测前缀后 ID × 每方向」，方向分开计）；机制级
-  拒收触发点仍为 spec §5.4.3 上游确认项、不构造针对性激励。
+  M2-TL02 的压测目标按 BUG-0016/REV-007 裁决更新：向同一 master 端口连发同
+  （前缀后）ID、同方向事务，压到并**越过** `MaxSlvTrans`（spec §5.4.2 已撤销
+  "≤ `MaxSlvTrans`" 作为可断言在飞上界——该参数实为 `axi_mux` 的 `MaxWTrans`
+  AW→W ID 高位 FIFO 深度，mux 侧无 per-ID 在飞计数机制，实际在飞受上游 demux
+  每桶有效上限 §5.4.1 主导），供**非判决**覆盖点记录（分组「每 master 端口 ×
+  每可观测前缀后 ID × 每方向」，方向分开计，见 functional_coverage §2
+  `cg_tx_limit`）；REV-005 曾解锁的"≤ `MaxSlvTrans` 绝不假红"可观测上界 checker
+  已被 spec §5.4.2 正式收回，env 不再为其构造激励。机制级拒收触发点亦不构造
+  针对性激励——spec §5.4.3 已把 `MaxSlvTrans` 侧由"上游确认项"改判为"mux 侧
+  在飞机制根本不存在"的已定结论。
 - **C5.4 多源汇聚（M2-WO01，spec §5.5）**：virtual sequencer 需能同步启动 ≥2 个
   不同 slave 端口的写序列，令它们的 AW 落在同一 master 端口且时间上交错到达，
   制造真实仲裁竞争（而非各自独立、先后不重叠的写——那样不会比 M1-02 的偶然
@@ -115,9 +121,11 @@ scoreboard（含参考模型）+ virtual sequencer + config。M1 只做**骨架 
   收录于 `sim/flist/tb.f`（CLAUDE.md §6）。
 - 弹起判据：env build/connect/run phase 无 `UVM_ERROR`/`UVM_FATAL`；smoke 场景由
   M1-01/M1-02 承载并经 `make evidence` 产出 PASS 日志（评审门后 DV 落地）。
-- M2 判据：§5 驱动原语支撑的场景（M2-CFG01/OR01/OR02/TL01/WO01/AT01）经
-  `make evidence` 产出 PASS 日志；M2-TL02 落地为已解锁的弱化可观测上界 checker
-  （spec §5.4.2；机制级断言仍为 §5.4.3 上游确认项、不派发）。
+- M2 判据：§5 驱动原语支撑的场景（M2-CFG01/OR01/OR02/TL01/TL02/WO01/AT01）经
+  `make evidence` 产出 PASS 日志；其中 M2-TL01/TL02 的判决门已按 BUG-0016/
+  REV-007 裁决锚 scoreboard 路由/数据/响应正确 + 达标 cover 非空转
+  （spec §5.4.1/§5.4.2/§5.4.3/§7.4.5），env 侧只需保证压测原语能把在飞计数
+  真正顶到目标区间（非空转），不再为任何在飞上界 assert 构造激励。
 
 ## 引用的 spec 章节
 

@@ -40,13 +40,19 @@ property` 原生产生（VCS assertion 覆盖数据库），但它天然只反�
   `stalled`、`not_stalled_same_target`、`not_stalled_diff_direction`）；cross
   方向（读/写）。依据 spec §5.2；场景 M2-OR01/OR02。
 - **`cg_tx_limit`**：coverpoint「该（slave 端口, 低位 ID 桶, 方向）组合的在飞峰值
-  计数」（bins：按 `0..MaxMstTrans` 分桶，至少含 `== MaxMstTrans` 一档）——分桶
-  维度依据 spec §2.1 `MaxMstTrans` 行 + §5.4.1（分桶口径的规范来源；spec 该条自身
-  出处标注 axi_demux.md L70-74）。master 端口的对应 coverpoint（依据 spec §5.4.2）
-  随 M2-TL02 的**已解锁弱化上界 checker** 一并补齐——分组取「每 master 端口 × 每
-  可观测（前缀后）ID × 每方向」的在飞峰值（bins 含 `== MaxSlvTrans` 一档；方向
-  分开计，见 `doc/bugs/BUG-0011.md` ## regression_guard 不假红约束）；机制级触发点
-  仍为 spec §5.4.3 上游确认项、不采集。本处先登记 slave 侧。场景 M2-TL01（+ M2-TL02）。
+  计数」（bins：按 `0..有效上限` 分桶，至少含 `== MaxMstTrans`（基线 10）与
+  `== 有效上限`（基线 15）两档——依据 spec §5.4.1 的有效上限公式
+  `2^⌈log₂MaxMstTrans⌉−1`，BUG-0016/REV-007 裁决：实际峰值可越过 `MaxMstTrans`
+  字面值，bin 设计须能记录该情形而非只截止于 `MaxMstTrans`）——分桶维度依据
+  spec §2.1 `MaxMstTrans` 行 + §5.4.1（分桶口径的规范来源；spec 该条自身出处
+  标注 axi_demux.md L70-74）。master 端口的对应 coverpoint（依据 spec §5.4.2/
+  §5.4.3）：**不再依附任何"弱化上界 checker"**——REV-005 曾解锁的该监视器已被
+  spec §5.4.2 正式收回（其前提不成立、会假红）；本 coverpoint 仅作**非判决观察**，
+  分组同前（每 master 端口 × 每可观测前缀后 ID × 每方向）记录在飞峰值（bins 含
+  `== MaxSlvTrans`（基线 6）一档，**不隐含 `≤ MaxSlvTrans` 为上界**；方向分开计，
+  沿用 `doc/bugs/BUG-0011.md` ## regression_guard 的分组原则，非"不假红 checker"
+  本身——该 checker 已被收回）；机制级触发点仍为 spec §5.4.3 已定论"mux 侧机制
+  不存在"、不采集。本处先登记 slave 侧。场景 M2-TL01（+ M2-TL02）。
 - **`cg_w_order`**：coverpoint「某 master 端口在一笔 W burst 起始时，是否存在
   ≥2 个不同源 slave 端口贡献的 AW 处于未决」（bins：`single_source`，
   `multi_source_contended`）。依据 spec §5.5；场景 M2-WO01。
@@ -63,9 +69,13 @@ property` 原生产生（VCS assertion 覆盖数据库），但它天然只反�
 
 ## 3. assert 类覆盖：cover property 配对约定
 
-- `sva_bind.md` §3 每条 M2 新增 `assert property`（C3.1/C3.2/C3.4-slave 侧/C3.5）
-  以及 C3.3 的既有断言，均须配一条**同触发前提**的 `cover property`（清单见
-  `sva_bind.md` 各条目下方的"cover"小节）。目的：在 VCS assert 覆盖数据库中区分
+- `sva_bind.md` §3 每条 M2 新增 `assert property`（C3.1/C3.2/C3.5）以及 C3.3 的
+  既有断言，均须配一条**同触发前提**的 `cover property`（清单见 `sva_bind.md`
+  各条目下方的"cover"小节）。**C3.4（事务在飞上限，slave 侧 + master 侧）已按
+  BUG-0016/REV-007 裁决从 `assert property` 降级为非判决 `cover property`/
+  `uvm_info`**（spec §5.4.1/§5.4.2/§5.4.3/§7.4.5），故不落入本条"assert 配
+  cover"的配对要求——其自身即为覆盖点，判决门另锚 scoreboard 正确性（见
+  `scoreboard_refmodel.md` C5.3）。目的：在 VCS assert 覆盖数据库中区分
   "从未失败因为从未被触发"与"被真实触发且未失败"，让 `assert` 类覆盖数字有意义，
   而不仅是"零失败"。依据：CLAUDE.md §6 覆盖口径 assert 类、spec §0 行 4。
 - 本文的 covergroup（§2）与 SVA 的 cover property（本节）是**互补而非重复**的两

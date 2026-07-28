@@ -137,7 +137,7 @@ spec §1；具体条目：
   先后序"——见 scoreboard_refmodel C5.5。
 - 适用端口：master 端口（复用既有挂点，不新增实例）。
 
-### C3.4 事务在飞上限（依据 spec §2.1 `MaxMstTrans` 行 + §5.4.1/§5.4.2/§5.4.3；开放机制依赖见 §5.4.3 `MaxSlvTrans` 侧上游确认项）
+### C3.4 事务在飞上限（依据 spec §2.1 `MaxMstTrans`/`MaxSlvTrans` 行 + §5.4.1/§5.4.2/§5.4.3/§7.4.5；BUG-0016/REV-007 裁决落地后，`MaxSlvTrans` 侧机制已由"上游确认项"改判"mux 侧机制不存在"的已定结论，`MaxMstTrans` 侧字面值改判"计数器定宽提示"、有效上限公式见 §5.4.1）
 
 - 状态：每端口维护一个按（约简 ID、方向）分桶的计数器数组，每桶额外带一个"当前
   绑定目标 master 端口"寄存器——依据 spec §2.1 `MaxMstTrans` 行（分桶口径 + 目标
@@ -148,19 +148,31 @@ spec §1；具体条目：
   （spec §5.2），不属本条计数上限判据（spec §5.4.1），二者为同一底层机制的两面
   （spec §2.1 `MaxMstTrans` 行明述），构造激励时须分清楚（呼应
   scoreboard_refmodel C5.3 的同一说明）。
-- slave 端口侧比较（`MaxMstTrans`，依据 spec §5.4.1；M2-TL01 场景收窄到单一
-  ID 桶×方向×目标 master 端口三元组）：该桶计数 `> MaxMstTrans` 不得发生（即
-  计数已达上限时，同桶下一次 `valid&&ready` 不得为真，直到一次完成使计数回落）。
-- master 端口侧比较（`MaxSlvTrans`，依据 spec §5.4.2）：REV-005 裁决已**解锁**一条
-  **弱化的可观测上界 checker**——「每 master 端口 × 每可观测（前缀后）ID × 每方向
-  在飞事务数 ≤ `MaxSlvTrans`」（分组见 `doc/bugs/BUG-0011.md` ## regression_guard
-  的不假红约束：方向须分开计，该分组在任何未决机制读法下都只会是真实上界的保守
-  下侧、绝不假红）。但**机制级断言**（spec §5.4.3 列为上游确认项的具体拒收触发点/
-  是否硬性反压）**仍不落地、不派发**——不得断言"第 7 笔在某具体通道/时点被拒收"。
-- cover：slave 端口侧，某桶计数达到（且不超过）`MaxMstTrans` 至少发生一次（激励
-  来源 M2-TL01）；master 端口侧的对应 cover 随 M2-TL02 的弱化上界 checker 一并
-  落地（每 master 端口 × 每可观测前缀后 ID × 每方向计数达到 `MaxSlvTrans` 至少
-  一次；机制级触发点仍为上游确认项、不落地）。
+- slave 端口侧判据（`MaxMstTrans`，依据 spec §5.4.1/§5.4.3/§7.4.5；M2-TL01 场景
+  收窄到单一 ID 桶×方向×目标 master 端口三元组；BUG-0016/REV-007 裁决）：该桶
+  计数 `> MaxMstTrans` **不构成 `assert property` 判据**——spec §5.4.1 已把
+  "≤ `MaxMstTrans`" 改判为**有效上限 `2^⌈log₂MaxMstTrans⌉−1`**（基线 15，非字面
+  10）之内的计数器位宽取整效应，越过字面值零功能损害。判决门降级为：路由/数据/
+  响应路由/完成正确（scoreboard 侧，spec §1/§3.1/§5.1）作**唯一**判决锚点；本
+  属性只保留非判决 `cover property`/`uvm_info`（记"该桶计数达到 `MaxMstTrans`
+  至少一次"与"计数越过 `MaxMstTrans` 字面值至少一次"，随裁决可升格）；
+  `assert property` **不落地**。
+- master 端口侧判据（`MaxSlvTrans`，依据 spec §5.4.2/§5.4.3；BUG-0016/REV-007
+  裁决）：REV-005 曾解锁的"≤ `MaxSlvTrans` 绝不假红"弱化可观测上界 checker
+  **已被 spec §5.4.2 正式收回**——其前提（mux 侧存在 per-ID 在飞计数机制）不
+  成立：`MaxSlvTrans` 经 `axi_xbar.sv` L141 实为 `axi_mux` 的 `MaxWTrans`
+  （AW→W ID 高位 FIFO 深度），mux 侧无按 ID 分桶的在飞计数机制，master 端口每
+  ID 在飞数受上游 demux 每桶有效上限（§5.4.1）主导、可超 `MaxSlvTrans`（已见证
+  8>6）。故 master 侧**无任何可断言在飞上界**——`assert property` 不落地（非
+  "仍不落地"的临时状态，而是机制不存在的已定结论）；只保留非判决 `cover
+  property`/`uvm_info`（记该（master 端口, 可观测前缀后 ID, 方向）组合计数
+  达到/越过 `MaxSlvTrans` 至少一次），判决门同 slave 侧锚定 scoreboard 正确性。
+- cover：slave 端口侧，某桶计数达到 `MaxMstTrans` 至少发生一次（`SVA_TXLIMIT`）
+  ＋计数越过 `MaxMstTrans` 字面值至少发生一次（`SVA_TXLIMIT_OVER`，非空转见证
+  BUG-0016 现象，不隐含判决）——激励来源 M2-TL01；master 端口侧对应 cover（每
+  master 端口 × 每可观测前缀后 ID × 每方向计数达到/越过 `MaxSlvTrans` 至少一次）
+  随 M2-TL02 落地，同为非判决见证，不再挂靠"随弱化上界 checker 一并落地"
+  （该 checker 已被收回，见上）。
 - 适用端口：两类端口（同一"分桶计数器"结构的两种读出方式）。
 
 ### C3.5 ATOP 读写通道成对响应与 ID 唯一性（依据 spec §6.3/§6.4）
@@ -184,10 +196,13 @@ spec §1；具体条目：
   `sim/flist/tb.f`。
 - M1 判据：编译弹起、smoke（M1-01/M1-02）期间 assert 类覆盖有采样且**零 assertion
   失败**（SVA passive 通过）。
-- M2 判据：C3.1/C3.2/C3.3(cover)/C3.4(slave 侧)/C3.5 随对应场景（M2-CFG01/OR01/
-  OR02/WO01/TL01/AT01）落地、assert 零失败**且**配套 cover 均非零命中（非空转
-  证据）；C3.4 master 侧断言受 spec §5.4.3 上游确认项约束、随 M2-TL02 弱化范围
-  确认后另行落地，不阻塞其余五条。
+- M2 判据：C3.1/C3.2/C3.5 及 C3.3 的既有断言随对应场景（M2-CFG01/OR01/OR02/
+  WO01/AT01）落地、assert 零失败**且**配套 cover 均非零命中（非空转证据）；
+  C3.3 本身不新增 assert，只补 cover。**C3.4（事务在飞上限，slave 侧 M2-TL01 +
+  master 侧 M2-TL02）均已从 `assert property` 降级为非判决 cover/`uvm_info`**
+  （BUG-0016/REV-007 裁决，spec §5.4.1/§5.4.2/§5.4.3/§7.4.5）：判决门改锚
+  scoreboard 路由/数据/响应正确 + 达标 cover 非空转，不阻塞其余场景，不再有
+  "上游确认项待落地"的开放项。
 
 ## 引用的 spec 章节
 
