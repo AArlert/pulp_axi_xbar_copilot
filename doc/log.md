@@ -2,6 +2,60 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.2.5] 2026-07-28 拉框架 0.5.3：FB-18 当日闭环，M2 签核卡解除暂停
+
+**Done**
+- **`make fw-pull` → 框架 0.5.3**，`fw-check`（26 files pinned）/ `docs-check`
+  双绿。pull 只动 4 个文件（+4 个重新渲染的 agent 文件），逐 diff 核对无外溢：
+  `workflow/signoff/rubric.md`、`scripts/docs.py`、`scripts/iverif.manifest.json`、
+  `iverif.json`
+- **FB-18 → `fixed@0.5.3`**（框架 commit `12b1548`），两半全采纳：
+  - (a) rubric 机器条件 3 同步为 "terminal **or unexpired `ACCEPTED@M<n>`**"
+  - (b) 新增人工抽查**第 7 条**（`docs.py --signoff` 同步打印，实测已见）：
+    "each `ACCEPTED@M<n>` row: the cited REV record states a *falsifiable*
+    rationale …… Carry-overs were re-arbitrated — never auto-extended — and
+    say why the previous due date slipped"
+  ⇒ 本仓库 REV-011 §4 G3 的项目自立规则**入 canon**，§5.4 作为参考形状记入框架
+  CHANGELOG；框架侧另加 fuse 钉住 rubric/工具在条件 3 与第 7 条上的永久一致
+- **FB-11 → `fixed@0.5.2`**：gate 自证教义按本仓库送出的**对抗原型证伪结论**
+  （stamp 候选形态的两个洞 + "elaboration done" 在 VCS O-2018 根本不存在）
+  全文重写进框架 deferred 台账；本仓库 `sim/Makefile`（BUG-0022 的无条件重跑 +
+  逐文件执行证明）被记为参考实现。本仓库原待办两项已随 BUG-0022 完成，无欠账
+- **BUG-0030 上游订正落页，但**不**关闭**：框架 0.5.2（`iverif-workflow@68a7e83`）
+  承认尾冒号是**快照缺陷而非环境约束**，`vcs-2018.mk` 改条件拼接。本仓库实测该
+  fragment 单独展开确已无尾冒号。**但框架"`env -i` 绕法可退役"的结论未采信**：
+  本页判据写的是"必须**恰为** `$VERDI_HOME/share/PLI/VCS/LINUX64`"，而
+  `sim/Makefile` 走完整 include 链后实测仍带 VCS lib 前缀 ⇒ **仍不"恰为"**。
+  尾冒号与"恰为"是两件事，上游只修了前者；当初的二分定位是逐项**加**变量做的，
+  没测过"带无关前缀但无尾冒号"这一形态 ⇒ 二者未经实测无法区分。维持 WONTFIX，
+  并在其 `## regression_guard` 登记一项**待兑现的附带义务**（下一张需要 xdebug
+  的卡本来就会产 FSDB，顺手做一次二值实验：成功则绕法退役、本条转 CLOSED 走
+  FB-16 的 `CMD=`/`EXPECT=` 形态；失败则"恰为"成立、绕法保留）
+
+**Not done**
+- M2 签核未做（本 chunk 只解除其前置阻塞）
+- BUG-0030 的二值实验未做（需 FSDB，不为不阻塞门禁的终态条目单独烧一次
+  编译+仿真；已登记为守卫义务，不是遗忘）
+- 四条 ACCEPTED@M3 债务本身未修；M3-TL01 未落地
+
+**Next**
+- **派 M2 签核卡**（rev，新实例——REV-011 作者不得签自己裁的债）。三条交接条件：
+  1. rubric #4"再读一个被豁免的洞"**明确挑 BUG-0018**（REV-011 §3.3 指定）
+  2. **不得**把 `axi_xbar_stall_sva` 的通过计为 M2-CFG01 的独立证据——84/84
+     零命中即其空转的机械证明（REV-011 §5.4）
+  3. rubric #7 是**新条**，四行 ACCEPTED@M3 全部落在它的抽查范围内
+- 签核 PASS 后 `make bump-minor` → 0.3.0 / M3 + `git tag`
+
+**How verified**
+- `make fw-check` 绿（0.5.3，26 files pinned）；`make docs-check` 绿
+- 新 rubric 逐条读过：条件 3 措辞已含 "or unexpired `ACCEPTED@M<n>`"，人工抽查
+  第 7 条存在且 `make signoff-check` 尾部确实打印它（**不是只改文档没改工具**）
+- `make signoff-check` 条件 1/2/3 全 PASS，仅余 `[not yet] signoff file`
+- BUG-0030 的上游修法是**实测**而非采信：`make -f -` 求值一个只 include 该
+  fragment 的临时 Makefile，父变量为空时结果恰为单一路径；对照 `sim/Makefile`
+  完整链的实测值带 VCS lib 前缀——正是这个对照支撑了"不采信绕法退役"的判断
+- `make guards FILES="sim/Makefile"` 7 条命中，含 BUG-0030 的新增待兑现义务
+
 ## [0.2.4] 2026-07-28 FB-18 回流并阻塞 M2 签核：ACCEPTED 只落到机器侧，rubric 两处未同步
 
 **Done**
@@ -117,53 +171,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 orch——挡住的是"ACCEPTED 的 rationale 必须由 rev 签名"这条**约定**，以及
 rev 交回来的那三条**可被 grep 推翻**的依据。可证伪性是自愿交出来的，不是被
 门禁逼出来的；这与 REV-011 §4 G1 的"沉默的通过"是同一枚硬币的两面。
-
-## [0.2.2] 2026-07-28 REV-011 spec 条款落地：译码未命中事务的保序地位（BUG-0025 SPEC_ISSUE 半边裁决）
-
-**Done**
-- rev 卡 **REV-011** 交付（`doc/review/REV-011.md`）：对 M2 仅剩的三条 active
-  bug（0018/0024/0025）做终态再裁决，并**当场完成** BUG-0025 的 SPEC_ISSUE
-  半边仲裁。本 chunk 只落地其中的 spec 部分（C-1），其余四项条件（C-2 新登
-  BUG-0031、C-3 改写三条 regression_guard、C-4 详情页正文订正、C-5 另派签核
-  卡）留给后续 chunk
-- **应用条款提案 P-REV011-1**：`doc/spec.md` §5.2 新增第 6 条「译码未命中
-  事务的保序地位」——(1) 走 §3.3 default master port 的事务其目标是**真实
-  master 端口**（xbar.md L35），§5.2.1-4 原样适用；(2) 走 §4 decode error
-  slave 的事务分两层：**完整 ID 维度可断言**（同一 slave 端口上完整 ID 相同、
-  同方向事务的 B/rlast 完成序须与接受序一致，**无论**路由去向；依据 §1 +
-  §4.5 + §5.2.3 + xbar.md L86 "same ID and direction must remain ordered"
-  ——该义务只依赖 slave 端口是 AXI4 接口、不依赖内部路由），**低位 ID 桶
-  维度不可断言**（完整 ID 不同且其一走 err_slv 时，次序关系许可来源未定义：
-  xbar.md §Ordering and Stalls 只约束"不同 master 端口"、§Decode Errors 未涉
-  次序、demux.md/mux.md 对 err_slv 无记载 ⇒ 不得写断言，以非判决 cover 留痕 +
-  列上游确认项 + 不阻塞里程碑，同 §7.4.4/§8.4 处置）；(3) checker 对该排除
-  必须**显式引本条**，不得以"未登记⇒读默认值⇒比较恰好为假"实现
-- **应用条款提案 P-REV011-2**：`doc/spec.md` §4 新增第 6 条一行交叉指针至
-  §5.2.6。§5.2.1-5 与 §4.1-5 正文一字未动（surgical）
-- Change record 第 6 行登记 + `docs.py --pin-spec` 重 pin（`doc/spec.sha256`
-  `bfe8542b…` → `0fd431f7…`）
-
-**Not done**
-- REV-011 的其余四项 orch 条件（C-2/C-3/C-4/C-5）——下一 chunk
-- 三条 bug 的 `ACCEPTED@M3` 状态改写虽已由 rev 卡在工作树中完成，但**不在本
-  commit**：本 chunk 严格限定为 spec 应用，bug 台账变更随 C-2/C-3/C-4 一并
-  提交，以免 spec 变更与台账变更混进同一个不可分割的 commit
-- M2 里程碑签核（signoff-M2）未做
-
-**Next**
-- C-2 登记 BUG-0031（`stall_sva.sv:99-100` 编译期 `ADDR_MAP` 译码 vs
-  `sva_bind.sv:33-35` 未传 `cfg_if`——design-prompt §3 的要求只落实了一半，
-  误差**双向可假红**）+ C-3 三条 regression_guard 改写 + C-4 详情页正文订正
-- C-5 M2 签核卡（rubric #4 明确挑 BUG-0018 作"再读一个被豁免的洞"，#5 须真做
-  一次守卫证伪）
-
-**How verified**
-- `make docs-check` 绿；`make fw-check` 绿（框架 0.5.2，26 files pinned）
-- 结构核对：新条款落在 `doc/spec.md:201`（§5.2 第 6 条，位于原第 5 条之后、
-  `### 5.3` 之前）与 `doc/spec.md:151`（§4 第 6 条），编号连续无跳号；
-  Change record 第 6 行列数 = 6，与表头一致（FB-14 那类静默串列的自检）
-- pin 一致性：`sha256sum doc/spec.md` 与 `doc/spec.sha256` 相符
-- spec-from-RTL 红线：REV-011 §1.3 明确声明未读 `axi_xbar.sv`/`axi_demux.sv`
-  实现体，条款的许可来源清单全部为 `vendor/axi/doc/*.md` 与 spec 内部章节；
-  `axi_mux.md` 对 err_slv 无记载被作为"未定义"的**否定性证据**引用
 

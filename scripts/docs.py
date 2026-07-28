@@ -892,6 +892,8 @@ def cmd_signoff():
           "scope; falsify at least one (re-introduce its defect, see red)")
     print("  6. open SPEC_ISSUE list empty, or each entry has a written "
           "acceptance rationale")
+    print("  7. accepted debt: each ACCEPTED row's REV rationale is "
+          "falsifiable; carry-overs re-arbitrated, never auto-extended")
     return 1 if fails else 0
 
 

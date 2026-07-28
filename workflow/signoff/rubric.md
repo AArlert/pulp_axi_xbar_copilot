@@ -12,8 +12,9 @@ risks are retired?** Two halves: machine-checkable conditions (printed by
 2. `make regress` summary for the full list is registered as evidence
    (100% PASS, includes every regression-guard case).
 3. All bug rows are in terminal states (`CLOSED / TB_BUG / SPEC_CHANGED /
-   WONTFIX`); every CLOSED row has re-verification evidence; every FL detail
-   page has its required sections non-empty (when `fl_schema_enforce` on).
+   WONTFIX`) or unexpired `ACCEPTED@M<n>`; every CLOSED row has
+   re-verification evidence; every FL detail page has its required
+   sections non-empty (when `fl_schema_enforce` on).
 
 The tool prints each condition PASS/FAIL and, for FAILs, the offending ids.
 It is read-only — it never edits state.
@@ -31,6 +32,10 @@ It is read-only — it never edits state.
    has never been seen red is a hypothesis, not a guard.
 6. **Spec debt is zero or accepted.** The open SPEC_ISSUE list is empty, or
    each entry has a written acceptance rationale.
+7. **Accepted debt is real debt.** Each `ACCEPTED@M<n>` row: the cited
+   REV record states a *falsifiable* rationale (which fact, if refuted,
+   voids the ruling). Carry-overs were re-arbitrated — never
+   auto-extended — and say why the previous due date slipped.
 
 ## The signoff record
 

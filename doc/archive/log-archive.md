@@ -1,4 +1,53 @@
 # Work log archive
+## [0.2.2] 2026-07-28 REV-011 spec 条款落地：译码未命中事务的保序地位（BUG-0025 SPEC_ISSUE 半边裁决）
+
+**Done**
+- rev 卡 **REV-011** 交付（`doc/review/REV-011.md`）：对 M2 仅剩的三条 active
+  bug（0018/0024/0025）做终态再裁决，并**当场完成** BUG-0025 的 SPEC_ISSUE
+  半边仲裁。本 chunk 只落地其中的 spec 部分（C-1），其余四项条件（C-2 新登
+  BUG-0031、C-3 改写三条 regression_guard、C-4 详情页正文订正、C-5 另派签核
+  卡）留给后续 chunk
+- **应用条款提案 P-REV011-1**：`doc/spec.md` §5.2 新增第 6 条「译码未命中
+  事务的保序地位」——(1) 走 §3.3 default master port 的事务其目标是**真实
+  master 端口**（xbar.md L35），§5.2.1-4 原样适用；(2) 走 §4 decode error
+  slave 的事务分两层：**完整 ID 维度可断言**（同一 slave 端口上完整 ID 相同、
+  同方向事务的 B/rlast 完成序须与接受序一致，**无论**路由去向；依据 §1 +
+  §4.5 + §5.2.3 + xbar.md L86 "same ID and direction must remain ordered"
+  ——该义务只依赖 slave 端口是 AXI4 接口、不依赖内部路由），**低位 ID 桶
+  维度不可断言**（完整 ID 不同且其一走 err_slv 时，次序关系许可来源未定义：
+  xbar.md §Ordering and Stalls 只约束"不同 master 端口"、§Decode Errors 未涉
+  次序、demux.md/mux.md 对 err_slv 无记载 ⇒ 不得写断言，以非判决 cover 留痕 +
+  列上游确认项 + 不阻塞里程碑，同 §7.4.4/§8.4 处置）；(3) checker 对该排除
+  必须**显式引本条**，不得以"未登记⇒读默认值⇒比较恰好为假"实现
+- **应用条款提案 P-REV011-2**：`doc/spec.md` §4 新增第 6 条一行交叉指针至
+  §5.2.6。§5.2.1-5 与 §4.1-5 正文一字未动（surgical）
+- Change record 第 6 行登记 + `docs.py --pin-spec` 重 pin（`doc/spec.sha256`
+  `bfe8542b…` → `0fd431f7…`）
+
+**Not done**
+- REV-011 的其余四项 orch 条件（C-2/C-3/C-4/C-5）——下一 chunk
+- 三条 bug 的 `ACCEPTED@M3` 状态改写虽已由 rev 卡在工作树中完成，但**不在本
+  commit**：本 chunk 严格限定为 spec 应用，bug 台账变更随 C-2/C-3/C-4 一并
+  提交，以免 spec 变更与台账变更混进同一个不可分割的 commit
+- M2 里程碑签核（signoff-M2）未做
+
+**Next**
+- C-2 登记 BUG-0031（`stall_sva.sv:99-100` 编译期 `ADDR_MAP` 译码 vs
+  `sva_bind.sv:33-35` 未传 `cfg_if`——design-prompt §3 的要求只落实了一半，
+  误差**双向可假红**）+ C-3 三条 regression_guard 改写 + C-4 详情页正文订正
+- C-5 M2 签核卡（rubric #4 明确挑 BUG-0018 作"再读一个被豁免的洞"，#5 须真做
+  一次守卫证伪）
+
+**How verified**
+- `make docs-check` 绿；`make fw-check` 绿（框架 0.5.2，26 files pinned）
+- 结构核对：新条款落在 `doc/spec.md:201`（§5.2 第 6 条，位于原第 5 条之后、
+  `### 5.3` 之前）与 `doc/spec.md:151`（§4 第 6 条），编号连续无跳号；
+  Change record 第 6 行列数 = 6，与表头一致（FB-14 那类静默串列的自检）
+- pin 一致性：`sha256sum doc/spec.md` 与 `doc/spec.sha256` 相符
+- spec-from-RTL 红线：REV-011 §1.3 明确声明未读 `axi_xbar.sv`/`axi_demux.sv`
+  实现体，条款的许可来源清单全部为 `vendor/axi/doc/*.md` 与 spec 内部章节；
+  `axi_mux.md` 对 err_slv 无记载被作为"未定义"的**否定性证据**引用
+
 ## [0.2.1] 2026-07-28 M2 场景收官 + 框架五版回流 + bug 台账 12→4：签核前最后一段
 
 **Done**
