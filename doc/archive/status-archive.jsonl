@@ -1,2 +1,3 @@
+{"date": "2026-07-27", "version": "0.0.2", "summary": "DV 复验闭环：M0-01 ✅，BUG-0001/0006 CLOSED，signoff-check 机器条件全过；待 rev 里程碑签核"}
 {"date": "2026-07-27", "version": "0.0.1", "summary": "M0 基建首循环收官：vendor pin(axi v0.39.9)+sim 基建+P-001/P-002 编译排雷(compile 全过)+spec v0 评审应用重 pin；M0-01 待 DV 复验，FB-1~5 待回流"}
 {"date": "2026-07-27", "version": "0.0.0", "summary": "repo scaffolded by fwsync --init"}
