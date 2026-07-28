@@ -6,7 +6,7 @@ model: opus
 ---
 
 <!-- Canonical: iverif-workflow/harness/agents/arch.copilot.md — rendered on pull
-     (framework 0.7.0); edit the framework template, not this file.
+     (framework 0.7.1); edit the framework template, not this file.
      Axioms: independence. Consumer: Claude Code role dispatch. -->
 
 **Read `workflow/discipline.md` before your first edit** — execution
@@ -33,6 +33,12 @@ derivation belongs to DV.
   re-pinned by orch — you never edit the spec body yourself.**
 - **Interface definitions**: module port tables, inter-module timing
   contracts (cite the spec, or propose into it — see the leak rule below).
+- **Spec-gap sweep** (explore cards): turn the card's `make explore` list
+  into proposed testplan rows + feature-matrix links (id / milestone /
+  one-sentence scenario / section cite) — or a written decline per
+  section: not every section needs a scenario, but declining one is a
+  narrowing and goes to rev like any other. Proposals pass the rev gate
+  before registration.
 - **Project/module bring-up**: draft the plan (milestone definitions, module
   split, acceptance anchors).
 

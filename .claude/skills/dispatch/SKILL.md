@@ -1,6 +1,6 @@
 ---
 name: dispatch
-description: Dispatch-card assembly (copilot profile, orch only) — assemble inputs per the fixed card templates, pick a model tier, pass the isolation self-check. Run before every subagent dispatch.
+description: Dispatch-card assembly (copilot profile, orch only) — grade the card (L0–L3), assemble inputs per the fixed card templates, pass the isolation self-check. Run before every subagent dispatch.
 ---
 
 <!-- Canonical: iverif-workflow/harness/skills/dispatch/SKILL.md — pinned snapshot.
@@ -8,14 +8,18 @@ description: Dispatch-card assembly (copilot profile, orch only) — assemble in
 
 # Dispatch flow (orch only)
 
-## 1. Pick the model tier (Agent `model` parameter; omit = agents' default)
+## 1. Grade the card (L0–L3), then the model tier follows
 
-- **Low (haiku)**: mechanical edits — table backfills, file moves,
-  formatting, small changes with explicit instructions.
-- **Mid (sonnet)**: routine coding — template-following scenarios/sequences,
-  structurally clear RTL modules, evidence registration.
-- **High (opus)**: architecture, cross-module changes, hard debug,
-  arbitration, milestone signoff.
+Grade by the heaviest surface the card touches; in doubt, grade up.
+Grades tune the **chain**, never record duties — taxonomy registration
+and evidence gates stay unconditional at every grade.
+
+| Grade | Surface | Chain weight | Tier |
+| --- | --- | --- | --- |
+| L0 | docs / build / lint mechanics | no arch, no rev pre-gate; accept = docs-check / compile clean; bugs close via CMD-form evidence | haiku |
+| L1 | TB / sequence / coverage | dv card + sim evidence; arch only for a new module; rev at review cadence, not per card | sonnet |
+| L2 | RTL / SVA / scoreboard | full isolation chain: design-prompt gate for new behavior, independent re-verification | opus |
+| L3 | spec / waiver / signoff / arbitration | rev mandatory, full rubric | opus |
 
 ## 2. Assemble the card (only listed inputs — the common-mode firewall)
 
@@ -26,6 +30,7 @@ card by type:
 | --- | --- | --- |
 | arch design input | spec sections (or the new-need description), feature-matrix scope, design-prompt README/conventions path | orch's preconceptions about the implementation |
 | arch spec proposal | the ambiguity's BUG id or description, sections involved | any party's preferred ruling |
+| arch spec-gap sweep | `make explore` output pasted verbatim, spec section list | orch's own scenario ideas |
 | DE new feature | `doc/design-prompt/<module>.md` path (**must have passed the rev gate**), spec sections, feature-matrix ids, interface file paths | DV checker code/reasoning, rejected arch drafts |
 | DE fix | bugs.md row id (symptom / min repro / spec basis), spec sections, relevant rtl paths | DV's expected-value derivation, waveform-analysis reasoning |
 | DV scenario | testplan row id, spec sections, RTL module ports (header only, not the body), the designated register/parameter defs file | DE's implementation approach, RTL internals, design-prompts |
@@ -43,7 +48,8 @@ card by type:
 - [ ] Bug dispatches only after the bugs.md row exists (no verbal
       dispatch).
 - [ ] The card states its acceptance criteria (rev gate passed /
-      compile+lint clean / scenario PASS + evidence / review record path).
+      compile+lint clean / scenario PASS + evidence / review record path)
+      **and its grade** (L0–L3; in doubt, graded up).
 - [ ] `make guards FILES="<the card's file list>"` run; every matched
       guard block pasted verbatim (registered fact, no reasoning).
       Above ~6 hits split **hard** (paths match files this card edits)
@@ -64,5 +70,7 @@ card by type:
   script-computed (`make next`) — orch maintains no status cells.
 - Status cells (testplan/bugs) are backfilled by evidence.py; run
   `make docs-check` before closing the card.
-- Process cost exceeded the work? Log as framework feedback — two cases
-  fire the deferred risk-grading row.
+- Grade vs reality, every card: did the chain weight match the work? A
+  mismatch either way (L0 work dragged through an L2 chain, or an "L0"
+  that touched RTL) is framework feedback — record it. Subagents cannot
+  see chain weight; this per-card line is the only observer.

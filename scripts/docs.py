@@ -618,6 +618,9 @@ NEXT_PHRASES = {
         "unverified": "%(mod)s scenarios %(scenes)s not ✅ → write/run the "
                       "tests, then make evidence SCEN=<id>",
         "prompt_missing": None,  # design prompts do not exist in learning
+        "explore": "%(m)s has no scenario rows yet and %(n)d spec "
+                   "subsections are cited by nobody → make explore, draft "
+                   "candidate rows, request rev review",
     },
     "copilot": {
         "bug_open_spec": "%(bid)s OPEN (spec issue) → dispatch a rev "
@@ -642,6 +645,9 @@ NEXT_PHRASES = {
         "prompt_missing": "%(mod)s lacks doc/design-prompt/%(mod)s.md → "
                           "dispatch arch card (rev gate before any "
                           "%(role)s card)",
+        "explore": "%(m)s has no scenario rows yet and %(n)d spec "
+                   "subsections are cited by nobody → make explore, then "
+                   "dispatch an arch spec-gap card",
     },
 }
 
@@ -703,6 +709,15 @@ def cmd_next():
               if r.get(CFG.C["tp_milestone"]) == milestone]
     cur_fm = [r for r in fm_rows
               if r.get(CFG.C["fm_milestone"]) == milestone]
+    # Planning-time frontier nag: fires only while the current milestone
+    # has zero registered rows, silent once planning exists — the
+    # spec-gap explorer's daily-loop consumer (a mechanism nobody is told
+    # to run does not exist).
+    if not cur_tp and P.get("explore"):
+        uncited = chain_gaps()["uncited"]
+        if uncited:
+            acts.append((2, P["explore"] % {"m": milestone,
+                                            "n": len(uncited)}))
     for r in cur_tp:
         if "❌" in r.get(CFG.C["tp_status"], ""):
             acts.append((1, P["tp_fail"] % {"rid": r.get(CFG.C["tp_id"])}))
@@ -969,14 +984,13 @@ SPEC_REF_RE = re.compile(r"SPEC-(\d+(?:\.\d+)*)")
 SPEC_SEC_RE = re.compile(r"(?:^#{1,6}\s*|§)(\d+(?:\.\d+)*)", re.M)
 
 
-def cmd_chain_audit():
-    """Whole-graph break-link audit: spec ↔ testplan ↔ feature-matrix ↔
-    evidence. Hard-fails only on dangling spec refs (cited section absent
-    from spec.md, ancestors included); other break classes are reported
-    for review — convention layers (spec_ref headers) are counted, not
-    enforced, until adoption catches up."""
-    secs = set(SPEC_SEC_RE.findall(
-        CFG.spec.read_text(encoding="utf-8", errors="replace")))
+def chain_gaps():
+    """Break-link computation shared by --chain-audit (audit view) and
+    --explore (planning view)."""
+    spec_text = CFG.spec.read_text(encoding="utf-8", errors="replace")
+    secs = set(SPEC_SEC_RE.findall(spec_text))
+    titles = dict(re.findall(r"^#{1,6}\s*(\d+(?:\.\d+)*)\s+(.+)$",
+                             spec_text, re.M))
     tp_rows = parse_table(CFG.testplan)
     linked = {s for r in parse_table(CFG.feature_matrix)
               for s in linked_scenes(r)}
@@ -1019,24 +1033,72 @@ def cmd_chain_audit():
          and not any(ref == s or ref.startswith(s + ".")
                      for ref in all_refs)),
         key=lambda s: [int(x) for x in s.split(".")])
+    return {"dangling": dangling, "parented": parented,
+            "sourceless": sourceless, "orphans": orphans,
+            "uncited": uncited, "titles": titles,
+            "ev_missing_specref": ev_missing_specref,
+            "ev_checked": ev_checked}
 
+
+def cmd_chain_audit():
+    """Whole-graph break-link audit: spec ↔ testplan ↔ feature-matrix ↔
+    evidence. Hard-fails only on dangling spec refs (cited section absent
+    from spec.md, ancestors included); other break classes are reported
+    for review — convention layers (spec_ref headers) are counted, not
+    enforced, until adoption catches up."""
+    g = chain_gaps()
     print("== chain audit ==")
     print("[%s] dangling spec refs (cited, no such section): %d%s"
-          % ("FAIL" if dangling else "PASS", len(dangling),
-             " — " + ", ".join(dangling) if dangling else ""))
-    for label, items in (("scenarios citing no spec clause", sourceless),
-                         ("scenarios in no feature-matrix row", orphans),
+          % ("FAIL" if g["dangling"] else "PASS", len(g["dangling"]),
+             " — " + ", ".join(g["dangling"]) if g["dangling"] else ""))
+    for label, items in (("scenarios citing no spec clause",
+                          g["sourceless"]),
+                         ("scenarios in no feature-matrix row",
+                          g["orphans"]),
                          ("refs anchored only at a parent section",
-                          parented)):
+                          g["parented"])):
         print("[gap] %s: %d%s" % (label, len(items),
                                   " — " + ", ".join(items) if items else ""))
     print("[gap] spec subsections cited by no scenario: %d%s"
-          % (len(uncited),
-             " — §" + ", §".join(uncited) if uncited else ""))
+          % (len(g["uncited"]),
+             " — §" + ", §".join(g["uncited"]) if g["uncited"] else ""))
     print("[gap] ✅ evidence without a spec_ref header: %d/%d "
           "(convention, not yet enforced)"
-          % (ev_missing_specref, ev_checked))
-    return 1 if dangling else 0
+          % (g["ev_missing_specref"], g["ev_checked"]))
+    return 1 if g["dangling"] else 0
+
+
+def cmd_explore():
+    """Planning view of the gap frontier: spec subsections no scenario
+    cites, as candidates for the next testplan rows. Mechanical listing
+    only — whether a section deserves a scenario is a semantic call
+    (arch proposes, rev gates; declining a section is a recorded
+    decision, like any narrowing)."""
+    _, milestone = read_version()
+    g = chain_gaps()
+    cur = [r for r in parse_table(CFG.testplan)
+           if r.get(CFG.C["tp_milestone"]) == milestone]
+    print("== explore: spec-gap frontier (%s, %d scenario rows "
+          "registered) ==" % (milestone, len(cur)))
+    if not g["uncited"]:
+        print("no uncited spec subsections — the registered frontier "
+              "covers the spec; remaining gap surfaces are coverage holes "
+              "and ❌ rows")
+        return
+    print("spec subsections cited by no scenario: %d" % len(g["uncited"]))
+    for s in g["uncited"]:
+        print("  §%-10s %s" % (s, g["titles"].get(s, "")))
+    if g["sourceless"]:
+        print("scenarios citing no spec clause (anchor or retire): %s"
+              % ", ".join(g["sourceless"]))
+    if CFG.profile == "copilot":
+        print("next: dispatch an arch spec-gap card carrying this list "
+              "verbatim; rev gates the proposed rows before registration")
+    else:
+        print("next: draft candidate testplan rows for the sections this "
+              "milestone owns; request rev review before registering")
+    print("note: not every section needs a scenario — declining one is a "
+          "rev-recorded decision (narrowing must be declared)")
 
 
 def cmd_guards(paths):
@@ -1093,6 +1155,9 @@ def main():
     parser.add_argument("--chain-audit", action="store_true",
                         help="whole-graph break-link audit "
                              "(spec↔testplan↔matrix↔evidence)")
+    parser.add_argument("--explore", action="store_true",
+                        help="planning view: spec subsections no scenario "
+                             "cites (candidate testplan rows)")
     args = parser.parse_args()
     CFG = load_config()
     if args.pin_spec:
@@ -1111,6 +1176,8 @@ def main():
         cmd_guards(args.guards)
     if args.chain_audit:
         sys.exit(cmd_chain_audit())
+    if args.explore:
+        cmd_explore()
     if args.handover:
         cmd_handover()
     if args.next:

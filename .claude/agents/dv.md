@@ -6,7 +6,7 @@ model: opus
 ---
 
 <!-- Canonical: iverif-workflow/harness/agents/dv.copilot.md — rendered on pull
-     (framework 0.7.0); edit the framework template, not this file.
+     (framework 0.7.1); edit the framework template, not this file.
      Axioms: independence. Consumer: Claude Code role dispatch. -->
 
 **Read `workflow/discipline.md` before your first edit** — execution
