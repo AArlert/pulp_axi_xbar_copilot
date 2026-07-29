@@ -3,23 +3,24 @@ name: dispatch
 description: Dispatch-card assembly (copilot profile, orch only) — grade the card (L0–L3), assemble inputs per the fixed card templates, pass the isolation self-check. Run before every subagent dispatch.
 ---
 
-<!-- Canonical: iverif-workflow/harness/skills/dispatch/SKILL.md — pinned snapshot.
-     Axioms: independence, consumption. Consumer: orch, before every card. -->
+<!-- Project-owned since framework 0.8.0 (upstream retired .claude/skills/;
+     kept here as a local asset — we maintain it). Consumer: orch, before
+     every card. Role boundaries also live in .claude/agents/orch.md. -->
 
 # Dispatch flow (orch only)
 
 ## 1. Grade the card (L0–L3), then the model tier follows
 
-Grade by the heaviest surface the card touches; in doubt, grade up.
-Grades tune the **chain**, never record duties — taxonomy registration
-and evidence gates stay unconditional at every grade.
+**The grade table is in `CLAUDE.md` (派卡定级) — read it there, never copy it
+here.** 0.8.0 moved it into CLAUDE.md and `scripts/tests/test_docs.py`
+enforces its presence; a second copy in this file is exactly the drift the
+move was meant to end.
 
-| Grade | Surface | Chain weight | Tier |
-| --- | --- | --- | --- |
-| L0 | docs / build / lint mechanics | no arch, no rev pre-gate; accept = docs-check / compile clean; bugs close via CMD-form evidence | haiku |
-| L1 | TB / sequence / coverage | dv card + sim evidence; arch only for a new module; rev at review cadence, not per card | sonnet |
-| L2 | RTL / SVA / scoreboard | full isolation chain: design-prompt gate for new behavior, independent re-verification | opus |
-| L3 | spec / waiver / signoff / arbitration | rev mandatory, full rubric | opus |
+Grade by the heaviest surface the card touches; in doubt, grade up. Grades
+tune the **chain and model tier only** — taxonomy registration and evidence
+gates stay unconditional at every grade. When a card straddles two levels
+(a "doc fix" that touches a register definition, a "coverage tweak" that
+needs a new checker), escalate rather than downgrade.
 
 ## 2. Assemble the card (only listed inputs — the common-mode firewall)
 
@@ -30,7 +31,7 @@ card by type:
 | --- | --- | --- |
 | arch design input | spec sections (or the new-need description), feature-matrix scope, design-prompt README/conventions path | orch's preconceptions about the implementation |
 | arch spec proposal | the ambiguity's BUG id or description, sections involved | any party's preferred ruling |
-| arch spec-gap sweep | `make explore` output pasted verbatim, spec section list | orch's own scenario ideas |
+| arch spec-gap sweep | the exploration frontier from `make next` pasted verbatim, spec section list | orch's own scenario ideas |
 | DE new feature | `doc/design-prompt/<module>.md` path (**must have passed the rev gate**), spec sections, feature-matrix ids, interface file paths | DV checker code/reasoning, rejected arch drafts |
 | DE fix | bugs.md row id (symptom / min repro / spec basis), spec sections, relevant rtl paths | DV's expected-value derivation, waveform-analysis reasoning |
 | DV scenario | testplan row id, spec sections, RTL module ports (header only, not the body), the designated register/parameter defs file | DE's implementation approach, RTL internals, design-prompts |
@@ -69,7 +70,7 @@ card by type:
   command + generation stamp). Delivery/verification status is
   script-computed (`make next`) — orch maintains no status cells.
 - Status cells (testplan/bugs) are backfilled by evidence.py; run
-  `make docs-check` before closing the card.
+  `make check` before closing the card.
 - Grade vs reality, every card: did the chain weight match the work? A
   mismatch either way (L0 work dragged through an L2 chain, or an "L0"
   that touched RTL) is framework feedback — record it. Subagents cannot

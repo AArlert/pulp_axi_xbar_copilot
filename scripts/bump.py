@@ -83,8 +83,10 @@ def main():
         encoding="utf-8")
     print("%s -> %s (%s)" % (cur, new, data["milestone"]))
     insert_skeletons(cfg, new)
-    print("Reminder: fill the skeletons, then make docs-check; on milestone "
+    print("Reminder: fill the skeletons, then make check; on milestone "
           "completion tag: git tag v" + new)
+    print("Reminder: workflow/ files are upstream — if it has been a while, "
+          "spot-check known downstream forks for drift (see DESIGN.md).")
 
 
 if __name__ == "__main__":

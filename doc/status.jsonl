@@ -1,3 +1,4 @@
+{"date": "2026-07-29", "version": "0.3.6", "summary": "框架 0.8.0 换底盘（fwsync 已删、无 pull 对端，手工移植）：workflow 27→4 份、agents 转静态含新 orch、四动词收成 make check、handover→handoff。数据层 100% 兼容，doc/ 未改一字。裁决不变量 5 自 M3 起生效、M0-M2 不回填 KILL。登记 FB-27（上游角色卡仍指令已退休动词）+ 订正 FB-25"}
 {"date": "2026-07-29", "version": "0.3.5", "summary": "pull 框架 0.7.1（spec-gap 探索器 + L0-L3 分级，交采纳者压测）；压测 explore 当场命中 FB-24——§id 解析器把章节内列表项与跨文档引用当成 spec 章节，前沿幻影率 4/9；同根因解释 parent-anchored=15，建议否决 arch 的 §4/§5.3 自引用提案；arch spec-gap 卡暂不派"}
 {"date": "2026-07-29", "version": "0.3.4", "summary": "pull 框架 0.7.0（worktree 预演后执行；实测认定为纯结构重排、零行为规则变更，M2 证据与 M3 设计输入不受影响）；活文件路径迁移（CLAUDE.md + testplan/bugs 表头 + fw-feedback + 三份 design-prompt 死指针）；裁决冻结记录 16 份 39 处旧路径一律不动并登记 FB-23"}
 {"date": "2026-07-29", "version": "0.3.3", "summary": "arch 交付 M3 场景清单（11 行）+ 反驳 orch 的配置维 constrained-random 决定（三条机制事实已核实，改为声明式配置点）；四条 ACCEPTED@M3 债务逐条归属；新登 BUG-0032（err_slv×ATOP 应答未定义，待 rev 终判）"}
@@ -5,4 +6,3 @@
 {"date": "2026-07-28", "version": "0.3.1", "summary": "拉框架 0.6.0（chain-audit 毕业，触发器即本仓库 signoff-M2；首次运行 0 dangling / 19 uncited）。登记 FB-21（chain-audit 无任何门禁消费它，与 FB-11 判例同构，本仓库第三次撞同一家族）、FB-22（uncited 行静默截断 19/15/4，恒砍编号最大章节，丢的正是 M3 地盘）"}
 {"date": "2026-07-28", "version": "0.3.0", "summary": "M2 里程碑签核 PASS（doc/evidence/v0.2.5/signoff-M2.md）：八行场景 ✅、regress 11/11 独立重跑、rubric #5 真做证伪（BUG-0027 缺陷放回见 336 条红后复原）、rubric #7 首次实战——四条 ACCEPTED@M3 带推翻意图复核全数通过；新登 FB-20（终态行的未兑现义务对条件 3 不可见）。转入 M3"}
 {"date": "2026-07-28", "version": "0.2.5", "summary": "拉框架 0.5.3：FB-18 当日闭环（rubric 条件 3 同步 + 新增人工抽查第 7 条，本仓库 REV-011 §4 G3 入 canon）、FB-11 fixed@0.5.2；BUG-0030 上游订正落页但不关闭（「恰为」判据未经实测，登记为待兑现守卫义务）。M2 签核卡解除暂停"}
-{"date": "2026-07-28", "version": "0.2.4", "summary": "FB-18（blocking）登记并当日送达框架侧：0.5.0 的 ACCEPTED@M<n> 只落到机器侧，signoff/rubric.md 机器条件 3 措辞未同步、且无任何条目要求复核 ACCEPTED 的 rationale。M2 签核卡按指令暂停派发，待框架闭环后 fwsync --pull 再派"}

@@ -1,17 +1,14 @@
 # Execution discipline
 
-<!-- Canonical: iverif-workflow/loop/discipline.md — pinned snapshot.
-     Axioms: recording, pain-gating. Consumer: every role, before its
-     first edit of a session. -->
+<!-- Upstream file — local edits are your own to maintain. -->
 
-Behavioral rules for whoever is holding the keyboard — the learning-line
-engineer, orch, or any dispatched agent. They apply to every card, every
-session, both profiles.
+Behavioral rules for whoever is holding the keyboard — the engineer, orch,
+or any dispatched agent. They apply to every card, every session.
 
 **Priority.** Above ordinary convenience: when a rule here conflicts with
-"just get it done faster", the rule wins. Below the four core invariants
-(workflow/constitution.md) and each role's isolation boundary: those are hard gates enforced
-by scripts; this is how you behave *between* the gates, where no script is
+"just get it done faster", the rule wins. Below CLAUDE.md's five invariants
+and each role's isolation boundary: those are hard gates enforced by
+scripts; this is how you behave *between* the gates, where no script is
 watching. Read this before your first edit of a session.
 
 Adapted from Andrej Karpathy's LLM-coding guidelines
@@ -62,12 +59,8 @@ over speed; on a trivial task, use judgment.
 - Remove imports/variables/functions that *your* change orphaned. Don't
   delete pre-existing dead code — mention it.
 - "Mention it" is not a chat remark: if what you noticed matches a
-  `workflow/fail/failure_taxonomy.md` class, it gets a `doc/bugs.md` row.
-  Registration is unconditional.
-- **The pinned snapshot is not surgically editable at all.** `scripts/`,
-  `workflow/`, `.claude/skills/` and the rendered `.claude/agents/` come
-  from the framework; a fix goes to the framework first, then comes back by
-  `fwsync --pull`. `make fw-check` is watching.
+  `workflow/bugs.md` class, it gets a `doc/bugs.md` row. Registration is
+  unconditional.
 - The test: every changed line traces directly to the card.
 
 ## 4. Goal-driven execution

@@ -1,7 +1,5 @@
 #!/bin/sh
 # Local soft gate (bypassable with --no-verify; project CI still hard-fails).
+# 0.8.0: the fwsync drift check retired with the tool — upstream files are no
+# longer hash-pinned, so there is no drift state left to warn about.
 python3 scripts/docs.py --check || exit 1
-# Drift check is warn-only here so an emergency local fix can still commit —
-# but CI keeps failing until the fix flows back to the framework repo.
-python3 scripts/fwsync.py --check || \
-  echo "[warn] vendored framework files modified locally — improve the framework repo and re-pull"

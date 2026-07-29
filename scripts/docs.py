@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# Mechanical layer of the doc memory system: handover summary / structure
-# guards / rolling archive / spec pinning / signoff & chain queries.
+# Mechanical layer of the doc memory system: handoff summary / structure
+# guards / rolling archive / spec pinning / check & chain queries.
 # Principle: mechanics to scripts, semantics to humans/agents. This script
 # only counts, validates, and moves text — it never writes semantic content.
 #
-# Canonical home: iverif-workflow/kernel/docs.py. Project copies are
-# hash-pinned; improve the framework, then `fwsync --pull`.
+# Canonical home: iverif-workflow/scripts/docs.py. This is an upstream file
+# in a cloned project — local edits are your own to maintain; `git
+# cherry-pick` interesting upstream commits if you want them.
 import argparse
 import hashlib
 import json
@@ -295,7 +296,7 @@ def check_fl_page(page, status, errors):
         body = "\n".join(sections.get(name, [])).strip()
         if not body:
             errors.append("%s: section '## %s' missing or empty "
-                          "(workflow/fail/failure_record.md)"
+                          "(workflow/bugs.md)"
                           % (page.name, name))
     tax = "\n".join(sections.get("taxonomy", [])).strip()
     if tax and not any(c in tax for c in FL_CLASSES):
@@ -316,7 +317,7 @@ def signoff_file_exists(mnum):
     return any(any(d.glob(pattern)) for d in milestone_evidence_dirs(mnum))
 
 
-def cmd_handover():
+def cmd_handoff():
     version, milestone = read_version()
     first = CFG.status.read_text(encoding="utf-8").splitlines()[0]
     st = json.loads(first)
@@ -324,7 +325,7 @@ def cmd_handover():
     tp_rows = parse_table(CFG.testplan)
     fm_rows = parse_table(CFG.feature_matrix)
 
-    print("== %s handover ==" % CFG.project)
+    print("== %s handoff ==" % CFG.project)
     print("version: %s (%s)  profile: %s" % (version, milestone, CFG.profile))
     print("status[%s]: %s" % (st["date"], st["summary"]))
     print("\n-- log.md latest block --")
@@ -412,7 +413,7 @@ def cmd_check():
                                              lim["status_max_lines"]))
 
     # log.md: block cap + first-block version sync with version.json
-    # (blocks the "bumped but never wrote the handover block" failure).
+    # (blocks the "bumped but never wrote the handoff block" failure).
     _, blocks = split_log_blocks(CFG.log.read_text(encoding="utf-8"))
     if len(blocks) > lim["log_max_blocks"]:
         errors.append("log.md has %d blocks > %d — run: make docs-archive"
@@ -599,7 +600,7 @@ NEXT_PHRASES = {
     "learning": {
         "bug_open_spec": "%(bid)s OPEN (spec issue) → request rev arbitration",
         "bug_open": "%(bid)s OPEN → triage yourself (dispatch tables in "
-                    "workflow/fail/); DUT suspicion needs rev signoff",
+                    "workflow/bugs.md); DUT suspicion needs rev signoff",
         "bug_fixing": "%(bid)s FIXING → fill root cause + fix commit, then "
                       "set FIX_READY",
         "bug_fix_ready": "%(bid)s FIX_READY → re-run the registered "
@@ -835,12 +836,15 @@ def cmd_pin_spec():
     print("pinned doc/spec.md: %s" % sha)
 
 
-def cmd_signoff():
+def cmd_signoff(mnum=None):
     """Read-only milestone signoff pre-check: print each machine condition
     PASS/FAIL with offenders, then the human spot-check list. Writing the
-    signoff file remains rev's job (workflow/review/rubric.md)."""
-    version, milestone = read_version()
-    mnum = milestone.lstrip("M")
+    signoff file remains rev's job (workflow/review.md). mnum defaults to
+    the current milestone (version.json) when not given."""
+    if mnum is None:
+        _, milestone = read_version()
+        mnum = milestone.lstrip("M")
+    milestone = "M%s" % mnum
     fails = []
 
     tp_rows = [r for r in parse_table(CFG.testplan)
@@ -895,26 +899,53 @@ def cmd_signoff():
     if not cond3:
         fails.append(3)
 
+    cond4 = check_kill_coverage(mnum)
+    if not cond4:
+        fails.append(4)
+
     signed = signoff_file_exists(mnum)
     print("[%s] signoff file (%s) in doc/evidence/v0.%s.*"
           % ("yes" if signed else "not yet", CFG.signoff_glob.format(m=mnum),
              mnum))
 
     print("\nHuman spot checks (rev-led, recorded in the signoff file — "
-          "workflow/review/rubric.md):")
-    print("  4. coverage closure ≠ risk closure: verify 2-3 hit bins were "
+          "workflow/review.md):")
+    print("  5. coverage closure ≠ risk closure: verify 2-3 hit bins were "
           "hit by the intended scenario; re-read 1 waived hole")
-    print("  5. guards: make guards FILES=<touched> lists the review "
+    print("  6. guards: make guards FILES=<touched> lists the review "
           "scope; falsify at least one (re-introduce its defect, see red)")
-    print("  6. open SPEC_ISSUE list empty, or each entry has a written "
+    print("  7. open SPEC_ISSUE list empty, or each entry has a written "
           "acceptance rationale")
-    print("  7. accepted debt: each ACCEPTED row's REV rationale is "
+    print("  8. accepted debt: each ACCEPTED row's REV rationale is "
           "falsifiable; carry-overs re-arbitrated, never auto-extended")
-    print("  8. chain audit answered: paste one run into the signoff "
+    print("  9. chain audit answered: paste one run into the signoff "
           "record; disposition per gap class (report follows)")
     print("")
     cmd_chain_audit()
     return 1 if fails else 0
+
+
+def check_kill_coverage(mnum):
+    """Invariant 5's machine backing: no kill, no trust. A checker that has
+    never been proven able to go red is a hypothesis, not evidence — this
+    checks doc/bugs.md for at least one KILL row (status=KILL) tagged to
+    this milestone (summary contains the bare milestone token, e.g. "M2").
+    Deliberately a minimum, not a per-checker-class census: there is no
+    canonical registry of "every checker this milestone touched" to
+    enumerate against, so whether the KILL set is actually complete stays a
+    human call at rubric review (workflow/review.md, the kill-coverage
+    question) — this only catches the milestone with zero kills at all."""
+    tag = "M%s" % mnum
+    hits = [r.get(CFG.C["bug_id"], "?") for r in parse_table(CFG.bugs)
+            if r.get(CFG.C["bug_status"], "").strip() == "KILL"
+            and re.search(r"\b%s\b" % re.escape(tag),
+                          r.get(CFG.C["bug_summary"], ""))]
+    ok = bool(hits)
+    print("[%s] 4. kill coverage: >=1 KILL row tagged %s (%s)"
+          % ("PASS" if ok else "FAIL", tag,
+             ", ".join(hits) if hits else
+             "none — no checker proven able to fail this milestone"))
+    return ok
 
 
 def cmd_chain(rid):
@@ -985,8 +1016,8 @@ SPEC_SEC_RE = re.compile(r"(?:^#{1,6}\s*|§)(\d+(?:\.\d+)*)", re.M)
 
 
 def chain_gaps():
-    """Break-link computation shared by --chain-audit (audit view) and
-    --explore (planning view)."""
+    """Break-link computation shared by cmd_chain_audit() (part of bare
+    --check) and --explore (planning view)."""
     spec_text = CFG.spec.read_text(encoding="utf-8", errors="replace")
     secs = set(SPEC_SEC_RE.findall(spec_text))
     titles = dict(re.findall(r"^#{1,6}\s*(\d+(?:\.\d+)*)\s+(.+)$",
@@ -1134,27 +1165,29 @@ def main():
     global CFG
     parser = argparse.ArgumentParser(
         description="iverif doc mechanical layer")
-    parser.add_argument("--handover", action="store_true",
-                        help="print the handover summary")
+    parser.add_argument("--handoff", action="store_true",
+                        help="print the handoff summary")
     parser.add_argument("--next", action="store_true",
                         help="mechanically derive the next-action list")
     parser.add_argument("--check", action="store_true",
-                        help="doc structure + evidence-chain guards")
+                        help="doc structure + chain audit; combine with "
+                             "--scen or --milestone to narrow the view")
+    parser.add_argument("--scen", metavar="SCEN",
+                        help="with --check: one scenario's full evidence "
+                             "chain instead of the whole-repo check")
+    parser.add_argument("--milestone", metavar="M",
+                        help="with --check: milestone signoff precheck "
+                             "(machine conditions + kill coverage + human "
+                             "spot-check list) instead of the whole-repo "
+                             "check")
     parser.add_argument("--archive", action="store_true",
                         help="roll archives (log/status/bugs/waivers)")
     parser.add_argument("--pin-spec", action="store_true",
                         help="re-pin spec.md sha256")
-    parser.add_argument("--signoff", action="store_true",
-                        help="print milestone signoff machine conditions")
-    parser.add_argument("--chain", metavar="SCEN",
-                        help="print a scenario's full evidence chain")
-    parser.add_argument("--repro", metavar="SCEN",
-                        help="print a scenario's replay command")
     parser.add_argument("--guards", nargs="+", metavar="PATH",
                         help="print regression_guards binding these paths")
-    parser.add_argument("--chain-audit", action="store_true",
-                        help="whole-graph break-link audit "
-                             "(spec↔testplan↔matrix↔evidence)")
+    parser.add_argument("--repro", metavar="SCEN",
+                        help="print a scenario's replay command")
     parser.add_argument("--explore", action="store_true",
                         help="planning view: spec subsections no scenario "
                              "cites (candidate testplan rows)")
@@ -1165,21 +1198,22 @@ def main():
     if args.archive:
         cmd_archive()
     if args.check:
-        sys.exit(cmd_check())
-    if args.signoff:
-        sys.exit(cmd_signoff())
-    if args.chain:
-        cmd_chain(args.chain)
-    if args.repro:
-        cmd_repro(args.repro)
+        if args.scen:
+            cmd_chain(args.scen)
+        elif args.milestone:
+            sys.exit(cmd_signoff(args.milestone.lstrip("M")))
+        else:
+            struct_rc = cmd_check()
+            audit_rc = cmd_chain_audit()
+            sys.exit(struct_rc or audit_rc)
     if args.guards:
         cmd_guards(args.guards)
-    if args.chain_audit:
-        sys.exit(cmd_chain_audit())
+    if args.repro:
+        cmd_repro(args.repro)
     if args.explore:
         cmd_explore()
-    if args.handover:
-        cmd_handover()
+    if args.handoff:
+        cmd_handoff()
     if args.next:
         cmd_next()
     if not any(vars(args).values()):

@@ -1,5 +1,8 @@
-# CI hard gate: doc structure + evidence chain + framework-snapshot
-# integrity. Simulation gating stays in the local VM (no EDA licenses here).
+# CI hard gate: doc structure + evidence chain + canon selftest.
+# Simulation gating stays in the local VM (no EDA licenses here).
+# 0.8.0: the fw-check step retired with fwsync — upstream files are no longer
+# hash-pinned, so there is no drift state to fail on. selftest replaces it as
+# the "the machinery still works on this repo's data" gate.
 name: ci
 on:
   push:
@@ -9,9 +12,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: docs-check
+      - name: check (docs + chain audit)
         run: python3 scripts/docs.py --check
-      - name: handover smoke (guard scripts parse all paths without crashing)
-        run: python3 scripts/docs.py --handover
-      - name: fw-check (vendored framework files must be unmodified)
-        run: python3 scripts/fwsync.py --check
+      - name: handoff smoke (guard scripts parse all paths without crashing)
+        run: python3 scripts/docs.py --handoff
+      - name: selftest (canon scripts + contract fuses)
+        run: cd scripts/tests && python3 -m unittest discover

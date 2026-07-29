@@ -12,7 +12,7 @@
 #               merge the extra .vdb in the cov report (pattern below).
 #   clean-before-regress - stale .daidir/csrc from a different option set
 #               (e.g. lint) corrupts incremental builds (VFS_SDB_ERROR class);
-#               regress.py already cleans first.
+#               a project-owned regress loop must clean first (pattern below).
 #   ld-colon  - ':$(LD_LIBRARY_PATH)' with the parent var empty leaves a
 #               trailing empty element; NPI-based tools (xdebug) refuse
 #               to initialize on it (pulp BUG-0030) => conditional append.
@@ -20,8 +20,8 @@
 #               UVM_ERROR and do not change the simv exit code; the native
 #               "Summary: N assertions, ..." line this option prints is the
 #               only structured proof of assertion cleanliness, and
-#               evidence.py/regress.py fail-closed without it (ppa BUG-014).
-#               Never drop it from the run rule.
+#               evidence.py / svacheck.py --judge fail-closed without it
+#               (ppa BUG-014). Never drop it from the run rule.
 
 # ---- EDA environment fallback (non-interactive shells skip ~/.bashrc) ----
 export VCS_HOME        ?= /home/synopsys/vcs-mx/O-2018.09-SP2
@@ -42,6 +42,9 @@ export PATH := $(VCS_HOME)/bin:$(VERDI_HOME)/bin:$(SCL_HOME)/linux64/bin:$(PATH)
 # xverif toolkit (VM instruments; NOT on PATH — call via full path).
 # Probe with `test -x $(XVERIF_ROOT)/tools/xdebug`, never `command -v`;
 # xdebug/xcov need VERDI_HOME exported first (both handled above).
+# Its tested Verdi baseline (V-2023.12) is newer than this VM's Verdi 2018 —
+# if a tool misbehaves, record it as a TOOL_ENV failure record rather than
+# debugging blind.
 export XVERIF_ROOT ?= /home/open_tools/xverif
 
 OUT  ?= out
@@ -89,3 +92,23 @@ endif
 # Upstream TBs ending in $stop hang batch runs at the interactive prompt —
 # drive them with a ucli script:  echo "run; exit" > $(OUT)/x.ucli ;
 # $(OUT)/simv -ucli -i $(OUT)/x.ucli -l $(OUT)/<test>_<seed>.log
+#
+# regress (project-owned; canon only owns the one-log verdict primitive —
+# svacheck.py --judge, invoked below — everything else here is yours to
+# customize: parallelism, COV=1 policy, summary format):
+#
+#   regress:
+#       $(MAKE) clean                                    # avoid VFS_SDB_ERROR
+#       @rc=0; \
+#       while read -r test seed; do \
+#         [ -z "$$test" ] && continue; \
+#         case "$$test" in \#*) continue;; esac; \
+#         $(MAKE) run TEST=$$test SEED=$$seed COV=$(COV) \
+#           OUT=out/$$test_$$seed || true; \
+#         python3 ../scripts/svacheck.py --judge out/$$test_$$seed/*.log \
+#           || rc=1; \
+#       done < regress/regress.list; \
+#       exit $$rc
+#
+# A nonzero `make run` exit should force FAIL even if the log looks clean —
+# an abnormal process exit is never evidence of a clean run.

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-# Shared configuration + helpers for the iverif kernel scripts.
-# Canonical home: iverif-workflow/kernel/. Project repos carry a hash-pinned
-# copy under scripts/ — do not edit the copy; improve the framework and pull.
+# Shared configuration + helpers for the scripts/ mechanical layer.
+# Canonical home: iverif-workflow/scripts/iverif_config.py. This is an
+# upstream file in a cloned project — local edits are your own to maintain.
 #
-# Every project-specific knob lives in <project-root>/iverif.json. The kernel
-# scripts stay byte-identical across projects; only this file's *inputs* vary.
+# Every project-specific knob lives in <project-root>/iverif.json. The
+# scripts stay identical across projects unless you edit them; only this
+# file's *inputs* vary.
 # stdlib-only, Python >= 3.8.
 import json
 import re
@@ -54,9 +55,11 @@ LIMIT_DEFAULTS = {
 }
 
 BUG_STATES = ("OPEN", "FIXING", "FIX_READY", "VERIFYING", "CLOSED",
-              "TB_BUG", "SPEC_CHANGED", "WONTFIX")
+              "TB_BUG", "SPEC_CHANGED", "WONTFIX", "KILL")
 # Terminal = lifecycle over, archivable; active bugs are never archived.
-BUG_DONE_STATES = ("CLOSED", "TB_BUG", "SPEC_CHANGED", "WONTFIX")
+# KILL rows are self-tests, not defects — terminal on creation, archivable
+# like any done state.
+BUG_DONE_STATES = ("CLOSED", "TB_BUG", "SPEC_CHANGED", "WONTFIX", "KILL")
 # ACCEPTED@M<n>: analyzed, rev-signed rationale, scheduled to milestone n.
 # Not terminal (never archived); signoff passes it only while unexpired.
 BUG_ACCEPTED_RE = re.compile(r"^ACCEPTED@M(\d+)$")
@@ -75,7 +78,7 @@ _PLAIN_BAD_RE = re.compile(r"\s*(Error|Fatal)\b")
 
 
 def log_verdict(text):
-    """Single source of truth for sim-log pass/fail across the kernel.
+    """Single source of truth for sim-log pass/fail across scripts/.
     UVM logs: report-summary ERROR/FATAL counts must be zero.
     Plain VCS logs (non-UVM TBs): completion banner present, no Error/Fatal
     lines. Returns "PASS" / "FAIL" / "NOSUMMARY"."""
@@ -191,9 +194,8 @@ class Config:
 def load_config():
     if not CONFIG_PATH.exists():
         sys.exit("iverif.json not found at project root: %s\n"
-                 "New project? Scaffold one with:\n"
-                 "  python3 <framework>/kernel/fwsync.py --init <dir> "
-                 "--profile learning --columns en" % CONFIG_PATH)
+                 "New project? git clone the framework repo, rename it, and "
+                 "copy its iverif.json as a starting point." % CONFIG_PATH)
     try:
         raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:

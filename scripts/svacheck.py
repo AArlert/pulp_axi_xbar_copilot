@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """SVA assertion-failure detection — the single judgment point shared by
-evidence.py and regress.py (ported from ppa-lite-copilot BUG-014, with the
-BUG-017/BUG-018 adversarial hardenings).
+evidence.py and any project-owned regress loop (via `--judge <log>`; see
+scripts/make/vcs-2018.mk's reference pattern). Ported from
+ppa-lite-copilot BUG-014, with the BUG-017/BUG-018 adversarial hardenings.
 
 ## Why this module exists
 
@@ -280,12 +281,21 @@ def judge(text, cfg, baseline=None):
 
 
 def main():
-    """Batch retro-scan: python3 scripts/svacheck.py [-q] [--no-baseline]
-    <log>... Exit 0 = all clean; 1 = at least one log with assertion
-    failures / baseline violations."""
+    """python3 scripts/svacheck.py --judge <log>: the one-log, two-leg
+    primitive (log_verdict + SVA layers, via judge()) that evidence.py and
+    any project-owned regress loop share — the single judgment point this
+    module exists to centralize. Prints PASS or FAIL <reason> to stdout;
+    exit code 0/1 tracks the verdict.
+
+    python3 scripts/svacheck.py [-q] [--no-baseline] <log>...: batch
+    retro-scan, SVA leg only (no UVM leg — for scanning old logs where the
+    UVM verdict is already known/irrelevant). Exit 0 = all clean; 1 = at
+    least one log with assertion failures / baseline violations."""
     ap = argparse.ArgumentParser(
-        description="SVA assertion failure / baseline retro-scan")
-    ap.add_argument("logs", nargs="+")
+        description="SVA assertion failure / baseline check")
+    ap.add_argument("--judge", metavar="LOG",
+                    help="two-leg PASS/FAIL verdict for exactly one log")
+    ap.add_argument("logs", nargs="*")
     ap.add_argument("-q", "--quiet", action="store_true",
                     help="print failures only")
     ap.add_argument("--no-baseline", action="store_true",
@@ -294,6 +304,22 @@ def main():
     args = ap.parse_args()
 
     cfg = load_config()
+
+    if args.judge:
+        baseline = None if args.no_baseline else load_baseline(cfg)
+        p = Path(args.judge)
+        if not p.exists():
+            print("FAIL log not found: %s" % args.judge)
+            sys.exit(1)
+        verdict, reason, _sva = judge(
+            p.read_text(encoding="utf-8", errors="replace"), cfg,
+            baseline=baseline)
+        print(verdict if not reason else "%s %s" % (verdict, reason))
+        sys.exit(0 if verdict == "PASS" else 1)
+
+    if not args.logs:
+        ap.error("either --judge LOG or one or more logs is required")
+
     baseline = None if args.no_baseline else load_baseline(cfg)
     if baseline and not args.quiet:
         print("# baseline: total_min=%d attempted_min=%d (%s)"
