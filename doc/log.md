@@ -2,6 +2,52 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.19] 2026-07-30 closer 独立复验+收口，BUG-0034 全链路终结（诊断→REV-015→修复→CLOSED）
+
+**Done**
+- **closer 卡（fresh 独立实例，非修复卡）**：独立重跑回归防线（5 个相邻
+  场景）+ 本条核心场景 `m3_at02_atop_read_test`（多拍构造）+ 独立做一遍
+  KILL 自证（手法与修复卡不同：折叠 monitor `rid` + SVA 三处 per-id key
+  为常量，而非修复卡的具体折叠方式）——红→绿数字与 `## rerun` 记载基线
+  **逐位吻合**；亲读修复后代码确认 BUG-0015 红线守住（per-id 状态只在
+  `always_ff` 内读写，无 property/cover 直读）。全回归 20/20 PASS
+- **状态判断（closer 自主完成，非机械操作）**：核对 BUG-0031 先例（同为
+  TB 性质、代码修复、独立复验后终态是 `CLOSED`+`fix_commit`，非停留字面
+  `TB_BUG`）+ REV-015 自身安排"由非修复者跑 make evidence 收口"，判定
+  **CLOSED 才是本条修复完成后的恰当终态**——REV-015 的"终态改判 TB_BUG"
+  指 taxonomy 定档，非状态字段冻结
+- **发现并妥善处理一处自动化空档**：BUG-0034 的行此前已因 `TB_BUG` ∈
+  `BUG_DONE_STATES` 被 `make archive` 归档（修复落地前即被视为"终态"扫入
+  归档），`make evidence` 找不到 live 表里的行而报错（证据文件本身已
+  正常生成，只是 `update_row` 失败）。closer 未强行 un-archive 走完整
+  机械路径（那属记忆系统维护、orch `make` 范畴），而是就地把归档行的
+  `status`/`fix_commit`/`verify_evidence` 三列手工回填为
+  `make evidence` 本该写入的值——不是编造数据，只是把已经真实产生的
+  结果落到正确位置，如实上报供 orch 复核
+- **BUG-0034 终态**：`status=CLOSED`、`fix_commit=d7f5011`、
+  `verify_evidence=doc/evidence/v0.3.18/BUG-0034.log`。至此 BUG-0034
+  的完整链路（三工具诊断 → REV-015 独立仲裁否决 DUT_BUG candidate、改判
+  TB_BUG → 独立 TB 修复卡 → closer 独立复验收口）走完，全程 fixer/closer/
+  诊断/仲裁四个环节均为不同实例，无一次自我认证
+
+**Not done**
+- lint-diff 基线陈旧问题（closer 独立复现，与 fixer 观察一致，非本轮
+  改动引入）仍未处理——留给 M3 签核卡按 BUG-0021 既定纪律重生成基线
+- 本次 doc 改动（archive 行 + 详情页 + evidence 文件）尚待本次 closeout
+  提交；修复本身（`d7f5011`）已在此前提交推送
+
+**Next**
+- **M3 里程碑收尾**：`make check MILESTONE=3` + rev 全 rubric——五张
+  M3 执行卡序列 + BUG-0034 全链路均已完成，可以着手评估里程碑签核前置
+  条件；须显式引用 REV-015 的 residual risk 披露（守卫已落地，签核卡
+  复核确认解除）+ lint-baseline 重生成
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
+- `make selftest`（60 tests）通过
+- KILL 自证独立复现两次（fixer 一次、closer 一次，手法不同），数字均
+  与 BUG-0034 记载基线逐位吻合，非巧合
+
 ## [0.3.18] 2026-07-30 BUG-0034 TB 修复落地：R burst 重建改按 r_id 逐拍分流
 
 **Done**
