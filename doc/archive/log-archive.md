@@ -1,4 +1,49 @@
 # Work log archive
+## [0.3.13] 2026-07-29 卡③：BUG-0018 修复落地——scoreboard 增 AW/AR 接受事件流，M2-OR01/WO01 覆盖率转绿
+
+**Done**
+- **卡③（DV fixer，L2）**：落地 BUG-0018——`tb/slvport_agent.sv` 新增一路
+  payload-free 的 `req_accept_ap`，在 AW 接受（写）/ AR 接受（读）当拍即
+  发布，与现有携带完整 wdata/wstrb、在 `w_last` 才发布的 `req_ap` **并存**
+  （不删除、不改语义）；`tb/scoreboard_refmodel.sv` 新增
+  `write_slv_req_accept` handler，把 `or_open_q`/`worder_pend` 注册与
+  `stall_cls`/`sample_tx_limit` 采样从"迟到的 w_last"搬到"真实的 AW/AR
+  接受时刻"，§5.2.3 完成序判决本体、`accept_time`/`or_key` 语义均未改动；
+  `tb/xbar_env.sv` 接线新 analysis port。刷新 M2-OR01/M2-WO01 证据
+  （`make evidence` 对已 ✅ 场景的重新注册验证生效）
+- **实测结果**：`x_state_dir`（M2-OR01）由 16.67%→**33.33%**，
+  `[stalled][write]` 格由空转非空；`cp_w_contention`（M2-WO01）由
+  50.00%→**100.00%**（`multi_source_contended` 精确填满）；两次运行
+  `SB_SUMMARY` 均 `mismatch=0`、`UVM_ERROR:0`；全回归 15/15 + 交叉核对
+  `m3_cfg02_reconfig_test` PASS；`m2_or03_guard_test` 历史见证（collide
+  192/192、264/264，stack_diff 24/24，w/r_lost 456/162）字节级不变；
+  `cg_tx_limit`（TL01 80.00%/TL02 53.33%）无回归
+- **fixer 如实上报一处判据文字问题（未自行处置）**：REV-011 §3.3 原文
+  "`cp_stall_state` 由 33.33% 上升"对 M2-OR01 **几何上不可达**——该场景的
+  构造只触达 `SC_STALLED` 一个 stall class（无 `SC_SAME_TGT`/`SC_DIFF_DIR`），
+  `cp_stall_state` 在此场景的结构性天花板本就是 33.33%（读腿在修复前就已
+  达到），写腿补齐只会体现在更细的 `x_state_dir` 交叉 bin（已验证达标），
+  不可能让粗粒度的 `cp_stall_state` 再往上"升"。fixer 未擅自改判据、未
+  隐瞒，留给 closer 复核
+
+**Not done**
+- BUG-0018 状态未变（仍 `ACCEPTED@M3`，closer≠fixer，fixer 未动状态字段）
+- REV-011 §3.3 的 `cp_stall_state` 子句需要 closer 复核确认后，在关闭记录
+  里写明"几何不可达、以 x_state_dir/[stalled][write] 为实质判据"的订正
+- 五张 M3 执行卡序列中，④⑤仍未派（多配置基建 + M3-CF01；M3-CF02/03/04 +
+  M3-AT02）
+
+**Next**
+- 提交本次改动后派 closer 卡：独立复验（含亲自重新推导 cp_stall_state 的
+  几何论证）、通过后走 `make evidence BUG=BUG-0018 ...` 转 CLOSED
+- 卡④：多配置基建 + M3-CF01（L2，须先于⑤）→ ⑤ M3-CF02/03/04 + M3-AT02（L1）
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
+- `make selftest`（60 tests）通过
+- 判决输入管线改动的回归面广：15/15 canonical regress + 4 条交叉核对场景
+  全 PASS，历史 covergroup/SVA 见证（BUG-0023/0024/0027 相关）数值不变
+
 ## [0.3.12] 2026-07-29 卡②：BUG-0024 (b) 收窄 + M3-OR05 落地，closer 转 WONTFIX
 
 **Done**

@@ -1,3 +1,4 @@
+{"date": "2026-07-30", "version": "0.3.17", "summary": "落地 5 个 M3 covergroup（真接现有 SVA 事实源，不重复判断）；BUG-0034 三工具诊断→rev(REV-015)否决 DUT_BUG candidate、改判 TB_BUG；BUG-0035 TOOL_ENV WONTFIX"}
 {"date": "2026-07-30", "version": "0.3.16", "summary": "五张 M3 执行卡收官：M3-CF02/03/04+AT02 转绿，cg_cfg_point 落地，KILL-0002 注伤自证；新发 BUG-0034（AT02 多拍 R 交织，DUT/TB 未决，已合法绕过不阻塞）"}
 {"date": "2026-07-30", "version": "0.3.15", "summary": "落地 M3 多配置构建机制（TEST 名选点+独立构建产物+自报配置+基线不变，tb_top.md C5.1-C5.6）+ 首个消费场景 M3-CF01（cfgA 1x8 NO_LATENCY）转绿"}
 {"date": "2026-07-29", "version": "0.3.14", "summary": "closer 独立复推 cp_stall_state 几何论证（与 fixer 结论一致）、填 fix_commit=7a1c912，BUG-0018 转 CLOSED"}
@@ -6,4 +7,3 @@
 {"date": "2026-07-29", "version": "0.3.11", "summary": "closer 卡（新独立实例）填 fix_commit=482a47e，独立复验通过后关闭 BUG-0025/BUG-0031"}
 {"date": "2026-07-29", "version": "0.3.10", "summary": "BUG-0025+0031 修复落地+新发 BUG-0033→REV-014 仲裁 SPEC_CHANGED→应用；ERR_RDATA 校正转绿 M3-DE01/DE02/OR04+KILL-0001；closer 复验全过但 fix_commit 空挡住关闭，已如实回退"}
 {"date": "2026-07-29", "version": "0.3.9", "summary": "应用 P-REV012-1：arch 起草→REV-013 门禁 conditional pass（M3/M4 收窄为 M3）→orch 应用。spec §4 新增 clause 7 + §6 交叉引用，重 pin，BUG-0032 约束归宿落地 spec 正文"}
-{"date": "2026-07-29", "version": "0.3.8", "summary": "派 rev 仲裁卡 REV-012：BUG-0032→SPEC_CHANGED（approve P-REV012-1，待 arch 起草文本）；否决 §4/§5.3 自引用提案（归 FB-24）；3 处 orch 自标越界均未越界，顺带修复其中一处查出的 design-prompt 死指针"}

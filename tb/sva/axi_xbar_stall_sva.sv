@@ -146,10 +146,15 @@ module axi_xbar_stall_sva
   // region whose LIVE-table target equals the V1 idx (CFG01_MOVED_IDX) — can only
   // be true if the module decoded the *runtime* table (V1), never the compile-time
   // V0 (which routes this region to idx 0). Structurally 0 before the fix.
-  wire aw_moved_live_v1 = aw_hit && (aw_addr >= MOVED_LO) && (aw_addr < MOVED_HI)
-                          && (aw_tgt == CFG01_MOVED_IDX);
-  wire ar_moved_live_v1 = ar_hit && (ar_addr >= MOVED_LO) && (ar_addr < MOVED_HI)
-                          && (ar_tgt == CFG01_MOVED_IDX);
+  // aw_moved_region = an accepted-decodable transaction that fell in the moved-
+  // rule region, WHATEVER target it resolved to (V0 idx 0 or V1 CFG01_MOVED_IDX).
+  // aw_moved_live_v1 (the c_bug31 cover source, value UNCHANGED by this refactor —
+  // just factored through the region fold so cg_live_addr_map can reuse the region
+  // test without a second copy) additionally requires the target be the V1 idx.
+  wire aw_moved_region  = aw_hit && (aw_addr >= MOVED_LO) && (aw_addr < MOVED_HI);
+  wire ar_moved_region  = ar_hit && (ar_addr >= MOVED_LO) && (ar_addr < MOVED_HI);
+  wire aw_moved_live_v1 = aw_moved_region && (aw_tgt == CFG01_MOVED_IDX);
+  wire ar_moved_live_v1 = ar_moved_region && (ar_tgt == CFG01_MOVED_IDX);
 
   logic [BUCKET_W-1:0] aw_bkt, ar_bkt;
   assign aw_bkt = aw_id[BUCKET_W-1:0];
@@ -519,5 +524,43 @@ module axi_xbar_stall_sva
     aw_valid && aw_ready && aw_moved_live_v1);
   c_bug31_livev1_ar: cover property (@(posedge clk_i) disable iff (!rst_ni)
     ar_valid && ar_ready && ar_moved_live_v1);
+
+  // ---- functional-coverage instrumentation bridge (functional_coverage.md §4:
+  // cg_default_port_tracked / cg_live_addr_map / cg_miss_order's ERRBUCKET bin).
+  // These three covergroups are DEFINED centrally in tb/functional_coverage.sv;
+  // here we only hand them the SAME already-folded fact signals the BUG-0025 /
+  // BUG-0031 cover properties above read — so each fact is computed once, in one
+  // place, and expressed twice in complementary forms (the covers keep their
+  // assertion-local witness; the covergroups give the centralized FCOV_SUMMARY
+  // report). No tracking-table / decode logic is re-derived here.
+  //   - aw_via_default / ar_via_default : same wire as c_bug25_default (BUG-0015-
+  //     safe: a fold of the always_comb aw_hit/aw_rule_hit, not an always_ff read).
+  //   - aw_tgt / ar_tgt on aw_moved_region: the always_comb decode target; the
+  //     covergroup's new_version_idx bin is reachable only when this equals the V1
+  //     idx, i.e. the live table was really used (mirrors c_bug31's intent).
+  //   - aw_err_bucket_now / ar_err_bucket_now : same always_comb fold as
+  //     c_bug25_errbucket (already folded per BUG-0015; not the raw table fn).
+  // Pure additive instrumentation: it changes no assert/cover above, and the
+  // c_bug25_*/c_bug31_* hit counts stay bit-identical (same wires, same events).
+  // The single fcov collector is reached via its static handle, published in its
+  // new() (one scoreboard builds exactly one fcov); before that (pre-build) the
+  // handle is null and this block is inert — no transaction is accepted that early.
+  always @(posedge clk_i) if (rst_ni &&
+      xbar_tb_pkg::xbar_functional_coverage::m_probe != null) begin
+    if (aw_valid && aw_ready && aw_via_default)
+      xbar_tb_pkg::xbar_functional_coverage::m_probe.sample_default_port_tracked(1'b1);
+    if (ar_valid && ar_ready && ar_via_default)
+      xbar_tb_pkg::xbar_functional_coverage::m_probe.sample_default_port_tracked(1'b1);
+    if (aw_valid && aw_ready && aw_moved_region)
+      xbar_tb_pkg::xbar_functional_coverage::m_probe.sample_live_addr_map(aw_tgt);
+    if (ar_valid && ar_ready && ar_moved_region)
+      xbar_tb_pkg::xbar_functional_coverage::m_probe.sample_live_addr_map(ar_tgt);
+    if (aw_valid && aw_ready && aw_err_bucket_now)
+      xbar_tb_pkg::xbar_functional_coverage::m_probe.sample_miss_order(
+          xbar_tb_pkg::xbar_functional_coverage::MO_ERRBUCKET);
+    if (ar_valid && ar_ready && ar_err_bucket_now)
+      xbar_tb_pkg::xbar_functional_coverage::m_probe.sample_miss_order(
+          xbar_tb_pkg::xbar_functional_coverage::MO_ERRBUCKET);
+  end
 
 endmodule

@@ -138,6 +138,19 @@ class xbar_scoreboard extends uvm_scoreboard;
   int unsigned decerr_resp_cnt;
   int unsigned decerr_order_violation_cnt;
 
+  // cg_miss_order same_full_id_hit_miss_coexist (functional_coverage.md §4, spec
+  // §5.2.6 clause 2.a): reuse the err_order_q we already maintain — after a push,
+  // does this (port,dir,FULL slv-id) key now owe BOTH a hit (is_err=0) and a miss
+  // (is_err=1) response at once? That IS "同一完整 ID 命中笔+未命中笔并存" reached.
+  // Pure read of already-computed state; no new tracking structure.
+  local function bit err_order_coexist(input int unsigned rk);
+    bit has_hit, has_miss;
+    if (!err_order_q.exists(rk)) return 1'b0;
+    foreach (err_order_q[rk][i])
+      if (err_order_q[rk][i]) has_miss = 1'b1; else has_hit = 1'b1;
+    return has_hit && has_miss;
+  endfunction
+
   int unsigned route_match_cnt;
   int unsigned route_mismatch_cnt;
   int unsigned resp_match_cnt;
@@ -379,9 +392,27 @@ class xbar_scoreboard extends uvm_scoreboard;
     // by their own live table (§3.1/§3.2 rule move, §3.3 default port).
     begin
       cfg_snap_t snap;
+      bit rule_hit;
+      int unsigned rule_port;
       snap = version_at(ro.accept_time);
       hit  = xbar_types_pkg::decode_mst_port(ro.addr, snap.addr_map,
                snap.en_def[ro.port_idx], snap.def_port[ro.port_idx], exp_port);
+      // cg_decode_error (functional_coverage.md §4, spec §3.2/§3.3/§4.2):
+      // classify this transaction's decode destination at the reference model's
+      // decode instant. HIT_RULE vs MISS_DEFAULT is told apart by re-calling the
+      // SAME single-source decode function with the default master port forced off
+      // (rule-only) — not a second, hand-written decoder. A hit that no longer
+      // hits with default disabled was routed via the default master port.
+      if (!hit)
+        fcov.sample_decode_error(xbar_functional_coverage::DR_MISS_ERR_SLV,
+                                 ro.is_write, ro.port_idx);
+      else begin
+        rule_hit = xbar_types_pkg::decode_mst_port(ro.addr, snap.addr_map,
+                     1'b0, '0, rule_port);
+        fcov.sample_decode_error(rule_hit ? xbar_functional_coverage::DR_HIT_RULE
+                                          : xbar_functional_coverage::DR_MISS_DEFAULT,
+                                 ro.is_write, ro.port_idx);
+      end
     end
     if (!hit) begin
       // spec §4 decode error: unmapped address with no enabled default master
@@ -405,6 +436,17 @@ class xbar_scoreboard extends uvm_scoreboard;
                            ro.id[xbar_types_pkg::ID_W_SLV-1:0])]++;
       err_order_q[resp_key(ro.port_idx, ro.is_write,
                            ro.id[xbar_types_pkg::ID_W_SLV-1:0])].push_back(1'b1);
+      // cg_decerr_shape (functional_coverage.md §4, spec §4.3): record the
+      // err_slv transaction's burst-length band (AxLEN==0 vs >0) × direction, so
+      // §4.3's beat-count判据 is shown exercised beyond the trivial single-beat
+      // burst. Same AxLEN datum (ro.len) the SB_DECERR_RBEATS check consumes.
+      fcov.sample_decerr_shape(ro.len != 0, ro.is_write);
+      // cg_miss_order same_full_id_hit_miss_coexist: this miss just joined the
+      // (port,dir,full-id) err_order_q — if a hit is also owed on the same key,
+      // the clause-2.a coexistence corner is reached (see err_order_coexist).
+      if (err_order_coexist(resp_key(ro.port_idx, ro.is_write,
+                                     ro.id[xbar_types_pkg::ID_W_SLV-1:0])))
+        fcov.sample_miss_order(xbar_functional_coverage::MO_COEXIST);
       return;
     end
 
@@ -438,6 +480,12 @@ class xbar_scoreboard extends uvm_scoreboard;
     // normal (is_err=0) one, queued in accept order (see err_order_q comment).
     err_order_q[resp_key(ro.port_idx, ro.is_write,
                          ro.id[xbar_types_pkg::ID_W_SLV-1:0])].push_back(1'b0);
+    // cg_miss_order same_full_id_hit_miss_coexist (mirror of the miss-branch
+    // check): this hit joining the key while a miss is already owed for the same
+    // full id is the same clause-2.a coexistence corner, seen from the other side.
+    if (err_order_coexist(resp_key(ro.port_idx, ro.is_write,
+                                   ro.id[xbar_types_pkg::ID_W_SLV-1:0])))
+      fcov.sample_miss_order(xbar_functional_coverage::MO_COEXIST);
 
     // ---- C6.3 (spec §6.3, M2-AT01): an atomic load owes its source port
     // *two* responses — the B (already registered by the write-direction

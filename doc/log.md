@@ -2,6 +2,64 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.17] 2026-07-30 5 个 M3 covergroup 落地；BUG-0034 三工具诊断→rev 否决 DUT_BUG、改判 TB_BUG
+
+**Done**
+- **卡⑥（DV，L2）**：落地 `doc/design-prompt/functional_coverage.md` §4
+  规划、`functional_coverage.sv` 此前未实现的 5 个 M3 covergroup
+  （`cg_decode_error`/`cg_decerr_shape`/`cg_miss_order`/
+  `cg_default_port_tracked`/`cg_live_addr_map`）——按用户明确原则，真正
+  实现而非走"文档指向已有 SVA cover"的捷径；两个与既有 `stall_sva.sv`
+  SVA cover（`c_bug25_default_*`/`c_bug31_livev1_*`）重叠的项，接的是
+  同一信号事实源（桥接静态句柄 `m_probe`，喂入已折叠的 always_comb/wire
+  事实，BUG-0015 安全），不重复实现判断逻辑；判决 assert/property 条件
+  零改动。回归防线逐位对照 HEAD 通过；全回归 20/20 PASS。副产物登记
+  **BUG-0035**（TOOL_ENV，回归防线期间手工 stash+增量编译触发
+  `VFS_ZLIB_ERROR`，clean rebuild 不复现，同 `scripts/regress.py` 已知
+  VFS_SDB_ERROR class；orch 收卡时发现该卡自行设成 CLOSED——违反
+  closer≠fixer 且证据列不合规，改判 **WONTFIX**，对齐 BUG-0017/BUG-0030
+  同类先例）
+- **卡⑦（DV 诊断卡）**：对 BUG-0034 用 xdebug（改用 `event.export`，
+  非上一轮踩坑的 `value.at`）+ xwave（独立实现交叉核对）+ xtrace（RTL
+  因果）三工具诊断，物理层证据扎实（两个独立 FSDB 解析器逐拍一致：id0
+  4 拍、id8 单拍插入其中）——但**诊断卡自己给出的 taxonomy 结论（DUT_BUG
+  candidate）经 rev 独立复核被否决**（见下）
+- **rev 卡 → REV-015**：独立复核 100% 采信诊断卡的 RTL/波形观测，但指出
+  其援引的"spec §1/§5.5.3 禁止读交织"在 spec 钉定本中**不存在**——真实
+  条款只在 §5.5.1 禁 **W** 通道交织，R/响应侧 §5.1.4 + 上游
+  `axi_mux.md:18` **明文允许**不同完整 ID 响应交织（框定为性能特性），
+  §5.5.4 明文禁止 checker 断言 round-robin 发生序。逐拍代入诊断卡自己
+  的表格，证明四路"证据"是 `slvport_agent.sv` monitor 与 `axi_chan_sva`
+  bind SVA **共模同一"R 永不交织"重建假设**在合法交织下的必然误报，非
+  DUT 协议违反；物理层收发计数全对、无数据丢失。**taxonomy 改判
+  TB_BUG，不发起上游 issue、不走 P-xxx**——DUT 行为与其自身上游文档
+  （`axi_demux.md` §Atomic Transactions 原文承认此交互"额外假冲突
+  stall"，从未框定为正确性问题）一致，二者无矛盾
+- `doc/bugs/BUG-0034.md` 按 fl_schema_enforce 的英文标准 section
+  （symptom/first_anomaly/taxonomy/rca/fix/rerun/regression_guard/
+  similar）重新组织（原文件全用中文自定 header，状态转终态后触发
+  schema 检查失败，趁此机会订正结构，内容无损）
+
+**Not done**
+- BUG-0034 修复（r_id 感知的 R burst 重建）未派发——按 REV-015 要求须
+  独立 TB 修复卡（不与诊断/落地同链），随后由非修复者复跑收 evidence
+- 遗留的 M3-AT02 多拍交织覆盖缺口尚未在任何签核记录里正式披露（REV-015
+  Item 4 要求 M3 签核时须记 residual risk 或 `ACCEPTED@M<n>`）
+
+**Next**
+- 派独立 TB 修复卡：`tb/slvport_agent.sv`/`tb/sva/axi_chan_sva.sv` 的 R
+  burst 重建改按逐拍 r_id 分流；修复后恢复 M3-AT02 多拍两腿复跑转绿，
+  regression_guard 由非修复者收口
+- M3 里程碑收尾：`make check MILESTONE=3` + rev 全 rubric，须显式引用
+  REV-015 的 residual risk 披露
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap；
+  `doc/bugs/BUG-0034.md` schema 校验通过）
+- `make selftest`（60 tests）通过
+- rev 独立复核的方法学价值：证明"三个工具观测一致"不等于"观测解读正确"
+  ——这正是派发 REV-015 时特意提醒的陷阱，实测命中
+
 ## [0.3.16] 2026-07-30 卡⑤（五张 M3 执行卡收官）：M3-CF02/03/04+AT02 转绿
 
 **Done**
@@ -124,49 +182,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
   archive）
 - closer≠fixer 落地形态：关闭实例独立重跑+独立推导，未采信任何转述数字或
   结论，最终结论与 fixer 一致但过程完全独立
-
-## [0.3.13] 2026-07-29 卡③：BUG-0018 修复落地——scoreboard 增 AW/AR 接受事件流，M2-OR01/WO01 覆盖率转绿
-
-**Done**
-- **卡③（DV fixer，L2）**：落地 BUG-0018——`tb/slvport_agent.sv` 新增一路
-  payload-free 的 `req_accept_ap`，在 AW 接受（写）/ AR 接受（读）当拍即
-  发布，与现有携带完整 wdata/wstrb、在 `w_last` 才发布的 `req_ap` **并存**
-  （不删除、不改语义）；`tb/scoreboard_refmodel.sv` 新增
-  `write_slv_req_accept` handler，把 `or_open_q`/`worder_pend` 注册与
-  `stall_cls`/`sample_tx_limit` 采样从"迟到的 w_last"搬到"真实的 AW/AR
-  接受时刻"，§5.2.3 完成序判决本体、`accept_time`/`or_key` 语义均未改动；
-  `tb/xbar_env.sv` 接线新 analysis port。刷新 M2-OR01/M2-WO01 证据
-  （`make evidence` 对已 ✅ 场景的重新注册验证生效）
-- **实测结果**：`x_state_dir`（M2-OR01）由 16.67%→**33.33%**，
-  `[stalled][write]` 格由空转非空；`cp_w_contention`（M2-WO01）由
-  50.00%→**100.00%**（`multi_source_contended` 精确填满）；两次运行
-  `SB_SUMMARY` 均 `mismatch=0`、`UVM_ERROR:0`；全回归 15/15 + 交叉核对
-  `m3_cfg02_reconfig_test` PASS；`m2_or03_guard_test` 历史见证（collide
-  192/192、264/264，stack_diff 24/24，w/r_lost 456/162）字节级不变；
-  `cg_tx_limit`（TL01 80.00%/TL02 53.33%）无回归
-- **fixer 如实上报一处判据文字问题（未自行处置）**：REV-011 §3.3 原文
-  "`cp_stall_state` 由 33.33% 上升"对 M2-OR01 **几何上不可达**——该场景的
-  构造只触达 `SC_STALLED` 一个 stall class（无 `SC_SAME_TGT`/`SC_DIFF_DIR`），
-  `cp_stall_state` 在此场景的结构性天花板本就是 33.33%（读腿在修复前就已
-  达到），写腿补齐只会体现在更细的 `x_state_dir` 交叉 bin（已验证达标），
-  不可能让粗粒度的 `cp_stall_state` 再往上"升"。fixer 未擅自改判据、未
-  隐瞒，留给 closer 复核
-
-**Not done**
-- BUG-0018 状态未变（仍 `ACCEPTED@M3`，closer≠fixer，fixer 未动状态字段）
-- REV-011 §3.3 的 `cp_stall_state` 子句需要 closer 复核确认后，在关闭记录
-  里写明"几何不可达、以 x_state_dir/[stalled][write] 为实质判据"的订正
-- 五张 M3 执行卡序列中，④⑤仍未派（多配置基建 + M3-CF01；M3-CF02/03/04 +
-  M3-AT02）
-
-**Next**
-- 提交本次改动后派 closer 卡：独立复验（含亲自重新推导 cp_stall_state 的
-  几何论证）、通过后走 `make evidence BUG=BUG-0018 ...` 转 CLOSED
-- 卡④：多配置基建 + M3-CF01（L2，须先于⑤）→ ⑤ M3-CF02/03/04 + M3-AT02（L1）
-
-**How verified**
-- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
-- `make selftest`（60 tests）通过
-- 判决输入管线改动的回归面广：15/15 canonical regress + 4 条交叉核对场景
-  全 PASS，历史 covergroup/SVA 见证（BUG-0023/0024/0027 相关）数值不变
 

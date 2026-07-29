@@ -51,6 +51,20 @@
 class xbar_functional_coverage extends uvm_component;
   `uvm_component_utils(xbar_functional_coverage)
 
+  // ---- module->class instrumentation bridge handle (functional_coverage.md §4)
+  // Three of the M3 covergroups below (cg_default_port_tracked, cg_live_addr_map,
+  // and cg_miss_order's same_bucket_diff_full_id_with_err_slv bin) must sample the
+  // EXACT folded fact signals the BUG-0025/BUG-0031 cover properties in
+  // tb/sva/axi_xbar_stall_sva.sv already compute — not a second, independently
+  // maintained copy of the default-port / live-table / err-bucket decision logic
+  // (the user's single-fact-source rule). Those facts live in a module (6 stall-SVA
+  // instances), so the module reaches this single collector through this static
+  // handle (assigned in new(); there is exactly one fcov instance, created once by
+  // the scoreboard) and calls the sample_* wrappers below with the already-folded
+  // always_comb/wire value as the argument — "接一根线到 sample 调用". The handle is
+  // the only plumbing; no fact is recomputed here.
+  static xbar_functional_coverage m_probe = null;
+
   // Classification of one AW/AR against spec §5.2.1, computed by the
   // scoreboard at the observed accept instant and carried to the sampling
   // instant. SC_STALLED records that §5.2.1's *precondition* held (an older,
@@ -64,6 +78,23 @@ class xbar_functional_coverage extends uvm_component;
     SC_SAME_TGT = 2'd2, // §5.2.4: same dir, same target
     SC_DIFF_DIR = 2'd3  // §5.2.1 "same direction" scope boundary: opposite dir
   } stall_class_e;
+
+  // Decode destination of one AW/AR (spec §3.2/§3.3/§4.2), classified by the
+  // scoreboard at the SAME decode_mst_port() call its routing reference model
+  // uses (single source of truth) — never a second decode. cg_decode_error bin.
+  typedef enum bit [1:0] {
+    DR_HIT_RULE     = 2'd0, // matched an address rule → a mapped master port
+    DR_MISS_DEFAULT = 2'd1, // matched no rule, routed to the default master port
+    DR_MISS_ERR_SLV = 2'd2  // matched no rule, no default → err_slv (DECERR)
+  } decode_route_e;
+
+  // Which spec §5.2.6 miss-ordering留痕 situation this sample records. The two
+  // arms come from two fact sources on purpose (see cg_miss_order): COEXIST from
+  // the scoreboard's err_order_q, ERRBUCKET from the stall-SVA err-bucket fold.
+  typedef enum bit {
+    MO_COEXIST   = 1'b0, // §5.2.6 clause 2.a: same FULL id hit+miss both in flight
+    MO_ERRBUCKET = 1'b1  // §5.2.6 clause 2.b: same low bucket, diff full id, one err
+  } miss_order_e;
 
   // ---- cg_addr_reconfig (spec §3.4, M2-CFG01) ---------------------------
   // Which address-table version was live at this transaction's own AW/AR
@@ -178,6 +209,108 @@ class xbar_functional_coverage extends uvm_component;
     }
   endgroup
 
+  // ==== M3 covergroups (functional_coverage.md §4 "M3 覆盖点清单") ============
+  // Sampling instant / hook obey §1 C1.1/C1.2. §4's opening scopes decisional-
+  // adjacency: every §4 group is 非判决留痕 EXCEPT cg_decode_error /
+  // cg_decerr_shape — those two record a situation that IS separately verdicted
+  // by the scoreboard's SB_ROUTE / SB_DECERR_* checks (spec §4.3/§4.4); the
+  // covergroup itself still renders NO pass/fail (functional_coverage.md §0 hard
+  // rule holds for all groups here), it only proves those verdicts were exercised
+  // on more than the trivial single-beat / single-destination shape.
+
+  // ---- cg_decode_error (spec §3.2/§3.3/§4.2, M3-DE01/DE02) ---------------
+  // The reference model's decode destination for this AW/AR, crossed with source
+  // slave port × direction. Classified by the scoreboard at write_slv_req from the
+  // very decode_mst_port() result its routing model already computed (rule-only
+  // re-call with default off distinguishes HIT_RULE from MISS_DEFAULT — the same
+  // single-source function, not a re-derived decoder).
+  covergroup cg_decode_error with function sample(decode_route_e route,
+                                                  bit is_write,
+                                                  int unsigned src_port);
+    option.per_instance = 1;
+    cp_route: coverpoint route {
+      bins hit_rule          = {DR_HIT_RULE};
+      bins miss_default_port = {DR_MISS_DEFAULT};
+      bins miss_err_slv      = {DR_MISS_ERR_SLV};
+    }
+    cp_src_port: coverpoint src_port {
+      bins port[] = {[0:xbar_types_pkg::NO_SLV_PORTS-1]};
+    }
+    cp_dir: coverpoint is_write {
+      bins write = {1'b1};
+      bins read  = {1'b0};
+    }
+    x_route_src_dir: cross cp_route, cp_src_port, cp_dir;
+  endgroup
+
+  // ---- cg_decerr_shape (spec §4.3, M3-DE01) -----------------------------
+  // For a decode-error (err_slv) transaction: was its burst a single beat
+  // (AxLEN==0) or multi-beat (AxLEN>0), crossed with direction — proof that
+  // §4.3's beat-count judgement (reads return AxLEN+1 DECERR beats, writes a
+  // single B) is not verified only on the trivial single-beat burst. AxLEN is
+  // taken from the same ro.len the SB_DECERR_RBEATS check uses.
+  covergroup cg_decerr_shape with function sample(bit len_gt0, bit is_write);
+    option.per_instance = 1;
+    cp_len: coverpoint len_gt0 {
+      bins len_eq_0 = {1'b0};
+      bins len_gt_0 = {1'b1};
+    }
+    cp_dir: coverpoint is_write {
+      bins write = {1'b1};
+      bins read  = {1'b0};
+    }
+    x_len_dir: cross cp_len, cp_dir;
+  endgroup
+
+  // ---- cg_miss_order (non-decisional, spec §5.2.6 clause 2.a/2.b, M3-OR04) --
+  // Two 留痕 bins from two fact sources (never one judgement computed twice):
+  //   same_full_id_hit_miss_coexist       — the scoreboard's err_order_q holds a
+  //     hit(is_err=0) AND a miss(is_err=1) owed response for ONE full id at once
+  //     (clause 2.a, the assertable dimension SB_DECERR_ORDER verdicts). Without
+  //     this cover, "the coexistence was really reached" and "the ordering check
+  //     ran vacuously" look identical in the report.
+  //   same_bucket_diff_full_id_with_err_slv — the stall-SVA's aw_err_bucket_now /
+  //     ar_err_bucket_now fold (the c_bug25_errbucket cover source): a same low
+  //     bucket, DIFFERENT full id, one-leg-via-err_slv corner was reached (clause
+  //     2.b, the deliberately EXCLUDED dimension). Named by clause 2.b precisely
+  //     so "excluded on purpose" and "forgot to write" stop looking the same.
+  covergroup cg_miss_order with function sample(miss_order_e situ);
+    option.per_instance = 1;
+    cp_miss: coverpoint situ {
+      bins same_full_id_hit_miss_coexist         = {MO_COEXIST};
+      bins same_bucket_diff_full_id_with_err_slv = {MO_ERRBUCKET};
+    }
+  endgroup
+
+  // ---- cg_default_port_tracked (non-decisional, BUG-0025 clause-1 guard) ---
+  // Did a default-master-port-routed transaction ENTER axi_xbar_stall_sva's in-
+  // flight tracking table? Sampled (value always "entered") only when that
+  // module's own aw_via_default / ar_via_default fold fires at an accepted AW/AR
+  // — the exact c_bug25_default cover source. Structurally 0 before the BUG-0025
+  // fix (default traffic was dropped from tracking); >0 once M3-DE02 enables a
+  // default port and sends unmapped-address traffic. spec §3.3/§5.2.6 clause 1.
+  covergroup cg_default_port_tracked with function sample(bit entered);
+    option.per_instance = 1;
+    cp_entered: coverpoint entered {
+      bins entered = {1'b1};
+    }
+  endgroup
+
+  // ---- cg_live_addr_map (non-decisional, BUG-0031 positive witness) -------
+  // The target master port the STALL-SVA computed for a transaction hitting the
+  // moved-rule region after reconfiguration — sampled from that module's aw_tgt /
+  // ar_tgt fold at an accepted moved-region hit (the c_bug31_livev1 fact source).
+  // new_version_idx (CFG01_MOVED_IDX) is reachable ONLY if the decode path used
+  // the runtime (V1) table; the compile-time V0 table routes this region to idx 0
+  // (old_version_idx). spec §3.4; M3-CFG02.
+  covergroup cg_live_addr_map with function sample(int unsigned tgt);
+    option.per_instance = 1;
+    cp_live_tgt: coverpoint tgt {
+      bins old_version_idx = {0};
+      bins new_version_idx = {xbar_types_pkg::CFG01_MOVED_IDX};
+    }
+  endgroup
+
   int unsigned n_addr_reconfig;
   int unsigned n_stall;
   int unsigned n_tx_limit;
@@ -185,6 +318,11 @@ class xbar_functional_coverage extends uvm_component;
   int unsigned n_atop;
   int unsigned n_atop_read;
   int unsigned n_cfg_point;
+  int unsigned n_decode_error;
+  int unsigned n_decerr_shape;
+  int unsigned n_miss_order;
+  int unsigned n_default_port;
+  int unsigned n_live_addr;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -195,6 +333,15 @@ class xbar_functional_coverage extends uvm_component;
     cg_atop                  = new();
     cg_atop_read_interaction = new();
     cg_cfg_point             = new();
+    cg_decode_error          = new();
+    cg_decerr_shape          = new();
+    cg_miss_order            = new();
+    cg_default_port_tracked  = new();
+    cg_live_addr_map         = new();
+    // Publish this single instance for the stall-SVA instrumentation bridge
+    // (see m_probe's declaration). One scoreboard builds one fcov, so the last
+    // (only) assignment is the live collector.
+    m_probe = this;
   endfunction
 
   // Sample the elaborated config point once (its value is a compile-time
@@ -235,6 +382,38 @@ class xbar_functional_coverage extends uvm_component;
     n_atop_read++;
   endfunction
 
+  // ---- M3 sample wrappers (functional_coverage.md §4) --------------------
+  // cg_decode_error / cg_decerr_shape / cg_miss_order(COEXIST) are driven by the
+  // scoreboard (scoreboard_refmodel.sv). cg_miss_order(ERRBUCKET),
+  // cg_default_port_tracked, cg_live_addr_map are driven by the stall-SVA
+  // instrumentation bridge through m_probe (tb/sva/axi_xbar_stall_sva.sv), each
+  // fed an already-folded fact — this file re-derives nothing.
+  function void sample_decode_error(decode_route_e route, bit is_write,
+                                    int unsigned src_port);
+    cg_decode_error.sample(route, is_write, src_port);
+    n_decode_error++;
+  endfunction
+
+  function void sample_decerr_shape(bit len_gt0, bit is_write);
+    cg_decerr_shape.sample(len_gt0, is_write);
+    n_decerr_shape++;
+  endfunction
+
+  function void sample_miss_order(miss_order_e situ);
+    cg_miss_order.sample(situ);
+    n_miss_order++;
+  endfunction
+
+  function void sample_default_port_tracked(bit entered);
+    cg_default_port_tracked.sample(entered);
+    n_default_port++;
+  endfunction
+
+  function void sample_live_addr_map(int unsigned tgt);
+    cg_live_addr_map.sample(tgt);
+    n_live_addr++;
+  endfunction
+
   // Per-run, log-visible coverage evidence: sample count + instance coverage
   // for every covergroup (the "非空转" proof functional_coverage.md §4 asks
   // for). A zero sample count means the scenario never produced that kind of
@@ -257,6 +436,27 @@ class xbar_functional_coverage extends uvm_component;
       $sformatf("cg_cfg_point: samples=%0d inst_cov=%0.2f%% point_id=%0d config=%s",
                  n_cfg_point, cg_cfg_point.get_inst_coverage(),
                  xbar_types_pkg::CFG_POINT_ID, xbar_types_pkg::CFG_NAME),
+      UVM_LOW)
+    `uvm_info("FCOV_SUMMARY",
+      $sformatf("cg_decode_error: samples=%0d inst_cov=%0.2f%% | cg_decerr_shape: samples=%0d inst_cov=%0.2f%% | cg_miss_order: samples=%0d inst_cov=%0.2f%% | cg_default_port_tracked: samples=%0d inst_cov=%0.2f%% | cg_live_addr_map: samples=%0d inst_cov=%0.2f%%",
+                 n_decode_error, cg_decode_error.get_inst_coverage(),
+                 n_decerr_shape, cg_decerr_shape.get_inst_coverage(),
+                 n_miss_order,   cg_miss_order.get_inst_coverage(),
+                 n_default_port, cg_default_port_tracked.get_inst_coverage(),
+                 n_live_addr,    cg_live_addr_map.get_inst_coverage()),
+      UVM_LOW)
+    `uvm_info("FCOV_SUMMARY",
+      $sformatf("cg_decode_error coverpoints: cp_route=%0.2f%% cp_src_port=%0.2f%% cp_dir=%0.2f%% x_route_src_dir=%0.2f%% | cg_decerr_shape cp_len=%0.2f%% cp_dir=%0.2f%% x_len_dir=%0.2f%% | cg_miss_order cp_miss=%0.2f%% | cg_default_port_tracked cp_entered=%0.2f%% | cg_live_addr_map cp_live_tgt=%0.2f%%",
+                 cg_decode_error.cp_route.get_inst_coverage(),
+                 cg_decode_error.cp_src_port.get_inst_coverage(),
+                 cg_decode_error.cp_dir.get_inst_coverage(),
+                 cg_decode_error.x_route_src_dir.get_inst_coverage(),
+                 cg_decerr_shape.cp_len.get_inst_coverage(),
+                 cg_decerr_shape.cp_dir.get_inst_coverage(),
+                 cg_decerr_shape.x_len_dir.get_inst_coverage(),
+                 cg_miss_order.cp_miss.get_inst_coverage(),
+                 cg_default_port_tracked.cp_entered.get_inst_coverage(),
+                 cg_live_addr_map.cp_live_tgt.get_inst_coverage()),
       UVM_LOW)
     `uvm_info("FCOV_SUMMARY",
       $sformatf("cg_stall coverpoints: cp_stall_state=%0.2f%% cp_dir=%0.2f%% x_state_dir=%0.2f%% | cg_tx_limit cp_inflight=%0.2f%% | cg_addr_reconfig cp_table_version=%0.2f%% cp_src_port=%0.2f%% x_version_src=%0.2f%% | cg_w_order cp_w_contention=%0.2f%% | cg_atop cp_src=%0.2f%% cp_r_resp=%0.2f%% x_src_rresp=%0.2f%% | cg_atop_read_interaction cp=%0.2f%%",
