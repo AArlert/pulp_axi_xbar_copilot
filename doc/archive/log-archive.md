@@ -1,4 +1,92 @@
 # Work log archive
+## [0.3.4] 2026-07-29 pull 框架 0.7.0（结构重排）+ 路径迁移的活/冻二分裁决
+
+**Done**
+- **pull 框架 0.6.1 → 0.7.0**（27 files pinned，较 0.6.1 +1）。**升级前先在
+  临时 worktree 实拉预演**（`git worktree add --detach` → `fwsync --pull` →
+  跑全部门禁 → `worktree remove`），未采信 CHANGELOG 自述；预演证实：
+  fw-check / docs-check / handover / chain-audit 四项全绿，本仓库
+  `scripts/iverif.divergence.json` 为空 ⇒ 无本地改动需 re-key，10 个孤儿
+  文件被 fwsync 自动清扫
+- **实测认定 0.7.0 为纯结构重排、零行为规则变更**。逐字读 diff（13 文件
+  45+/30-）后归为三类且仅此三类：① 路径重命名（`workflow/signoff/` →
+  `workflow/review/`；`workflow/{schema,taxonomy,dispatch}/` → 顶层 +
+  `workflow/fail/`）；② 每份文档新增 provenance 标头（`Axioms:` /
+  `Consumer:`）；③ 一处死指针订正——`discipline.md` 原写"四条核心不变式
+  (README)"，而 README 不在快照内 ⇒ **该指针在每个项目副本里都是死的**，
+  0.7.0 改指新增的 `workflow/constitution.md`。**无一条判据/门禁阈值/角色
+  边界/报告格式变化** ⇒ M2 已签核的 8 条证据与 M3 已交付的设计输入均不受
+  影响，无需重跑任何仿真
+- 新增 `workflow/constitution.md`（4800B 硬上限）：五条公理（自反·独立·
+  落盘·消费·痛点）+ 一张机器循环图 + 四条核心不变式的正式归属地 + 文档→
+  公理→消费者索引表。会话阅读序变为 constitution → discipline → profile
+- **活文件路径迁移（框架不自动改，须手工）**：`CLAUDE.md` 三条框架路径
+  （§1 testplan 契约 / §2 分诊表 + failure_record / §2 failure_taxonomy）
+  + 抬头补 constitution read-first 行 + 渲染来源注释改指
+  `harness/templates/`；`doc/testplan.md:3` 与 `doc/bugs.md:3` 表头契约路径
+  （**核实过**：0.7.0 的 `fwsync.py:340-363` seed 已写新路径，但只在
+  `--init` 生成，既有仓库不会自动更新）；`doc/fw-feedback.md:7` 的
+  `iverif-workflow/docs/adoption.md` → `governance/adoption.md`
+- **三份 design-prompt 的 `workflow/dispatch/coverage_hole.md` 死指针已修**
+  （`sva_bind.md:81`、`functional_coverage.md:127`、`uvm_env.md:99`）——这
+  三份正是 M3 五张执行卡的输入，留着会让 DV 实例按图索骥扑空。**边界声明**：
+  design-prompt 属 arch 制品（CLAUDE.md §0「orch 不写 design-prompt」），
+  orch 此处只做**纯路径 token 替换**，每份净变更 1 行、`git diff
+  --word-diff` 已自证除路径外一字未动；派 arch 卡改三个路径不合比例
+  （公理 4 痛点 / discipline rule 2 简单优先）。若 rev 认为仍越界，回退成本
+  为三行
+- **裁决：冻结记录一律不迁移**——`doc/review/REV-*.md`、
+  `doc/evidence/*/signoff-M*.md`、`doc/bugs/BUG-*.md`、`doc/archive/` 共
+  **16 份文件 39 处**旧路径引用保持原样。理由：它们记录的是"当时那份契约在
+  哪"，回改等于伪造审计线索，与 evidence 不可回改同一条道理。代价是这 39
+  处从此指向不存在的路径，且**没有任何门禁会报**（docs-check/fw-check/
+  chain-audit 都不校验 workflow 路径引用）
+- **登记 FB-23**（annoyance，open）：canon 重排在采纳者冻结记录里留下永久
+  死指针，而 0.7.0 升级须知只覆盖活文件（CLAUDE.md / divergence.json /
+  next_phrases_override），对不得回改的记录只字未提。含一处框架内部真张力
+  （落盘公理 vs evidence 不可回改 ⇒ 指针必然死，非谁做错），故需一条明写
+  约定否则每个采纳者各判一遍；本仓库实证含三份签核书的"判据来源"抬头指向
+  已不存在的 `workflow/signoff/rubric.md`——**签核书声明自己依据的那份判据
+  路径已不存在**。三条建议：① CHANGELOG 明文声明"冻结记录保留旧路径是正确
+  行为"；② 加只追加的 `governance/path-map.md` 供反查（落在消费公理上：
+  这些指针的消费者是未来回溯审计线索的人，今天无机制服务他）；③ 由 fwsync
+  从历次 manifest 差分机械生成该表
+
+**Not done**
+- **本 chunk 不含任何仿真**——纯框架升级 + 文档路径迁移，无新证据登记，
+  testplan 计数不变（M3 仍 ✅0/11）
+- FB-23 状态 `open`，尚未回流框架仓库（框架作者在隔壁 session，可当日闭环）
+- M3 实质工作一步未动：rev 仲裁卡（BUG-0032）与五张执行卡仍全部待派
+- `.claude/agents/` 四份角色文件已由 pull 重新生成，但**本会话未实际派发过
+  任何卡** ⇒ 新版角色文件在真实派发下的行为未经实测（adoption.md 提示
+  agent 类型注册有延迟，首次派发若报 "Agent type not found" 是已知现象，
+  重启会话即可，不要去 debug 卡本身）
+
+**Next**
+- 派 rev 仲裁卡：BUG-0032 状态终判（沿用 BUG-0002/0003 先例是否成立）+
+  是否需要 spec 补条款；顺带评估 §4/§5.3 自引用编辑提案是否值得动 pin。
+  **该卡同时是新版角色文件的首次实测**
+- 按 arch 建议的五块切分派发 M3 执行卡（**严格顺序**，④ 必须先于 ⑤）：
+  ① BUG-0025+0031 同卡修 + M3-DE01/DE02/OR04/CFG02 ② BUG-0024 (b) 路线 +
+  M3-OR05 ③ BUG-0018 修 + 重跑 M2-OR01/WO01 ④ 多配置基建（tb_top
+  C5.1-C5.7 声明式配置点）+ M3-CF01 ⑤ M3-CF02/03/04 + M3-AT02
+- 若 rev 认为 orch 动 design-prompt 越界，回退那三行并改派 arch 卡
+- M3 签核卡需重做"判决活性矩阵"（M2 签核人交办）；BUG-0025/0031 详情页
+  `ref: 待定` 待其修复卡落地时填入具体 cover/assert 名
+
+**How verified**
+- `make fw-check` 绿（framework 0.7.0，27 files pinned）；`make docs-check`
+  绿；`make handover` 正常读出状态
+- `make chain-audit`：dangling **仍为 0**；sourceless 1 / matrix orphans 0 /
+  parent-anchored 15 / uncited 9 / 无 spec_ref 头 11——**逐项与升级前
+  （0.3.3 区块记录）完全一致**，证实升级未改变任何审计判据
+- 升级前预演在 `git worktree` 隔离副本中完成，主工作树全程干净
+  （`git status --short` 空），预演结束 `worktree remove --force` +
+  `worktree prune`
+- design-prompt 三处改动的"纯路径替换"以 `git diff --word-diff=plain` +
+  `--numstat` 双重自证：每份 `1  1`，词级 diff 仅显示路径 token 一对一替换
+- 冻结记录死指针规模以 `grep -rl` / `grep -ro` 双计得出：16 份文件、39 处
+
 ## [0.3.3] 2026-07-29 arch 卡：M3 场景清单落地 + 推翻 orch 的 constrained-random 决定
 
 **Done**

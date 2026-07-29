@@ -1,20 +1,33 @@
-# iverif-workflow 框架反馈台账
+# 实践记录（原：iverif-workflow 框架反馈台账）
 
-> 本仓库是 iverif-workflow 的首次实战应用。任何框架摩擦（门禁误伤、脚本缺口、
-> 文档失实）当场登记于此。blocking 当日回流框架仓库，annoyance 里程碑边界
-> 批量回流。回流仪式见 CLAUDE.md §5。
+> **本文件的性质自 0.3.7 起改变，文件名与 `FB-` 编号一律不动。**
+> 改名会打断 29 处引用，其中 **10 处在冻结记录里**（`signoff-M0/M2`、
+> `REV-004/010`、三份 bug 详情页、三份归档）——按 FB-23 裁决那些不得回改。
+> 所以变的是这个文件**是什么**，不是它在哪。
 >
-> **仪式自 0.8.0 起变更**：框架删除了 fwsync/manifest/divergence 三态，
-> 「绝不本地修改 `scripts/`/`workflow/`」这条红线**在机制上已不存在**——上游
-> 明说「本地怎么改是你自己的事，不红」，跟进方式改为 `git cherry-pick`。
-> 本仓库的选择：**先登记、可就地修，两者都做**。就地修的每一处必须在本台账
-> 留行并在代码旁注明 `见 doc/fw-feedback.md FB-xx`，否则就退化成 FB-7/BUG-0007
-> 那个形状（变通只落注释、无人可 grep）。历史行中提到的 `fw-check` / `fwsync`
-> / `workflow/{schema,taxonomy,dispatch,signoff}/` 等均为**当时事实**，按
-> FB-23 裁决不回改。
+> **旧性质（FB-1 ~ FB-27）**：向上游提交的反馈台账。本仓库是 iverif-workflow
+> 的首次实战应用，摩擦当场登记、blocking 当日回流、等上游修。
+>
+> **新性质（FB-28 起）**：**实践记录**。框架 0.8.0 删除了 fwsync/manifest/
+> divergence 三态，「绝不本地修改 `scripts/`/`workflow/`」这条红线在机制上
+> 已不存在，也不再有回流义务。本仓库的做法改为——**自己先做，做好了让上游
+> 来 cherry-pick**。因此每一行回答的问题从「求上游修什么」变成
+> 「**我们做了什么改动、为什么、上游要不要抄**」。
+>
+> **唯一的硬要求没变、而且比以前更重**：既然没有 manifest 记录我们改过哪些
+> 上游文件，**本台账就是那份记录本身**。任何对 `workflow/` `scripts/`
+> `.claude/` 的本地改动，必须在此留行并在代码旁注明 `见 doc/fw-feedback.md
+> FB-xx`。漏了就退化成 FB-7 / BUG-0007 那个形状（变通只落注释、无人可 grep），
+> 而这次连 `fw-check` 都不会再提醒你。
+>
+> 历史行提到的 `fw-check` / `fwsync` / `workflow/{schema,taxonomy,dispatch,
+> signoff}/` 等均为**当时事实**，按 FB-23 裁决不回改。
 
 severity：blocking（门禁/脚本拒绝正确工作）| annoyance（文档/体验问题）
-status：open | reported | fixed@<ver> | wontfix
+
+status（FB-1~27，上游台账时代）：open | reported | fixed@\<ver\> | wontfix
+status（FB-28 起，实践记录时代）：**local**（本仓库已改，上游可抄）|
+**noted**（只记录，未动手）| **upstreamed**（上游已 cherry-pick）
 
 **第一轮回流已闭环（2026-07-27）**：FB-1~FB-7 全部落入框架 0.2.1，本仓库已
 `fwsync --pull`（`iverif.json` 从 0.2.0 → 0.2.1，`make fw-check` / `docs-check`
@@ -52,3 +65,4 @@ status：open | reported | fixed@<ver> | wontfix
 | FB-26 | 2026-07-29 | **0.7.1 新发的「每卡分级 vs 实际」观察者，结构上看不见 orch-only 的 chunk——而那恰是本仓库时间真正花掉的地方**（本仓库连续两次 pull 后自检发现）：0.7.1 的裁决本身是对的且很锋利——「无人抱怨流程重 ≠ 流程轻，因为每个子代理只看见自己那张卡、链条重量只有 orch 看得见、而 orch 不疼」。它给出的观察者是 dispatch 手册里的**每卡**失配行。**但框架 pull 不是卡**：它没有分级、没有交付报告格式、没有失配行，是纯 orch chunk ⇒ 新观察者对它零可见度。本仓库实测：M3 窗口（`951bc66..HEAD`，0.3.0 收官转入 M3 起）共 **5 个 commit，其中 4 个是 `chore(fw)`**；全仓 46 个 commit 中 **12 个是框架 pull（26%）**。**两条必须同时说清的限定，否则这个数字会被误读**：(1) 今天两次 pull 是因为**框架今天发了两版**，属共同开发期非稳态，把 80% 当稳态抱怨是错的；(2) 这些 pull **买到了东西**——FB-24 正是 0.7.1 压测压出来的。故本条**不是「框架太重」的抱怨**，而是：**刚发布的那个观察者存在一类结构性盲区，框架除非采纳者主动报否则学不到**，这与它自己的**消费**公理（「a trigger nobody observes never fires」）撞在同一处。建议：① 把 pull/升级也纳入可记录单元——`chore(fw)` chunk 在 closeout 时记一行「本次 pull 的 orch 开销档位 + 是否与收益相称」，成本约一行；② 或在 `governance/` 侧统计采纳者 `chore(fw)` 与功能 commit 的比值（数据在每个采纳者的 git log 里，框架侧可机械取）；③ 至少在 0.7.1 的裁决记录里补一句「本观察者仅覆盖卡，orch-only chunk 的开销仍无观察者」，免得下次有人误以为盲区已闭合。**本条自身即证据**：登记它又是一次纯框架维护的开销，故本仓库选择**不为它单独开 chunk**，随下一张卡的 closeout 一并落地 | .claude/skills/dispatch/SKILL.md 末段（每卡失配观察者）+ 0.7.1 裁决记录（governance/） | annoyance（不阻塞任何门禁；缺口在框架的**自我度量**能力，不在采纳者的执行路径） | open |
 | FB-25 订正 | 2026-07-29 | **FB-25 被 0.8.0 部分闭环，此处订正**（不改 FB-25 原文，同 FB-23 裁决）：FB-25 断言「没有任何门禁读 `CLAUDE.md` 的内容」。0.8.0 起**不再完全成立**——`scripts/tests/test_docs.py:477` 的 `test_claude_md_carries_risk_grades` 会读项目 `CLAUDE.md` 并断言 L0–L3 分级表在场（0.8.0 把该表从 `skills/dispatch` 移入 CLAUDE.md，同时加了这道保险）。本仓库迁移时**实测撞到**：移植完机械层后 `make selftest` 60 例挂 1 例，正是这条。⇒ FB-25 现只在「**路径有效性**」那半边成立：仍然没有任何检查会发现 CLAUDE.md 指向了不存在的 `workflow/` 路径。修法建议不变（用 manifest 反查），但成本论据变了——0.8.0 已无 manifest，替代方案是扫 `workflow/*.md` 与 `scripts/*` 的实际文件名 | scripts/tests/test_docs.py:477（部分闭环）+ CLAUDE.md 路径有效性（仍缺） | annoyance | partially-fixed@0.8.0 |
 | FB-27 | 2026-07-29 | **0.8.0 删掉了四个 make 动词，但它自己发布的两张角色卡仍在指令角色去执行其中两个**（本仓库迁移 0.8.0 时逐文件核对发现）：0.8.0 的 Makefile 实有目标为 `handoff next run evidence regress check guards bump commit archive selftest`——`explore` / `signoff-check` / `chain-audit` / `replay` 均已retire（前三者折进 `check`/`next`，`replay` 因不变量 2 而多余）。但随同发布的 **`.claude/agents/arch.md:34`** 仍写「turn the card's **`make explore`** list into proposed testplan rows」，**`.claude/agents/rev.md:51`** 仍写「verify the machine conditions (**`make signoff-check`**)」。**命中面精确地落在最坏位置**：这两条不是背景说明，而是各自角色**主任务的操作指令**——arch 的 spec-gap sweep 与 rev 的里程碑签核；两个角色照做都会得到 `No rule to make target`。与 FB-25 同族（发布文档引用已退休机制、无门禁读它），但更尖锐：**退休这些动词的正是同一个 release**，且 0.8.0 的核心论点恰是「把表面缩到一个人脑子装得下」——表面缩了，两张卡没跟上。建议：① 在 `scripts/tests/` 加一条保险，把 `.claude/agents/*.md` 与 `CLAUDE.md` 里形如 `make <verb>` 的 token 与 Makefile 的实有目标求差，非空即红（与 test_claude_md_carries_risk_grades 同一思路，约十行，且天然覆盖今后每一次动词增删）；② 该保险同时能闭合 FB-25 的剩余半边（路径有效性可用同一模式扫 `workflow/*.md` 实有文件名）。**本仓库处置**：两处已就地修（arch.md → `make next` 的探索前沿；rev.md → `make check MILESTONE=<n>`），代码旁均注明 `见 doc/fw-feedback.md FB-27` | .claude/agents/arch.md:34 · .claude/agents/rev.md:51 · scripts/tests/（缺 make-verb 保险） | annoyance（不阻塞门禁，但角色照指令执行会直接报 No rule to make target——发生在 arch/rev 各自的主任务上） | open |
+| FB-28 | 2026-07-29 | **`.claude/agents/orch.md` 把 87 行主会话硬规则投递给了除主会话外的所有人——本仓库已删除该文件并把内容并入 `/dispatch` skill + `CLAUDE.md` §0** | **机制事实（本会话直接观测，非推断）**：`.claude/agents/*.md` 在 Claude Code 里只有一个作用——注册成**可派发的子代理类型**；文件正文仅在该类型被 `Agent` 工具派发时注入**新实例**的系统提示。0.8.0 新增 `orch.md` 后，主会话收到的系统提示只有一行 frontmatter `description`（"Orchestrator (orch) — the main session…"），**87 行正文一个字都没到达**——直到 orch 显式 `Read` 它才看见。⇒ 一份通篇写着 "You are orch — the main session" 的文件，唯一读不到它的就是主会话。**为什么它也不该被派发**：派一个 orch 子代理会同时违反它自己两条规则——(1) §"Handoffs are records, not conversation" 禁止「只传上下文」的旁路，而子代理**唯一**的回传形式就是最终那段文字，即口头摘要；(2) §"Closer ≠ fixer is your call" 要求 orch 自己追踪派发路由，嵌套实例的路由决策对持有台账的主会话不可见。再加上它写不了 `status.jsonl`/`log.md`（closeout 是主会话职责）。**唯一站得住的用法是反过来**：把它当独立的**组卡审查员**（我组好卡、派一个实例只审隔离与共模防火墙），那是审计不是编排。**放大风险**：0.8.0 同时废弃了 `.claude/skills/`（orch 的派卡手册原本住那儿、主会话会读）**又**把规则搬进 agent 卡（主会话读不到）⇒ 对严格照上游默认走的采纳者，orch 的隔离硬规则**没有任何人读得到**：主会话拿不到正文，而 orch 实例永远不会被派出来。本仓库侥幸没事，只因保留了四个 skill 作本地资产。这是 FB-21/25/27「机制无消费者」家族里目前最尖锐的一例——前几例是文档指向退休命令，本例是 87 行硬规则投错了收件人。**本仓库改动（供上游取用）**：① 删除 `.claude/agents/orch.md`；② 其中三块 `/dispatch` 原本没有的操作性内容并入该 skill——**closer ≠ fixer 的路由判断**（skill 此前完全没提）、**rev 卡只给范围不给结论**、**§3b「旁路即漂移」原理与补救**（两角色需要同一背景时指向同一份归档记录，而非互相转述；一方挖出的上下文另一方要重挖是**留存失败**而非效率损失）；③ `CLAUDE.md` §0 的指针从 orch.md 改指 `/dispatch`。**分层理由**：CLAUDE.md 是「常驻但字节受限」层（预算仅剩数百字节），skill 是「用时载入、不受预算约束」层，而 `/dispatch` 恰在每次派卡前被调用 ⇒ 消费时机比 CLAUDE.md 更准 | .claude/agents/orch.md（已删）→ .claude/skills/dispatch/SKILL.md §3/§3b + CLAUDE.md §0 | annoyance（不阻塞门禁；但受影响的是 orch 全部隔离硬规则的可达性） | local |

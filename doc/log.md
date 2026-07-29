@@ -2,6 +2,89 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.7] 2026-07-29 删除 orch.md 并入 /dispatch；反馈台账转为实践记录
+
+**Done**
+- **裁决：与上游的关系反转。** 0.8.0 删掉 fwsync/manifest/divergence 三态后
+  已无回流机制，用户裁定新姿势为——**我们先实践，做得好让上游来
+  cherry-pick**。本 chunk 落实这条裁决的两个后果
+- **删除 `.claude/agents/orch.md`，内容并入 `/dispatch` skill + `CLAUDE.md`
+  §0**（登记 FB-28，status `local`）。**机制事实为本会话直接观测所得、非
+  推断**：`.claude/agents/*.md` 在 Claude Code 里只注册**可派发的子代理
+  类型**，正文仅在派发时注入**新实例**；主会话收到的只有 frontmatter 的
+  `description` 一行。⇒ 那 87 行通篇写着 "You are orch — the main session"
+  的硬规则，**唯一读不到它的就是主会话**，直到有人显式 `Read`
+- **它也不该被派发**：嵌套 orch 会同时违反它自己两条规则——(1) §"Handoffs
+  are records, not conversation" 禁止只传上下文的旁路，而子代理唯一的回传
+  形式就是口头摘要；(2) §"Closer ≠ fixer is your call" 要求 orch 自己追踪
+  路由，嵌套实例的路由对持有台账的主会话不可见。且它写不了
+  `status.jsonl`/`log.md`。**唯一站得住的用法是反过来**：当独立的组卡
+  审查员（审隔离与共模防火墙），那是审计不是编排
+- **放大风险已识别**：0.8.0 同时废弃 `.claude/skills/`（orch 手册原本住那儿、
+  主会话会读）**又**把规则搬进 agent 卡（主会话读不到）⇒ 对严格照上游默认
+  走的采纳者，orch 的隔离硬规则**没有任何人读得到**。本仓库侥幸没事，只因
+  0.3.6 选择保留四个 skill 作本地资产——那个选择比当时看起来重要得多
+- **并入 `/dispatch` 的三块是它原本没有的**：① **closer ≠ fixer 的路由判断**
+  （skill 此前完全没提这四个字）② **rev 卡只给范围不给结论**（"a card that
+  hands rev a conclusion instead of a scope list is malformed"）③ 新增
+  **§3b「旁路即漂移」**——两角色需要同一背景时指向同一份归档记录而非互相
+  转述；一方挖出的上下文另一方要重挖是**留存失败**而非效率损失，修法是把
+  发现写到下一张卡找得到的地方，**永不为此放宽防火墙**
+- **分层理由记明**：`CLAUDE.md` 是常驻但**字节受限**层，skill 是用时载入、
+  不受预算约束层，而 `/dispatch` 恰在每次派卡前被调用 ⇒ **消费时机比
+  CLAUDE.md 更准**。故 §0 留简版 + 指针，操作细则全在 skill
+- **`doc/fw-feedback.md` 性质变更，但文件名与 `FB-` 编号一律不动**。用户提
+  "甚至可以删掉"，实测否决：`FB-xx` 被引用 **165 次 / 20 个文件**，文件名
+  被引 **29 次**，其中 **10 处在冻结记录里**（`signoff-M0`/`signoff-M2`、
+  `REV-004`/`REV-010`、三份 bug 详情页、三份归档）——按 FB-23 裁决那些不得
+  回改。⇒ 删或改名会一次性制造死引用，且**我们自己规定了不许去修**。
+  改的是这个文件**是什么**，不是它在哪
+- **新旧性质写进抬头**：旧（FB-1~27）= 向上游提交的反馈台账；新（FB-28 起）
+  = **实践记录**，每行回答"我们改了什么、为什么、上游要不要抄"。新 status
+  词表 `local` / `noted` / `upstreamed` 取代 `open`/`reported`/`fixed@ver`
+- **唯一的硬要求反而更重了**：既然已无 manifest 记录我们动过哪些上游文件，
+  **本台账就是那份记录本身**。任何对 `workflow/`/`scripts/`/`.claude/` 的
+  本地改动必须留行 + 代码旁注明 `见 doc/fw-feedback.md FB-xx`，漏了就退化成
+  FB-7/BUG-0007 那个形状，**而这次连 `fw-check` 都不会再提醒**。该要求同时
+  写进 `CLAUDE.md` §5
+
+**Not done**
+- **本 chunk 不含任何仿真**，无新证据，testplan 计数不变（M3 仍 ✅0/11）
+- **字节预算逼近上限：39369 / 39500，仅剩 131 字节**。下次往 `CLAUDE.md`
+  加任何东西必须先删等量内容。结构性成因已看清但**暂不登记**（痛点未真正
+  发生）：该预算覆盖 `CLAUDE.md` + `workflow/*.md`，而 `workflow/` 的
+  29922 字节是上游文风、我们不控制 ⇒ 上游一长，采纳者记录项目事实的空间
+  就被挤压，而"抬高上限"按纪律属于为过卡放宽门。真撞上再登记
+- **L0–L3 分级仍是零实走**（连续第四个 chunk），失配数据产量仍为 0
+- FB-23/24/25/26/27 五条仍 `open`；按新裁决它们不再是"等上游修"，而是
+  "我们可以自己动手" —— 尚未逐条重新分类
+- `/dispatch` 的新增内容（closer≠fixer 路由、rev 范围卡、§3b）**未经真实
+  派卡检验**
+
+**Next**
+- 派 rev 仲裁卡（L3），一卡四事：① BUG-0032 终判 ② §4/§5.3 自引用提案
+  **建议否决**（须带 FB-24 根因入卡）③ 复核 orch 三处越界判断（0.3.4 动
+  design-prompt 三行、0.3.6 动两张角色卡、本次删 orch.md 并改写 skill）
+  ④ 该卡本身即 `/dispatch` 新内容的首次实检
+- 五张 M3 执行卡（严格顺序，④ 先于 ⑤）：① BUG-0025+0031 同卡修 +
+  M3-DE01/DE02/OR04/CFG02（L2）② BUG-0024 (b) + M3-OR05（L2）③ BUG-0018 修 +
+  重跑 M2-OR01/WO01（L2）④ 多配置基建 + M3-CF01（L2）⑤ M3-CF02/03/04 +
+  M3-AT02（L1）。**其中至少一张须兑现 M3 的 KILL 行**
+- 把 FB-23~27 按新性质重新分类：哪些我们直接动手（转 `local`）、哪些只是
+  记录（转 `noted`）
+
+**How verified**
+- `make check` 绿；`make selftest` **60/60 OK**（删除 orch.md 未触发任何
+  测试——已先 `grep` 确认 `scripts/*.py` 与 `scripts/tests/*.py` 对
+  `orch.md`/`agents/` **零引用**，删除是机械无风险的）
+- `.claude/agents/` 现为 arch/de/dv/rev 四份，`ls` 实测
+- 删除决策的证据非目测：`grep -ro "FB-[0-9]*"` 得 165 处 id 引用、
+  `grep -ro "fw-feedback"` 得 29 处文件名引用，再对
+  `doc/{evidence,review,bugs,archive}` 单独求交得出 10 处落在冻结记录
+- orch.md 正文不可达的判断源自**本会话的直接观测**：该文件出现时系统提示
+  只给了一行 `description`，正文直到显式 `Read` 才可见——非查文档推断
+- 字节预算 `wc -c CLAUDE.md workflow/*.md` = 39369 / 39500，实测
+
 ## [0.3.6] 2026-07-29 框架 0.8.0 换底盘：手工移植「repo 即模板」模型
 
 **Done**
@@ -210,92 +293,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
   求差），非估计
 - 升级前预演在 `git worktree` 隔离副本完成，主工作树全程干净，预演后
   `worktree remove --force` + `prune`
-
-## [0.3.4] 2026-07-29 pull 框架 0.7.0（结构重排）+ 路径迁移的活/冻二分裁决
-
-**Done**
-- **pull 框架 0.6.1 → 0.7.0**（27 files pinned，较 0.6.1 +1）。**升级前先在
-  临时 worktree 实拉预演**（`git worktree add --detach` → `fwsync --pull` →
-  跑全部门禁 → `worktree remove`），未采信 CHANGELOG 自述；预演证实：
-  fw-check / docs-check / handover / chain-audit 四项全绿，本仓库
-  `scripts/iverif.divergence.json` 为空 ⇒ 无本地改动需 re-key，10 个孤儿
-  文件被 fwsync 自动清扫
-- **实测认定 0.7.0 为纯结构重排、零行为规则变更**。逐字读 diff（13 文件
-  45+/30-）后归为三类且仅此三类：① 路径重命名（`workflow/signoff/` →
-  `workflow/review/`；`workflow/{schema,taxonomy,dispatch}/` → 顶层 +
-  `workflow/fail/`）；② 每份文档新增 provenance 标头（`Axioms:` /
-  `Consumer:`）；③ 一处死指针订正——`discipline.md` 原写"四条核心不变式
-  (README)"，而 README 不在快照内 ⇒ **该指针在每个项目副本里都是死的**，
-  0.7.0 改指新增的 `workflow/constitution.md`。**无一条判据/门禁阈值/角色
-  边界/报告格式变化** ⇒ M2 已签核的 8 条证据与 M3 已交付的设计输入均不受
-  影响，无需重跑任何仿真
-- 新增 `workflow/constitution.md`（4800B 硬上限）：五条公理（自反·独立·
-  落盘·消费·痛点）+ 一张机器循环图 + 四条核心不变式的正式归属地 + 文档→
-  公理→消费者索引表。会话阅读序变为 constitution → discipline → profile
-- **活文件路径迁移（框架不自动改，须手工）**：`CLAUDE.md` 三条框架路径
-  （§1 testplan 契约 / §2 分诊表 + failure_record / §2 failure_taxonomy）
-  + 抬头补 constitution read-first 行 + 渲染来源注释改指
-  `harness/templates/`；`doc/testplan.md:3` 与 `doc/bugs.md:3` 表头契约路径
-  （**核实过**：0.7.0 的 `fwsync.py:340-363` seed 已写新路径，但只在
-  `--init` 生成，既有仓库不会自动更新）；`doc/fw-feedback.md:7` 的
-  `iverif-workflow/docs/adoption.md` → `governance/adoption.md`
-- **三份 design-prompt 的 `workflow/dispatch/coverage_hole.md` 死指针已修**
-  （`sva_bind.md:81`、`functional_coverage.md:127`、`uvm_env.md:99`）——这
-  三份正是 M3 五张执行卡的输入，留着会让 DV 实例按图索骥扑空。**边界声明**：
-  design-prompt 属 arch 制品（CLAUDE.md §0「orch 不写 design-prompt」），
-  orch 此处只做**纯路径 token 替换**，每份净变更 1 行、`git diff
-  --word-diff` 已自证除路径外一字未动；派 arch 卡改三个路径不合比例
-  （公理 4 痛点 / discipline rule 2 简单优先）。若 rev 认为仍越界，回退成本
-  为三行
-- **裁决：冻结记录一律不迁移**——`doc/review/REV-*.md`、
-  `doc/evidence/*/signoff-M*.md`、`doc/bugs/BUG-*.md`、`doc/archive/` 共
-  **16 份文件 39 处**旧路径引用保持原样。理由：它们记录的是"当时那份契约在
-  哪"，回改等于伪造审计线索，与 evidence 不可回改同一条道理。代价是这 39
-  处从此指向不存在的路径，且**没有任何门禁会报**（docs-check/fw-check/
-  chain-audit 都不校验 workflow 路径引用）
-- **登记 FB-23**（annoyance，open）：canon 重排在采纳者冻结记录里留下永久
-  死指针，而 0.7.0 升级须知只覆盖活文件（CLAUDE.md / divergence.json /
-  next_phrases_override），对不得回改的记录只字未提。含一处框架内部真张力
-  （落盘公理 vs evidence 不可回改 ⇒ 指针必然死，非谁做错），故需一条明写
-  约定否则每个采纳者各判一遍；本仓库实证含三份签核书的"判据来源"抬头指向
-  已不存在的 `workflow/signoff/rubric.md`——**签核书声明自己依据的那份判据
-  路径已不存在**。三条建议：① CHANGELOG 明文声明"冻结记录保留旧路径是正确
-  行为"；② 加只追加的 `governance/path-map.md` 供反查（落在消费公理上：
-  这些指针的消费者是未来回溯审计线索的人，今天无机制服务他）；③ 由 fwsync
-  从历次 manifest 差分机械生成该表
-
-**Not done**
-- **本 chunk 不含任何仿真**——纯框架升级 + 文档路径迁移，无新证据登记，
-  testplan 计数不变（M3 仍 ✅0/11）
-- FB-23 状态 `open`，尚未回流框架仓库（框架作者在隔壁 session，可当日闭环）
-- M3 实质工作一步未动：rev 仲裁卡（BUG-0032）与五张执行卡仍全部待派
-- `.claude/agents/` 四份角色文件已由 pull 重新生成，但**本会话未实际派发过
-  任何卡** ⇒ 新版角色文件在真实派发下的行为未经实测（adoption.md 提示
-  agent 类型注册有延迟，首次派发若报 "Agent type not found" 是已知现象，
-  重启会话即可，不要去 debug 卡本身）
-
-**Next**
-- 派 rev 仲裁卡：BUG-0032 状态终判（沿用 BUG-0002/0003 先例是否成立）+
-  是否需要 spec 补条款；顺带评估 §4/§5.3 自引用编辑提案是否值得动 pin。
-  **该卡同时是新版角色文件的首次实测**
-- 按 arch 建议的五块切分派发 M3 执行卡（**严格顺序**，④ 必须先于 ⑤）：
-  ① BUG-0025+0031 同卡修 + M3-DE01/DE02/OR04/CFG02 ② BUG-0024 (b) 路线 +
-  M3-OR05 ③ BUG-0018 修 + 重跑 M2-OR01/WO01 ④ 多配置基建（tb_top
-  C5.1-C5.7 声明式配置点）+ M3-CF01 ⑤ M3-CF02/03/04 + M3-AT02
-- 若 rev 认为 orch 动 design-prompt 越界，回退那三行并改派 arch 卡
-- M3 签核卡需重做"判决活性矩阵"（M2 签核人交办）；BUG-0025/0031 详情页
-  `ref: 待定` 待其修复卡落地时填入具体 cover/assert 名
-
-**How verified**
-- `make fw-check` 绿（framework 0.7.0，27 files pinned）；`make docs-check`
-  绿；`make handover` 正常读出状态
-- `make chain-audit`：dangling **仍为 0**；sourceless 1 / matrix orphans 0 /
-  parent-anchored 15 / uncited 9 / 无 spec_ref 头 11——**逐项与升级前
-  （0.3.3 区块记录）完全一致**，证实升级未改变任何审计判据
-- 升级前预演在 `git worktree` 隔离副本中完成，主工作树全程干净
-  （`git status --short` 空），预演结束 `worktree remove --force` +
-  `worktree prune`
-- design-prompt 三处改动的"纯路径替换"以 `git diff --word-diff=plain` +
-  `--numstat` 双重自证：每份 `1  1`，词级 diff 仅显示路径 token 一对一替换
-- 冻结记录死指针规模以 `grep -rl` / `grep -ro` 双计得出：16 份文件、39 处
 

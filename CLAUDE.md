@@ -31,7 +31,7 @@
 - **orch（主会话，即你）**：纯派发者——定级、组卡、隔离自检、按固定报告格式
   收交付物、应用 rev 批准的 spec 修改并重新 pin、用 make 维护记忆系统。
   **orch 不产出任何技术制品**：不写 RTL/TB/design-prompt/spec 内容。中文交流。
-  边界细则见 `.claude/agents/orch.md`。
+  操作细则见 `/dispatch` skill（orch 的完整契约，派卡时载入）。
 - **arch / de / dv / rev**：子代理，见 `.claude/agents/`（0.8.0 起为静态文件，
   不再渲染；本地改动自负）。各自边界写在自己文件里。
 - 实例隔离：每卡一个全新实例；DE 与 DV 对同一模块绝不共用；arch 与 rev 绝不
@@ -114,11 +114,14 @@ make check               # 关闭任何卡前必做
   可机械回答：`git log 05a49a0..upstream/master --oneline`。每次跟进后更新此
   基线 sha 与 `iverif.json` 的 `framework` 字段。
   `scripts/regress.py` 自 0.8.0 起**归本项目所有**（canon 只保留判据原语
-  `scripts/svacheck.py --judge`）。已就地修改的上游文件见
-  `doc/fw-feedback.md`（FB-27：`.claude/agents/{arch,rev}.md` 各一处）。
-- **框架反馈**：摩擦仍当场登记 `doc/fw-feedback.md` 并回流
-  <https://github.com/AArlert/iverif-workflow>。机制上已无强制，但本仓库是
-  框架首次实战应用，回馈仍按硬性交付物对待。
+  `scripts/svacheck.py --judge`）。
+- **实践记录 `doc/fw-feedback.md`（旧名沿用，性质已变）**：不再是"求上游修"
+  的反馈台账，而是**我们做了什么改动、为什么**——自己先实践，做好了让上游来
+  cherry-pick。**硬要求**：既然已无 manifest 记录我们动过哪些上游文件，
+  **该台账就是那份记录本身**。任何对 `workflow/`/`scripts/`/`.claude/` 的本地
+  改动必须在此留行 + 代码旁注明 `见 doc/fw-feedback.md FB-xx`。当前已改：
+  FB-27（`.claude/agents/{arch,rev}.md` 各一处死命令）、FB-28（删除
+  `.claude/agents/orch.md`，内容并入 `/dispatch` 与本页 §0）。
 
 ## §6 项目专属
 

@@ -3,9 +3,15 @@ name: dispatch
 description: Dispatch-card assembly (copilot profile, orch only) — grade the card (L0–L3), assemble inputs per the fixed card templates, pass the isolation self-check. Run before every subagent dispatch.
 ---
 
-<!-- Project-owned since framework 0.8.0 (upstream retired .claude/skills/;
-     kept here as a local asset — we maintain it). Consumer: orch, before
-     every card. Role boundaries also live in .claude/agents/orch.md. -->
+<!-- Project-owned. Consumer: orch (the main session), before every card.
+     This file IS orch's operative contract: upstream 0.8.0 shipped one as
+     .claude/agents/orch.md, but that path only ever reaches a *spawned*
+     subagent's prompt — the main session sees the frontmatter description
+     and nothing else, so 87 lines addressed to "you, the main session"
+     were delivered to everyone except it. We deleted that file and merged
+     its operative content here (loaded at the moment of use) plus the
+     brief always-on version in CLAUDE.md §0. See doc/fw-feedback.md
+     FB-28. -->
 
 # Dispatch flow (orch only)
 
@@ -48,6 +54,16 @@ card by type:
       (behavior-leak check).
 - [ ] Bug dispatches only after the bugs.md row exists (no verbal
       dispatch).
+- [ ] **rev cards carry a scope list, never a conclusion.** rev reads the
+      primary material itself (files, logs, diffs) — a card that hands rev
+      someone else's verdict to ratify is malformed.
+- [ ] **closer ≠ fixer routing decided here, by you.** The fix card and the
+      closing card go out as *two separate dispatches, never to the same
+      executor*. No script enforces this: same git author / same VM is not
+      a reliable signal either way, and a check like that would look like a
+      gate while catching nobody. What the machine *can* verify is that the
+      closing card carries its own independent re-run evidence; whether the
+      hands were independent is yours to track at dispatch time.
 - [ ] The card states its acceptance criteria (rev gate passed /
       compile+lint clean / scenario PASS + evidence / review record path)
       **and its grade** (L0–L3; in doubt, graded up).
@@ -61,6 +77,20 @@ card by type:
       computed it + the hit index lines + a count self-check ("your
       count/id set differs → stop and report"). The dispatchee executing
       and proving it beats relaying a snapshot that can go stale.
+
+## 3b. Why the firewall is worth its cost (read once, then it's obvious)
+
+A side channel that "only carries context" is exactly how DV's expectations
+drift from *spec-derived* to *implementation-agreed* — the common-mode
+failure the role split exists to prevent. So when two roles need the same
+background, that need is **the price of the firewall, not a bug in it**:
+point them at the same archived record (`doc/bugs/`, `doc/log.md`,
+`doc/review/`) instead of relaying a summary between them.
+
+Corollary worth internalizing: when one role digs out context and the next
+has to redo the dig from scratch, that is a **retention failure, not wasted
+efficiency**. The fix is to write the finding where the next card can find
+it — never to widen the firewall so reasoning can pass through informally.
 
 ## 4. Collection check
 
