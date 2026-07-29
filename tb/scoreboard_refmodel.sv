@@ -91,6 +91,27 @@ class xbar_scoreboard extends uvm_scoreboard;
   int unsigned resp_route_match_cnt;
   int unsigned resp_route_mismatch_cnt;
 
+  // ---- cfgC UniqueIds precondition fallback monitor (M3-CF03, spec §5.3.1) --
+  // ONLY armed when Cfg.UniqueIds is set (cfgC). Tracks, per (slave port,
+  // direction, FULL slv-side id), the count of currently in-flight transactions
+  // and their common target master port. spec §5.3.1's precondition holds iff
+  // every such group targets ONE master port (or the id is unique in flight, the
+  // count==0 branch). A new same-key accept whose target differs from an already
+  // in-flight one BREAKS the precondition — and since §5.3.3 makes the DUT
+  // undefined then, this must be reported as a TB_BUG (env violated its own
+  // constructive guarantee), never pre-judged a DUT_BUG. Decode-miss legs carry
+  // a sentinel target (NO_MST_PORTS) so same-id misses stay consistent. Under the
+  // single-outstanding-per-port cfgC env the count is always 0/1, so this can
+  // never fire — it is a falsifiable safety net, not a routine check.
+  local int unsigned uid_cnt[int unsigned];
+  local int unsigned uid_tgt[int unsigned];
+  int unsigned uid_violation_cnt;
+  local function int unsigned uid_key(input int unsigned port, input bit is_write,
+                                      input xbar_types_pkg::id_slv_t full_id);
+    return (port << (xbar_types_pkg::ID_W_SLV + 1))
+           | (int'(is_write) << xbar_types_pkg::ID_W_SLV) | int'(full_id);
+  endfunction
+
   // ---- decode-error / same-full-ID completion-order bookkeeping (spec §4,
   // §5.2.6 clause 2.a; M3-DE01/DE02/OR04). Per (source port, direction, full
   // slv-side id) FIFO of "is this owed response a decode-error (err_slv) one?"
@@ -487,6 +508,27 @@ class xbar_scoreboard extends uvm_scoreboard;
     snap = version_at(ro.accept_time);
     hit  = xbar_types_pkg::decode_mst_port(ro.addr, snap.addr_map,
              snap.en_def[ro.port_idx], snap.def_port[ro.port_idx], exp_port);
+
+    // ---- cfgC §5.3.1 precondition fallback monitor (M3-CF03) — armed only under
+    // Cfg.UniqueIds. Runs BEFORE the decode-miss early return so misses (sentinel
+    // target) are tracked too. A same (port,dir,full-id) group already in flight
+    // toward a DIFFERENT target is a §5.3.1 breach ⇒ TB_BUG (env's own guarantee).
+    if (xbar_types_pkg::Cfg.UniqueIds) begin
+      int unsigned uk;
+      int unsigned tgt;
+      uk  = uid_key(ro.port_idx, ro.is_write, ro.id[xbar_types_pkg::ID_W_SLV-1:0]);
+      tgt = hit ? exp_port : xbar_types_pkg::NO_MST_PORTS; // sentinel for err_slv
+      if (uid_cnt.exists(uk) && uid_cnt[uk] != 0 && uid_tgt[uk] != tgt) begin
+        uid_violation_cnt++;
+        `uvm_error("SB_UNIQUEIDS",
+          $sformatf("slv port %0d %s full-id 'h%0h accepted toward target %0d while %0d in-flight same-id/dir transaction(s) target %0d — env broke the spec §5.3.1 UniqueIds precondition (TB_BUG; §5.3.3 makes the DUT undefined here, so this is NOT a DUT_BUG)",
+                     ro.port_idx, ro.is_write ? "AW" : "AR",
+                     ro.id[xbar_types_pkg::ID_W_SLV-1:0], tgt, uid_cnt[uk], uid_tgt[uk]))
+      end
+      if (!uid_cnt.exists(uk) || uid_cnt[uk] == 0) uid_tgt[uk] = tgt;
+      uid_cnt[uk]++;
+    end
+
     if (!hit) return; // §5.2.6 clause 2.b: decode-miss never enters or_open_q/worder
 
     // ---- C5.1/C5.2/C5.5: register this AW/AR's accept as a new open
@@ -684,6 +726,15 @@ class xbar_scoreboard extends uvm_scoreboard;
   virtual function void write_resp(axi_resp_obs ro);
     bit observed_err;    // this completion is a decode-error (all beats DECERR)
     bit expected_is_err; // accept-order-expected err class for this (port,dir,id)
+
+    // cfgC §5.3.1 monitor (M3-CF03): this B/rlast retires one in-flight
+    // (port,dir,full-id) transaction — mirror the accept-time increment so the
+    // in-flight group count stays exact. Armed only under Cfg.UniqueIds.
+    if (xbar_types_pkg::Cfg.UniqueIds) begin
+      int unsigned uk;
+      uk = uid_key(ro.port_idx, ro.is_write, ro.id);
+      if (uid_cnt.exists(uk) && uid_cnt[uk] != 0) uid_cnt[uk]--;
+    end
     // C3.2 source-port response-routing check (spec §5.1.2/§5.1.3): this B/R
     // landed on slv port ro.port_idx — verify that port actually has an
     // outstanding request with this (direction, slv-side id). A miss means
@@ -917,6 +968,13 @@ class xbar_scoreboard extends uvm_scoreboard;
                  atop_pend.num(), worder_match_cnt, worder_mismatch_cnt,
                  worder_open_total, decerr_resp_cnt, decerr_order_violation_cnt),
       UVM_LOW)
+    // cfgC §5.3.1 fallback monitor (M3-CF03): report the breach count so the
+    // evidence self-documents the env-side guard actually ran (0 = precondition
+    // held for the whole run). Only meaningful when armed (Cfg.UniqueIds).
+    if (xbar_types_pkg::Cfg.UniqueIds)
+      `uvm_info("SB_UNIQUEIDS_SUMMARY",
+        $sformatf("cfgC §5.3.1 UniqueIds precondition monitor: violations=%0d (0 = env held the constructive guarantee for the whole run)",
+                   uid_violation_cnt), UVM_LOW)
     if (pending_total != 0) begin
       `uvm_error("SB_DANGLING",
         $sformatf("%0d slv-side request(s) never observed a matching mst-side request — routing incomplete at end of test",

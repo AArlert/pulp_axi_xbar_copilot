@@ -23,19 +23,80 @@ package xbar_types_pkg;
   // one Makefile mapping line (extensible per C5.5). Config points vary ONLY
   // the spec §0 row-3 dimensions; all other Cfg fields and the address-table
   // layout follow baseline (C5.5).
+  // Each branch sets the FIVE spec §0 row-3 dimensions (topology NoSlv/NoMst,
+  // LatencyMode, UniqueIds, ATOPs, Connectivity-sparse-or-not) plus a stable
+  // CFG_POINT_ID (indexes the cg_cfg_point covergroup bin — one bin per
+  // registered config point, functional_coverage.md §4). CFG_RULE_MST_MOD is
+  // how the address-table idx is derived: idx = rule_index mod CFG_RULE_MST_MOD
+  // (C5.5, = NoMstPorts for every point EXCEPT cfgD, where C5.7 pins the 8
+  // rules to mst0/mst1 only ⇒ mod 2). Every field NOT listed as a row-3
+  // dimension stays baseline (C5.5) — the Cfg struct / address layout below
+  // reference these knobs, they are not re-pinned per point.
 `ifdef XBAR_CFG_A
   // cfgA (M3-CF01): topology 1×8 + LatencyMode=NO_LATENCY (spec §0 row 3 /
   // §7.2). NoSlvPorts=1 ⇒ $clog2(1)=0 ⇒ 0-bit ID prefix (spec §5.1, C5.6).
-  localparam int unsigned            NO_SLV_PORTS = 1;
-  localparam int unsigned            NO_MST_PORTS = 8;
-  localparam axi_pkg::xbar_latency_e CFG_LATENCY  = axi_pkg::NO_LATENCY;
-  localparam string                  CFG_NAME     = "cfgA (1x8, NO_LATENCY)";
+  localparam int unsigned            NO_SLV_PORTS    = 1;
+  localparam int unsigned            NO_MST_PORTS    = 8;
+  localparam axi_pkg::xbar_latency_e CFG_LATENCY     = axi_pkg::NO_LATENCY;
+  localparam bit                     CFG_UNIQUE_IDS  = 1'b0;
+  localparam bit                     CFG_ATOPS       = 1'b1;
+  localparam bit                     CFG_SPARSE_CONN = 1'b0;
+  localparam int unsigned            CFG_RULE_MST_MOD= 8;
+  localparam int unsigned            CFG_POINT_ID    = 1;
+  localparam string                  CFG_NAME        = "cfgA (1x8, NO_LATENCY)";
+`elsif XBAR_CFG_B
+  // cfgB (M3-CF02): topology 6×1 + LatencyMode=CUT_ALL_PORTS (spec §0 row 3 /
+  // §7.2). All 8 rules idx=0 (mod NoMstPorts=1) ⇒ maximal mux-side convergence
+  // at the sole master port (spec §3.1: many rules may map to one master port).
+  // NoSlvPorts=6 ⇒ PREFIX_W=3, non-degenerate (same as baseline).
+  localparam int unsigned            NO_SLV_PORTS    = 6;
+  localparam int unsigned            NO_MST_PORTS    = 1;
+  localparam axi_pkg::xbar_latency_e CFG_LATENCY     = axi_pkg::CUT_ALL_PORTS;
+  localparam bit                     CFG_UNIQUE_IDS  = 1'b0;
+  localparam bit                     CFG_ATOPS       = 1'b1;
+  localparam bit                     CFG_SPARSE_CONN = 1'b0;
+  localparam int unsigned            CFG_RULE_MST_MOD= 1;
+  localparam int unsigned            CFG_POINT_ID    = 2;
+  localparam string                  CFG_NAME        = "cfgB (6x1, CUT_ALL_PORTS)";
+`elsif XBAR_CFG_C
+  // cfgC (M3-CF03): topology 4×4 + UniqueIds=1'b1 (spec §0 row 3 / §5.3). 8
+  // rules idx = rule_index mod 4 (2 rules per master port). Env constructively
+  // guarantees the §5.3.1 precondition (single-outstanding-per-port ⇒ every
+  // in-flight ID unique per direction) — enforced by a fallback monitor (CF03).
+  localparam int unsigned            NO_SLV_PORTS    = 4;
+  localparam int unsigned            NO_MST_PORTS    = 4;
+  localparam axi_pkg::xbar_latency_e CFG_LATENCY     = axi_pkg::CUT_ALL_AX;
+  localparam bit                     CFG_UNIQUE_IDS  = 1'b1;
+  localparam bit                     CFG_ATOPS       = 1'b1;
+  localparam bit                     CFG_SPARSE_CONN = 1'b0;
+  localparam int unsigned            CFG_RULE_MST_MOD= 4;
+  localparam int unsigned            CFG_POINT_ID    = 3;
+  localparam string                  CFG_NAME        = "cfgC (4x4, UniqueIds)";
+`elsif XBAR_CFG_D
+  // cfgD (M3-CF04): topology 4×4 + sparse Connectivity + ATOPs=1'b0 (spec §0
+  // row 3 / §8 / §6). 8 rules point ONLY to mst0/mst1 (mod 2); mst2/mst3 are
+  // reachable only via each slave port's default master port (slv 0/1 → mst2,
+  // slv 2/3 → mst3). Connectivity per C5.7 keeps SPEC-8.3 constructively true.
+  localparam int unsigned            NO_SLV_PORTS    = 4;
+  localparam int unsigned            NO_MST_PORTS    = 4;
+  localparam axi_pkg::xbar_latency_e CFG_LATENCY     = axi_pkg::CUT_ALL_AX;
+  localparam bit                     CFG_UNIQUE_IDS  = 1'b0;
+  localparam bit                     CFG_ATOPS       = 1'b0;
+  localparam bit                     CFG_SPARSE_CONN = 1'b1;
+  localparam int unsigned            CFG_RULE_MST_MOD= 2;
+  localparam int unsigned            CFG_POINT_ID    = 4;
+  localparam string                  CFG_NAME        = "cfgD (4x4, sparse Conn, ATOPs=0)";
 `else
   // baseline (M1/M2): spec §0 row 2, values pinned (C5.4 anchor — unchanged).
-  localparam int unsigned            NO_SLV_PORTS = 6;
-  localparam int unsigned            NO_MST_PORTS = 8;
-  localparam axi_pkg::xbar_latency_e CFG_LATENCY  = axi_pkg::CUT_ALL_AX;
-  localparam string                  CFG_NAME     = "baseline (6x8, CUT_ALL_AX)";
+  localparam int unsigned            NO_SLV_PORTS    = 6;
+  localparam int unsigned            NO_MST_PORTS    = 8;
+  localparam axi_pkg::xbar_latency_e CFG_LATENCY     = axi_pkg::CUT_ALL_AX;
+  localparam bit                     CFG_UNIQUE_IDS  = 1'b0;
+  localparam bit                     CFG_ATOPS       = 1'b1;
+  localparam bit                     CFG_SPARSE_CONN = 1'b0;
+  localparam int unsigned            CFG_RULE_MST_MOD= 8;
+  localparam int unsigned            CFG_POINT_ID    = 0;
+  localparam string                  CFG_NAME        = "baseline (6x8, CUT_ALL_AX)";
 `endif
 
   // ---- port counts / widths (spec §0 row 2, §2.1, §5.1.1) --------------
@@ -90,7 +151,7 @@ package xbar_types_pkg;
     PipelineStages:     1,
     AxiIdWidthSlvPorts: ID_W_SLV,
     AxiIdUsedSlvPorts:  3,
-    UniqueIds:          1'b0,
+    UniqueIds:          CFG_UNIQUE_IDS, // config-point dimension (spec §0 row 3/§5.3)
     AxiAddrWidth:       ADDR_W,
     AxiDataWidth:       DATA_W,
     NoAddrRules:        NO_ADDR_RULES
@@ -103,18 +164,60 @@ package xbar_types_pkg;
   localparam int unsigned MAX_MST_TRANS     = Cfg.MaxMstTrans;                // 10
   localparam int unsigned MAX_MST_TRANS_EFF = (1 << $clog2(MAX_MST_TRANS)) - 1; // 15
 
-  localparam bit ATOPS = 1'b1; // spec §0 row 2 / §2.2 — M1-01 issues no ATOP (uvm_env.md C2.4 note)
-  localparam bit [Cfg.NoSlvPorts-1:0][Cfg.NoMstPorts-1:0] CONNECTIVITY = '1;
+  localparam bit ATOPS = CFG_ATOPS; // spec §0 row 2/row 3 (§2.2/§6) — config-point dim
 
-  // ---- address map: one non-overlapping rule per master port (spec §3.1) -
+  // Connectivity (spec §2.2/§8, C5.7): full-mesh for every point except cfgD's
+  // sparse construction. cfgD: rule-reachable ports (0..CFG_RULE_MST_MOD-1, i.e.
+  // mst0/mst1) are connected to ALL slave ports; the sparse ports (mst2/mst3)
+  // are connected only to the slave-port rows that use them as default master
+  // port (rows 0..NoSlv/2-1 → mst NoMst-2; rows NoSlv/2..NoSlv-1 → mst NoMst-1).
+  // This keeps SPEC-8.3 constructively true (no address decodes to a
+  // non-connected port), so SPEC-8.4's undefined case is unreachable.
+  localparam int unsigned CFG_DEF_LO = (NO_MST_PORTS >= 2) ? (NO_MST_PORTS - 2) : 0;
+  localparam int unsigned CFG_DEF_HI = (NO_MST_PORTS >= 1) ? (NO_MST_PORTS - 1) : 0;
+
+  function automatic bit [NO_SLV_PORTS-1:0][NO_MST_PORTS-1:0] gen_connectivity();
+    for (int unsigned s = 0; s < NO_SLV_PORTS; s++) begin
+      if (!CFG_SPARSE_CONN) begin
+        gen_connectivity[s] = '1;
+      end else begin
+        gen_connectivity[s] = '0;
+        for (int unsigned m = 0; m < CFG_RULE_MST_MOD; m++)
+          gen_connectivity[s][m] = 1'b1;                       // mst0/mst1: all rows
+        gen_connectivity[s][(s < NO_SLV_PORTS/2) ? CFG_DEF_LO : CFG_DEF_HI] = 1'b1; // this row's default
+      end
+    end
+  endfunction
+  localparam bit [NO_SLV_PORTS-1:0][NO_MST_PORTS-1:0] CONNECTIVITY = gen_connectivity();
+
+  // cfgD default-master-port config (spec §3.3, C5.7): slave rows 0..NoSlv/2-1
+  // default to mst NoMst-2, rows NoSlv/2..NoSlv-1 to mst NoMst-1 (cfgD: mst2 /
+  // mst3). Applied at runtime by m3_cf04's vseq in an all-idle window (spec
+  // §3.4); computed for every config but only exercised under cfgD.
+  localparam logic [NO_SLV_PORTS-1:0] EN_DEFAULT_CFGD = '1;
+
+  function automatic logic [NO_SLV_PORTS-1:0][MST_PORT_IDX_W-1:0]
+      gen_default_mst_cfgd();
+    for (int unsigned i = 0; i < NO_SLV_PORTS; i++)
+      gen_default_mst_cfgd[i] = (i < NO_SLV_PORTS/2)
+          ? MST_PORT_IDX_W'(CFG_DEF_LO) : MST_PORT_IDX_W'(CFG_DEF_HI);
+  endfunction
+  localparam logic [NO_SLV_PORTS-1:0][MST_PORT_IDX_W-1:0] DEFAULT_MST_CFGD =
+      gen_default_mst_cfgd();
+
+  // ---- address map: one non-overlapping rule per region (spec §3.1) ------
   // Region size 0x1000_0000 (256 MiB) keeps every rule inside the 32-bit
-  // address space with no wraparound; idx == rule index == target mst port.
+  // address space with no wraparound. idx = rule_index mod CFG_RULE_MST_MOD
+  // (C5.5): = rule_index for baseline/cfgA/cfgC (mod = NoMstPorts, identity for
+  // index < NoMstPorts), all-0 for cfgB (mod 1), and {0,1} alternating for cfgD
+  // (mod 2, C5.7 — rules point to mst0/mst1 only). Baseline stays bit-for-bit
+  // identical (0..7 mod 8 = 0..7, C5.4).
   localparam addr_t REGION_SIZE = 32'h1000_0000;
 
   function automatic rule_t [NO_ADDR_RULES-1:0] gen_addr_map();
     for (int unsigned i = 0; i < NO_ADDR_RULES; i++) begin
       gen_addr_map[i] = rule_t'{
-        idx:        i,
+        idx:        i % CFG_RULE_MST_MOD,
         start_addr: addr_t'(i)   * REGION_SIZE,
         end_addr:   addr_t'(i+1) * REGION_SIZE,
         default:    '0

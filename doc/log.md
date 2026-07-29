@@ -2,6 +2,53 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.16] 2026-07-30 卡⑤（五张 M3 执行卡收官）：M3-CF02/03/04+AT02 转绿
+
+**Done**
+- **卡⑤（DV，L2，升级自原计划 L1）**：复用卡④建的多配置构建机制，扩展
+  `xbar_types_pkg.sv`/`sim/Makefile` 补齐 cfgB/C/D 三个配置点（`UniqueIds`/
+  `ATOPs`/`Connectivity`/地址表覆盖维度接入选点机制）；`tb/functional_
+  coverage.sv` 新增 `cg_cfg_point`（design-prompt functional_coverage.md
+  §4 规划、义务范围内的唯一一项，其余四个 M3 covergroup 明确留在范围外）。
+  落地并转绿四条 testplan 行：**M3-CF02**（cfgB 6×1+`CUT_ALL_PORTS`）、
+  **M3-CF03**（cfgC 4×4+`UniqueIds=1`，env 侧 `SB_UNIQUEIDS` 兜底监视）、
+  **M3-CF04**（cfgD 4×4+稀疏 `Connectivity`+`ATOPs=0`，按 tb_top.md C5.7
+  逐字构造）、**M3-AT02**（ATOP 跨方向假冲突守卫）。基线+cfgA 回归防线
+  在验证新场景前先行核对，逐位一致（C5.4 持续成立）。全回归 20/20 PASS
+- **KILL-0002**：为 cfgC 的 `SB_UNIQUEIDS` 兜底监视做注伤自证——植入
+  §5.3.1 违例（同完整 ID/同方向/异目标 master 端口）→ 红
+  （`violations=1`）→ 撤销 → 绿，证明该监视器非恒真空转
+- **新发 BUG-0034（OPEN，DUT/TB 未决，不阻塞）**：M3-AT02 构造多拍两腿
+  重叠时，slave 端口 R 通道四路独立证据（`MON_RNOAR`/`SVA_RLAST_LEN`/
+  `SB_RBEATS`/`SB_ATOP_DANGLING`）同时命中，疑似 atop 影子读 R 与同桶
+  普通读 R 交织（AXI4 §1 禁止读交织）；`r_ready` 恒 1 排除背压，xdebug
+  `signal.changes` 显示同一连续 `r_valid` 块内 `r_id` 跳变 3 次，是交织
+  的结构性证据。**DUT_BUG（真交织）vs TB_BUG（monitor/SVA 无交织重建
+  缺口）未决**——需波形逐 beat decode `r_id`/`r_last` 定性，本卡 `value.at`
+  在该 FSDB 上返回 unknown，未能落定，留待专卡。本卡**合法绕过**：
+  M3-AT02 改单拍两腿，§6.5 假冲突仍真实发生、三条判据完整满足，不阻塞
+  M3；未在判决本体加临时补丁、未把观测行为抄成期望值
+
+**Not done**
+- BUG-0034 定性未决（需要 xdebug 更细粒度取证或 Verdi 波形逐 beat decode，
+  留待独立诊断卡）
+- 遗留四个 M3 covergroup 缺口（`cg_decode_error`/`cg_decerr_shape`/
+  `cg_miss_order`/`cg_default_port_tracked`/`cg_live_addr_map`，早于本次
+  五卡序列即存在，design-prompt 已规划但 `functional_coverage.sv` 未实现）
+  ——非本卡引入，留给独立记账/整改卡
+- cfgC 的 §5.3.1 前置保证目前靠单发（single-outstanding）构造性满足；
+  若 M4 需要多发在飞需补集中式 ID 分配器（fixer 交付报告已记）
+
+**Next**
+- **五张 M3 执行卡序列至此全部完成**（①②③④⑤ + 各自 closer/rev 支线）。
+  剩余 M3 收尾项：BUG-0034 定性（独立诊断卡）、四个遗留 covergroup 缺口
+  （独立整改卡）、M3 里程碑签核（`make check MILESTONE=3` + rev 全 rubric）
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
+- `make selftest`（60 tests）通过
+- 全回归 20/20 PASS（基线 + cfgA + 卡①②③④已交付场景 + 本卡四场景）
+
 ## [0.3.15] 2026-07-30 卡④：M3 多配置构建机制落地 + M3-CF01（cfgA）转绿
 
 **Done**

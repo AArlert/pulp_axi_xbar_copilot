@@ -158,12 +158,33 @@ class xbar_functional_coverage extends uvm_component;
     }
   endgroup
 
+  // ---- cg_cfg_point (spec §0 row 3, functional_coverage.md §4, M3-CF01~CF04)
+  // Records WHICH config point this run actually elaborated — one bin per
+  // registered config point, so "哪些配置点真的跑过" becomes a coverage-database
+  // fact rather than a regression-list claim. The value is the compile-time
+  // xbar_types_pkg::CFG_POINT_ID (elaborated by the TEST-name-selected build in
+  // sim/Makefile, C5.1), sampled once at start_of_simulation. This covergroup is
+  // NON-DECISIONAL like every other bin in this file — it draws no verdict, it
+  // only lets signoff confirm each config point in the regression was really
+  // exercised (not silently re-running one config, the BUG-0022/0028 hazard).
+  covergroup cg_cfg_point with function sample(int unsigned point_id);
+    option.per_instance = 1;
+    cp_config_point: coverpoint point_id {
+      bins baseline = {0}; // 6x8 CUT_ALL_AX (M1/M2 + M3 baseline scenarios)
+      bins cfgA     = {1}; // 1x8 NO_LATENCY       (M3-CF01)
+      bins cfgB     = {2}; // 6x1 CUT_ALL_PORTS    (M3-CF02)
+      bins cfgC     = {3}; // 4x4 UniqueIds        (M3-CF03)
+      bins cfgD     = {4}; // 4x4 sparse Conn/ATOPs=0 (M3-CF04)
+    }
+  endgroup
+
   int unsigned n_addr_reconfig;
   int unsigned n_stall;
   int unsigned n_tx_limit;
   int unsigned n_w_order;
   int unsigned n_atop;
   int unsigned n_atop_read;
+  int unsigned n_cfg_point;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -173,6 +194,15 @@ class xbar_functional_coverage extends uvm_component;
     cg_w_order               = new();
     cg_atop                  = new();
     cg_atop_read_interaction = new();
+    cg_cfg_point             = new();
+  endfunction
+
+  // Sample the elaborated config point once (its value is a compile-time
+  // constant, so one sample fully covers this run's bin — spec §0 row 3).
+  virtual function void start_of_simulation_phase(uvm_phase phase);
+    super.start_of_simulation_phase(phase);
+    cg_cfg_point.sample(xbar_types_pkg::CFG_POINT_ID);
+    n_cfg_point++;
   endfunction
 
   function void sample_addr_reconfig(bit is_post, int unsigned src_port);
@@ -222,6 +252,11 @@ class xbar_functional_coverage extends uvm_component;
                  n_w_order,       cg_w_order.get_inst_coverage(),
                  n_atop,          cg_atop.get_inst_coverage(),
                  n_atop_read,     cg_atop_read_interaction.get_inst_coverage()),
+      UVM_LOW)
+    `uvm_info("FCOV_SUMMARY",
+      $sformatf("cg_cfg_point: samples=%0d inst_cov=%0.2f%% point_id=%0d config=%s",
+                 n_cfg_point, cg_cfg_point.get_inst_coverage(),
+                 xbar_types_pkg::CFG_POINT_ID, xbar_types_pkg::CFG_NAME),
       UVM_LOW)
     `uvm_info("FCOV_SUMMARY",
       $sformatf("cg_stall coverpoints: cp_stall_state=%0.2f%% cp_dir=%0.2f%% x_state_dir=%0.2f%% | cg_tx_limit cp_inflight=%0.2f%% | cg_addr_reconfig cp_table_version=%0.2f%% cp_src_port=%0.2f%% x_version_src=%0.2f%% | cg_w_order cp_w_contention=%0.2f%% | cg_atop cp_src=%0.2f%% cp_r_resp=%0.2f%% x_src_rresp=%0.2f%% | cg_atop_read_interaction cp=%0.2f%%",

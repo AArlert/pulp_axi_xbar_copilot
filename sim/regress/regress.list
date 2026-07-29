@@ -15,3 +15,7 @@ m3_de02_default_test 1
 m3_or04_order_test 1
 m3_or05_range_test 1
 m3_cf01_cfga_test 1
+m3_cf02_cfgb_test 1
+m3_cf03_cfgc_test 1
+m3_cf04_cfgd_test 1
+m3_at02_atop_read_test 1

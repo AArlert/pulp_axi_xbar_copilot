@@ -1509,3 +1509,209 @@ class m3_cf01_cfga_vseq extends uvm_sequence #(uvm_sequence_item);
     ms.start(p_sequencer.slv_sqr[0]);
   endtask
 endclass
+
+// ---- M3-CF02: config point B regression (cfgB 6×1, CUT_ALL_PORTS) (testplan
+// M3-CF02, spec §0 row 3 / §7.2 / §5.5). Every slave port concurrently drives
+// hit write/read bursts — all 8 rules idx=0 so every hit converges on the sole
+// master port (mux-side convergence maximised, spec §3.1 / §5.5.1) — plus a
+// batch of unmapped-address read/writes (en_default='0 ⇒ err_slv DECERR). No
+// new stimulus primitives: hits reuse slvport_basic_seq (tgt=(slv+k)%1=0 always,
+// num_iter deepened so several AWs from distinct sources are co-pending at the
+// master port), misses reuse slvport_de01_seq (§4.7 no-ATOP). Same-source W
+// bursts stay in AW order (single-outstanding-per-port driver) and the scoreboard
+// SB_WORDER check owns that per-source order (spec §5.5.1); NOTHING here asserts
+// cross-source round-robin order (spec §5.5.4 red line) — the worder_sva compete
+// cover only witnesses the ≥2-source contention was reached.
+class m3_cf02_cfgb_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_cf02_cfgb_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m3_cf02_cfgb_vseq"); super.new(name); endfunction
+  task body();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork begin
+        slvport_basic_seq hs;
+        slvport_de01_seq  ms;
+        hs = slvport_basic_seq::type_id::create($sformatf("cf02_hit_%0d", ii));
+        hs.slv_port_idx = ii;
+        hs.num_iter     = 6; // several bursts per source at the sole master port
+        hs.start(p_sequencer.slv_sqr[ii]);
+        ms = slvport_de01_seq::type_id::create($sformatf("cf02_miss_%0d", ii));
+        ms.slv_port_idx = ii;
+        ms.start(p_sequencer.slv_sqr[ii]);
+      end join_none
+    end
+    wait fork;
+  endtask
+endclass
+
+// ---- M3-CF03: config point C regression (cfgC 4×4, UniqueIds=1'b1) (testplan
+// M3-CF03, spec §0 row 3 / §5.3). Every slave port concurrently walks hit
+// write/read bursts across all 4 master ports (basic_seq tgt=(slv+k)%4) plus
+// unmapped misses (err_slv). The §5.3.1 precondition (per direction, in-flight
+// IDs unique OR same-target) is guaranteed CONSTRUCTIVELY: the slvport driver is
+// single-outstanding-per-port for plain items (slvport_agent.sv header), so a
+// slave port never has two same-direction transactions in flight at once ⇒ every
+// in-flight ID is trivially unique per direction (precondition branch a). An
+// env-side fallback monitor (scoreboard uid_check, gated on Cfg.UniqueIds) flags
+// any violation as TB_BUG — so a §5.3.1 breach can never be silently mistaken for
+// a DUT_BUG, and the ✅ is never built on §5.3.3 undefined behaviour.
+class m3_cf03_cfgc_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_cf03_cfgc_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m3_cf03_cfgc_vseq"); super.new(name); endfunction
+  task body();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork begin
+        slvport_basic_seq hs;
+        slvport_de01_seq  ms;
+        hs = slvport_basic_seq::type_id::create($sformatf("cf03_hit_%0d", ii));
+        hs.slv_port_idx = ii;
+        hs.num_iter     = xbar_types_pkg::NO_MST_PORTS; // walk every master port
+        hs.start(p_sequencer.slv_sqr[ii]);
+        ms = slvport_de01_seq::type_id::create($sformatf("cf03_miss_%0d", ii));
+        ms.slv_port_idx = ii;
+        ms.start(p_sequencer.slv_sqr[ii]);
+      end join_none
+    end
+    wait fork;
+  endtask
+endclass
+
+// ---- M3-CF04: config point D regression (cfgD 4×4, sparse Connectivity,
+// ATOPs=1'b0) (testplan M3-CF04, spec §0 row 3 / §8 / §6 / §3.3). The 8 rules
+// point only to mst0/mst1 (addr-map idx = index mod 2), so every rule-hit routes
+// to a mst0/mst1 (connected to all slave ports). mst2/mst3 are reachable ONLY via
+// each slave port's default master port: slv 0/1 → mst2, slv 2/3 → mst3 (spec
+// §3.3, applied once in an all-idle window before traffic, spec §3.4). Unmapped
+// addresses therefore route to the row's default port (mst2/mst3) rather than
+// err_slv, giving the sparse ports genuine traffic. The existing stall_sva
+// c_bug25_default_aw/ar cover witnesses that default-routed traffic — since in
+// cfgD every default target is mst2/mst3, its firing proves mst2/mst3 got default
+// traffic (the CF04 non-decisional witness; no new covergroup needed, and none of
+// the excluded cg_default_port_tracked family is touched). ATOPs=1'b0 ⇒ every AW
+// is aw.atop≡'0 (slvport_basic_seq / slvport_de01_seq never set atop).
+class m3_cf04_cfgd_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_cf04_cfgd_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  virtual xbar_cfg_if cfg_vif; // set by the test
+
+  function new(string name = "m3_cf04_cfgd_vseq"); super.new(name); endfunction
+
+  // Apply cfgD's per-port default master port config once, in an all-idle window
+  // (spec §3.4 — no AW/AR valid during the change), before any traffic.
+  task automatic set_cfgd_default();
+    do @(posedge cfg_vif.clk_i); while (!cfg_vif.all_ax_idle);
+    cfg_vif.en_default_mst_port <= xbar_types_pkg::EN_DEFAULT_CFGD;
+    cfg_vif.default_mst_port    <= xbar_types_pkg::DEFAULT_MST_CFGD;
+    repeat (3) @(posedge cfg_vif.clk_i);
+  endtask
+
+  task body();
+    if (cfg_vif == null)
+      `uvm_fatal("NOCFGVIF", "m3_cf04_cfgd_vseq: cfg_vif not set")
+    set_cfgd_default();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork begin
+        slvport_basic_seq hs;
+        slvport_de01_seq  ms;
+        hs = slvport_basic_seq::type_id::create($sformatf("cf04_hit_%0d", ii));
+        hs.slv_port_idx = ii;
+        hs.num_iter     = xbar_types_pkg::NO_MST_PORTS; // regions 0..3 → mst0/mst1 via idx
+        hs.start(p_sequencer.slv_sqr[ii]);
+        ms = slvport_de01_seq::type_id::create($sformatf("cf04_miss_%0d", ii));
+        ms.slv_port_idx = ii;
+        ms.start(p_sequencer.slv_sqr[ii]); // unmapped → this row's default (mst2/mst3)
+      end join_none
+    end
+    wait fork;
+  endtask
+endclass
+
+// ---- M3-AT02: ATOP atomic read cross-direction false-conflict guard (testplan
+// M3-AT02, spec §6.5 / §5.2.5, BUG-0012). Per slave port an axi_pair_item overlaps
+// a normal READ (leg A) with an atomic load requiring a read response (leg B, a
+// write with atop) that share the SAME low AxiIdUsedSlvPorts=3 bucket but target
+// DIFFERENT master ports — so the atomic load's shadow-AR is injected into the AR
+// direction counter/compare against the still-open normal read (spec §6.5), the
+// cross-direction false conflict M2-AT01 only observed incidentally. The two legs
+// carry DIFFERENT full IDs (high bits differ) so the atomic load's ID stays unique
+// vs all in-flight (spec §6.4). Functional correctness is unaffected (spec §6.5):
+// the atomic load returns B+R (spec §6.3), the read completes, scoreboard zero
+// mismatch. The cover cg_atop_read_interaction.colliding_read_present fires because
+// a same-bucket read is open at the atomic load's accept (scoreboard collide flag).
+class slvport_at02_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_at02_seq)
+
+  int unsigned slv_port_idx;
+
+  // ATOP[5:4]=ATOMICLOAD, ATOP[3]=LITTLE_END, ATOP[2:0]=ADD (axi_pkg.sv).
+  localparam axi_pkg::atop_t ATOP_LOAD_ADD =
+      {axi_pkg::ATOP_ATOMICLOAD, axi_pkg::ATOP_LITTLE_END, axi_pkg::ATOP_ADD};
+
+  function new(string name = "slvport_at02_seq"); super.new(name); endfunction
+
+  task body();
+    axi_pair_item p;
+    int unsigned  bkt, tgt_a, tgt_b;
+    bkt   = slv_port_idx % (1 << xbar_types_pkg::Cfg.AxiIdUsedSlvPorts);
+    tgt_a = slv_port_idx % xbar_types_pkg::NO_MST_PORTS;
+    tgt_b = (slv_port_idx + 1) % xbar_types_pkg::NO_MST_PORTS;
+
+    p = axi_pair_item::type_id::create($sformatf("at02_%0d", slv_port_idx));
+    // leg A: normal read, low bucket = bkt, target A. Stays open (awaiting R)
+    // while leg B's atomic load is accepted.
+    p.is_write = 1'b0;
+    p.id       = xbar_types_pkg::id_slv_t'({2'd0, bkt[2:0]});
+    p.addr     = xbar_types_pkg::addr_t'(tgt_a) * xbar_types_pkg::REGION_SIZE
+                 + 32'h0000_0900 + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+    p.len      = axi_pkg::len_t'(0); // single beat: the read + atomic-load R bursts
+                                     // are each 1 beat, so the two same-slave-port
+                                     // R streams cannot beat-interleave (AXI4 forbids
+                                     // R interleaving; a multi-beat read here lets the
+                                     // §6.5 shadow-read R and the normal read R return
+                                     // beat-mixed on the shared slave-port R channel)
+    // leg B: atomic load requiring read response, SAME low bucket (bkt) but
+    // DIFFERENT full ID and DIFFERENT target (tgt_b) — the §6.5 cross-direction
+    // collision that must NOT be judged an §5.2.1 violation (sva_bind C3.2 range
+    // boundary), only cover-witnessed here.
+    p.second_item = axi_seq_item::type_id::create(
+        $sformatf("at02_%0d_b", slv_port_idx));
+    p.second_item.is_write = 1'b1;
+    p.second_item.atop     = ATOP_LOAD_ADD;
+    p.second_item.id       = xbar_types_pkg::id_slv_t'({2'd1, bkt[2:0]});
+    p.second_item.addr     = xbar_types_pkg::addr_t'(tgt_b)
+                             * xbar_types_pkg::REGION_SIZE
+                             + 32'h0000_0a00 + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+    p.second_item.len      = axi_pkg::len_t'(0);
+    p.second_item.wdata.delete();
+    p.second_item.wstrb.delete();
+    p.second_item.wdata.push_back({$urandom(), $urandom()});
+    p.second_item.wstrb.push_back('1);
+    p.gap_cycles = 1; // leg A's AR accepted first, so it is open at leg B's accept
+    start_item(p); finish_item(p);
+  endtask
+endclass
+
+class m3_at02_atop_read_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_at02_atop_read_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m3_at02_atop_read_vseq"); super.new(name); endfunction
+  task body();
+    // Single slave port (testplan M3-AT02 "单 slave 端口"): the atomic load and
+    // the same-bucket colliding read both originate from ONE slave port toward
+    // two DIFFERENT master ports (mst0 / mst1). Deliberately NOT forked across
+    // all ports — that would make port p's atomic load and port p+1's read
+    // converge at a shared master port, an atop+read convergence AT02 is not
+    // about and which the plain responder does not model (an unintended
+    // scenario, not the §6.5 cross-direction interaction under test). Repeated a
+    // few times on the same port for robustness (each repeat is one atop+read
+    // overlap → several colliding_read_present cover hits).
+    slvport_at02_seq s;
+    s = slvport_at02_seq::type_id::create("at02_seq");
+    s.slv_port_idx = 0;
+    s.start(p_sequencer.slv_sqr[0]);
+  endtask
+endclass

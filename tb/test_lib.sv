@@ -349,3 +349,89 @@ class m3_cf01_cfga_test extends base_test;
     phase.drop_objection(this, "m3_cf01_cfga_vseq done");
   endtask
 endclass
+
+// M3-CF02 config point B regression (testplan.md M3-CF02, spec §0 row 3/§7.2).
+// TEST name prefix m3_cf02_ selects the XBAR_CFG_B build in sim/Makefile
+// (cfgB: 6×1, CUT_ALL_PORTS) — see design-prompt tb_top.md C5.1.
+class m3_cf02_cfgb_test extends base_test;
+  `uvm_component_utils(m3_cf02_cfgb_test)
+
+  function new(string name = "m3_cf02_cfgb_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_cf02_cfgb_vseq vseq;
+    phase.raise_objection(this, "m3_cf02_cfgb_vseq running");
+    vseq = m3_cf02_cfgb_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_cf02_cfgb_vseq done");
+  endtask
+endclass
+
+// M3-CF03 config point C regression (testplan.md M3-CF03, spec §0 row 3/§5.3).
+// TEST name prefix m3_cf03_ selects the XBAR_CFG_C build in sim/Makefile
+// (cfgC: 4×4, UniqueIds=1) — see design-prompt tb_top.md C5.1.
+class m3_cf03_cfgc_test extends base_test;
+  `uvm_component_utils(m3_cf03_cfgc_test)
+
+  function new(string name = "m3_cf03_cfgc_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_cf03_cfgc_vseq vseq;
+    phase.raise_objection(this, "m3_cf03_cfgc_vseq running");
+    vseq = m3_cf03_cfgc_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_cf03_cfgc_vseq done");
+  endtask
+endclass
+
+// M3-CF04 config point D regression (testplan.md M3-CF04, spec §0 row 3/§8/§6).
+// TEST name prefix m3_cf04_ selects the XBAR_CFG_D build in sim/Makefile
+// (cfgD: 4×4, sparse Connectivity, ATOPs=0). Fetches the runtime config bus so
+// the vseq can apply the per-port default master port config (mst2/mst3) in an
+// all-idle window before traffic (spec §3.3/§3.4).
+class m3_cf04_cfgd_test extends base_test;
+  `uvm_component_utils(m3_cf04_cfgd_test)
+
+  virtual xbar_cfg_if cfg_vif;
+
+  function new(string name = "m3_cf04_cfgd_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual xbar_cfg_if)::get(this, "", "cfg_vif", cfg_vif))
+      `uvm_fatal("NOCFGVIF", "m3_cf04_cfgd_test: cfg_vif not set")
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_cf04_cfgd_vseq vseq;
+    phase.raise_objection(this, "m3_cf04_cfgd_vseq running");
+    vseq = m3_cf04_cfgd_vseq::type_id::create("vseq");
+    vseq.cfg_vif = cfg_vif;
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_cf04_cfgd_vseq done");
+  endtask
+endclass
+
+// M3-AT02 ATOP atomic read cross-direction false-conflict guard (testplan.md
+// M3-AT02, spec §6.5/§5.2.5, BUG-0012). Baseline config (ATOPs=1).
+class m3_at02_atop_read_test extends base_test;
+  `uvm_component_utils(m3_at02_atop_read_test)
+
+  function new(string name = "m3_at02_atop_read_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_at02_atop_read_vseq vseq;
+    phase.raise_objection(this, "m3_at02_atop_read_vseq running");
+    vseq = m3_at02_atop_read_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_at02_atop_read_vseq done");
+  endtask
+endclass
