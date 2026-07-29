@@ -170,6 +170,30 @@ class TestSignoffGate(DocsBase):
         self.assertIn("[FAIL] 1.", cp.stdout)
         self.assertIn("M1-01", cp.stdout)
 
+    def test_kill_coverage_with_archived_row(self):
+        """Regression for FB-29: check_kill_coverage() must scan both live
+        bugs.md and bugs_archive.md (not just live). When a KILL row has been
+        archived, it still counts toward the milestone's kill coverage."""
+        set_scenario_green(self.tmp)
+        ev_dir = self.tmp / "doc" / "evidence" / "v0.1.0"
+        (ev_dir / "result_summary.txt").write_text(
+            "fixture regression passed=1/1\n", encoding="utf-8")
+        # Put KILL row in live bugs.md (empty)
+        self.doc("bugs.md").write_text(
+            "# Bugs\n\n" + _table(EN["bug_header"]),
+            encoding="utf-8")
+        # Put KILL row in bugs_archive.md
+        (self.tmp / "doc" / "archive" / "bugs-archive.md").write_text(
+            "# Bugs archive\n\n" + _table(EN["bug_header"], [
+                "| KILL-001 | KILL | TB | M1 scoreboard KILL: injected "
+                "off-by-one, red->green | - | - | - | - |"]),
+            encoding="utf-8")
+        # Verify that kill coverage still passes even with archived KILL row
+        cp = run(self.tmp, "docs.py", "--check", "--milestone", "1")
+        self.assertEqual(cp.returncode, 0, cp.stdout)
+        self.assertIn("[PASS] 4.", cp.stdout)  # kill coverage
+        self.assertIn("KILL-001", cp.stdout)  # the archived KILL row is found
+
 
 class TestArchive(DocsBase):
     def test_archive_roundtrip(self):

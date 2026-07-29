@@ -928,15 +928,18 @@ def cmd_signoff(mnum=None):
 def check_kill_coverage(mnum):
     """Invariant 5's machine backing: no kill, no trust. A checker that has
     never been proven able to go red is a hypothesis, not evidence — this
-    checks doc/bugs.md for at least one KILL row (status=KILL) tagged to
-    this milestone (summary contains the bare milestone token, e.g. "M2").
-    Deliberately a minimum, not a per-checker-class census: there is no
-    canonical registry of "every checker this milestone touched" to
-    enumerate against, so whether the KILL set is actually complete stays a
-    human call at rubric review (workflow/review.md, the kill-coverage
-    question) — this only catches the milestone with zero kills at all."""
+    checks doc/bugs.md (and archive) for at least one KILL row (status=KILL)
+    tagged to this milestone (summary contains the bare milestone token,
+    e.g. "M2"). Deliberately a minimum, not a per-checker-class census:
+    there is no canonical registry of "every checker this milestone touched"
+    to enumerate against, so whether the KILL set is actually complete stays
+    a human call at rubric review (workflow/review.md, the kill-coverage
+    question) — this only catches the milestone with zero kills at all.
+    See doc/fw-feedback.md FB-29."""
     tag = "M%s" % mnum
-    hits = [r.get(CFG.C["bug_id"], "?") for r in parse_table(CFG.bugs)
+    bug_rows = parse_table(CFG.bugs)
+    abug_rows = parse_table(CFG.bugs_archive)
+    hits = [r.get(CFG.C["bug_id"], "?") for r in bug_rows + abug_rows
             if r.get(CFG.C["bug_status"], "").strip() == "KILL"
             and re.search(r"\b%s\b" % re.escape(tag),
                           r.get(CFG.C["bug_summary"], ""))]
