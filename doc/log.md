@@ -2,6 +2,37 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.14] 2026-07-29 closer 独立复推 cp_stall_state 论证一致，BUG-0018 转 CLOSED
+
+**Done**
+- **closer 卡（fresh 独立实例，非卡③ fixer）**：独立重跑 M2-OR01/M2-WO01 +
+  15 场景全回归，全 PASS、UVM_ERROR=0；历史守卫（M2-OR03 的 collide/
+  stack_diff/w_lost/r_lost 系列）字节级未受判决输入管线改动影响
+- **独立重新推导 cp_stall_state 几何论证**（不采信 fixer 结论，从
+  `cg_stall` covergroup 定义 + `stall_cls` 赋值逻辑 + M2-OR01 激励构造
+  逐步重推）：确认 `cp_stall_state` 只有 3 个 bin（SC_STALLED/SC_SAME_TGT/
+  SC_DIFF_DIR），M2-OR01 的构造（同方向、不同目标 master 端口）结构性只能
+  触达 SC_STALLED 一类，天花板即 33.33%、且读腿在修复前已达标——**closer
+  独立复核后与 fixer 结论一致**：REV-011 §3.3 该子句对 M2-OR01 几何不可达，
+  实质判据是 `x_state_dir[stalled][write]`（已由空转非空达标）。订正写入
+  `doc/bugs.md`/`doc/bugs/BUG-0018.md`
+- 填 `fix_commit=7a1c912`（`git show --stat` 核实确含三份修复文件），
+  `make evidence BUG=BUG-0018 TEST=m2_or01_stall_test SEED=1` 一次通过，
+  **BUG-0018 转 CLOSED**
+
+**Not done**
+- 五张 M3 执行卡序列中，④⑤仍未派（多配置基建 + M3-CF01；M3-CF02/03/04 +
+  M3-AT02）
+
+**Next**
+- 卡④：多配置基建 + M3-CF01（L2，须先于⑤）→ ⑤ M3-CF02/03/04 + M3-AT02（L1）
+
+**How verified**
+- `make check` 绿（docs-check passed；无 terminal rows/blocks 溢出，未跑
+  archive）
+- closer≠fixer 落地形态：关闭实例独立重跑+独立推导，未采信任何转述数字或
+  结论，最终结论与 fixer 一致但过程完全独立
+
 ## [0.3.13] 2026-07-29 卡③：BUG-0018 修复落地——scoreboard 增 AW/AR 接受事件流，M2-OR01/WO01 覆盖率转绿
 
 **Done**
