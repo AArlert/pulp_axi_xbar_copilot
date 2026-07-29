@@ -9,7 +9,21 @@
 > 不变量 4）。本文里凡涉及 DUT 行为处一律给出 spec 章节号，请以 spec 为准；
 > 本文与 spec 冲突时，spec 赢，并请提 issue 修本文。
 >
-> 阅读顺序建议：§0 → §5 是协议本身，任何 AXI 项目都通用；§6 起是本项目专属。
+> 阅读顺序建议：§0 → §6 是协议本身，任何 AXI 项目都通用；§7 起是本项目专属。
+
+### 怎么读这份文档
+
+光讲协议是悬空的——AXI 的很多规则要看到那行 Verilog 才会"啊原来如此"。所以：
+
+- **每节末尾有 `📎 对照代码`**，给出 `vendor/` 里的确切文件与行号。`vendor/`
+  是 SHA 锁定的只读快照（`vendor/VENDOR.md`），行号稳定，可以直接跳。
+- **[§8](#8-跟着代码走一遍s2-写-m5) 是一次完整的代码走读**：跟一笔写事务从
+  S2 走到 M5 再走回来，八站，每站贴真实 RTL。前面所有抽象概念都在那里落地。
+  只想快速上手的话，可以 §0 → §8 → 回头补细节。
+
+> ⚠️ 读代码是为了**理解原理**，不是为了**取期望值**。本仓库的红线：checker 的
+> 期望值只准从 `doc/spec.md` 推导，**永不从 RTL 抄**（`CLAUDE.md` 不变量 4）。
+> 看懂实现之后回到 spec 找条款，这个顺序不能反。
 
 ---
 
@@ -23,7 +37,8 @@
 - [§5 ID 与保序：AXI 最容易搞错的部分](#5-id-与保序axi-最容易搞错的部分)
 - [§6 通道间的依赖关系](#6-通道间的依赖关系)
 - [§7 映射回本项目的 DUT](#7-映射回本项目的-dut)
-- [§8 常见误解清单](#8-常见误解清单)
+- [§8 跟着代码走一遍：S2 写 M5](#8-跟着代码走一遍s2-写-m5)
+- [§9 常见误解清单](#9-常见误解清单)
 - [附录 A 术语表](#附录-a-术语表)
 - [附录 B 继续往下读](#附录-b-继续往下读)
 
@@ -115,6 +130,67 @@ AW 与 AR 结构同构，合称 `Ax`：
 spec §4.3 里 decode error 那句"读出齐 `AxLEN+1` 拍、末拍 `RLAST=1`；写在收齐
 W burst 后回单拍 B"说的就是这个不对称——不是 spec 在啰嗦，是协议本身如此。
 
+### 📎 对照代码：五个通道在 RTL 里长什么样
+
+上面那张表不是抽象概念，它就是一组 struct。`vendor/axi/include/axi/typedef.svh`
+用宏把五个通道定死：
+
+```systemverilog
+// vendor/axi/include/axi/typedef.svh:34   AW 通道 —— 和 §1 的字段表逐项对应
+`define AXI_TYPEDEF_AW_CHAN_T(aw_chan_t, addr_t, id_t, user_t)  \
+  typedef struct packed {                                       \
+    id_t              id;                                       \
+    addr_t            addr;                                     \
+    axi_pkg::len_t    len;      // 8 位 = beat 数 − 1            \
+    axi_pkg::size_t   size;     // 3 位 = log2(每 beat 字节数)   \
+    axi_pkg::burst_t  burst;    // FIXED / INCR / WRAP           \
+    logic             lock;                                     \
+    axi_pkg::cache_t  cache;                                    \
+    axi_pkg::prot_t   prot;                                     \
+    axi_pkg::qos_t    qos;                                      \
+    axi_pkg::region_t region;                                   \
+    axi_pkg::atop_t   atop;     // ← AXI5 原子操作，见 §7        \
+    user_t            user;                                     \
+  } aw_chan_t;
+```
+
+关键在于**请求与响应是怎么打包的**——这解释了为什么本项目的信号叫
+`slv_ports_req_i` / `slv_ports_resp_o` 而不是逐通道的一大把线：
+
+```systemverilog
+// vendor/axi/include/axi/typedef.svh:84
+`define AXI_TYPEDEF_REQ_T(req_t, aw_chan_t, w_chan_t, ar_chan_t)  \
+  typedef struct packed {                                         \
+    aw_chan_t aw;  logic aw_valid;   // M → S 的三条通道：payload + VALID
+    w_chan_t  w;   logic w_valid;                                 \
+    logic     b_ready;               // ← B 是 S → M，所以这边只出 READY
+    ar_chan_t ar;  logic ar_valid;                                \
+    logic     r_ready;               // ← R 同理                  \
+  } req_t;
+
+// vendor/axi/include/axi/typedef.svh:95
+`define AXI_TYPEDEF_RESP_T(resp_t, b_chan_t, r_chan_t)  \
+  typedef struct packed {                               \
+    logic     aw_ready;  logic ar_ready;  logic w_ready;  // ← 三条请求通道的 READY
+    b_chan_t  b;  logic b_valid;                        \
+    r_chan_t  r;  logic r_valid;                        \
+  } resp_t;
+```
+
+看这两个 struct 就能把 §0 的方向规则彻底钉死：**`req_t` 装的是"M 往 S 送的
+东西"**——三条 M→S 通道的 payload+VALID，加上两条 S→M 通道的 READY。`resp_t`
+正好互补。所以：
+
+- 在 xbar 的 **slave 端口**上，`req` 是 **输入**（`slv_ports_req_i`）
+- 在 xbar 的 **master 端口**上，`req` 是 **输出**（`mst_ports_req_o`）
+
+同一个 `req_t` 类型，方向由端口角色决定——这就是 §0 那句"方向永远跟着谁发起走"
+在代码里的样子（spec §2.3）。
+
+其余通道：`W` 在 `:49`、`B` 在 `:56`、`AR` 在 `:62`、`R` 在 `:76`。翻一眼就能
+确认 §1 说的不对称——`b_chan_t` 里没有 `last`，`r_chan_t` 里有 `resp` 也有
+`last`。
+
 ---
 
 ## §2 VALID/READY 握手：三条铁律
@@ -145,6 +221,34 @@ READY ________╱‾‾‾╲______
 > 工具限制备忘：VCS-2018.09-SP2 拒绝 `bind <interface> <module>`，本仓库的协议
 > SVA 一律走宿主模块 generate 循环内直接例化，见
 > `doc/design-prompt/sva_bind.md` C1.1。
+
+### 📎 对照代码：铁律 1 为什么能防死锁
+
+`spill_register` 是整个设计里出现最多的部件（demux 里 7 个、每个 `axi_cut` 里
+5 个），它就是"**在不违反铁律 1 的前提下把时序路径切开**"的标准答案。核心只有
+三行：
+
+```systemverilog
+// vendor/common_cells/src/spill_register_flushable.sv:90
+  // 只要两级寄存器里还有空位就收 —— READY 完全不看 valid_i
+  assign ready_o = !a_full_q || !b_full_q;
+
+// :93
+  // 只要有货就发 —— VALID 完全不看 ready_i
+  assign valid_o = a_full_q | b_full_q;
+
+// :96
+  assign data_o  = b_full_q ? b_data_q : a_data_q;
+```
+
+请注意 `ready_o` 的表达式里**没有 `valid_i`**，`valid_o` 的表达式里**没有
+`ready_i`**——上下游被彻底切断，这正是铁律 1 要的效果。用两级寄存器（A/B）而
+不是一级，是为了在切断组合路径的同时**不损吞吐**：一级寄存器一旦下游 stall
+就必须让 `ready_o` 拉低，两级则还能再吞一拍。
+
+代价是延迟：每过一个 spill_register 就多一拍。这就是 spec §7 `LatencyMode` 在
+配置的东西，也是 spec §7.4「延迟不敏感原则」存在的原因——**同一个功能，换个
+`LatencyMode` 拍数就全变，所以 checker 不准数拍**。
 
 ---
 
@@ -248,6 +352,42 @@ slave 端口在 master 端口侧的 ID 空间**互不相交**——否则两个 
 master 端口 ID 宽度因此**必须**是
 `AxiIdWidthSlvPorts + $clog2(NoSlvPorts)`（spec §5.1.1）。
 
+#### 📎 对照代码：整套机制就是两行 Verilog
+
+**出去时拼前缀**——`axi_mux` 为每个 slave 端口例化一个 `axi_id_prepend`：
+
+```systemverilog
+// vendor/axi/src/axi_id_prepend.sv:89
+  mst_aw_chans_o[i].id = {pre_id_i, slv_aw_chans_i[i].id[AxiIdWidthSlvPort-1:0]};
+  mst_ar_chans_o[i].id = {pre_id_i, slv_ar_chans_i[i].id[AxiIdWidthSlvPort-1:0]};
+```
+
+`pre_id_i` 从哪来？就是 generate 循环的下标：
+
+```systemverilog
+// vendor/axi/src/axi_mux.sv:227
+        .pre_id_i ( switch_id_t'(i) ),   // i = 源 slave 端口号
+```
+
+**回来时剥前缀**——B 通道：
+
+```systemverilog
+// vendor/axi/src/axi_mux.sv:387
+    assign slv_b_chans  = {NoSlvPorts{mst_b_chan}};              // 广播给所有端口
+    assign switch_b_id  = mst_b_chan.id[SlvAxiIDWidth+:MstIdxBits];  // 剥出高位
+    assign slv_b_valids = (mst_b_valid) ? (1 << switch_b_id) : '0;   // 只给一个端口拉 VALID
+```
+
+R 通道一模一样（`:445`，只是把 `b` 换成 `r`）。
+
+**这三行就是"响应怎么找到回家的路"的全部**。payload 广播给所有 slave 端口，
+`1 << switch_b_id` 让只有一个端口看到 VALID——所以"路由"在这里根本不是查表，
+而是**一次移位**。ID 高位就是端口号，剥出来直接当 one-hot 的移位量用。
+
+顺带解释了 spec §5.1.4 那句"ID 前缀使不同 slave 端口拥有互不相交的 ID 空间"
+为什么是**必须**的：如果两个 slave 端口能产出同样的高位，`1 << switch_b_id`
+就会把响应送错人，而且**错得悄无声息**——没有任何校验能发现。
+
 ### 5.3 为什么会 stall
 
 这个 crossbar **没有 reorder buffer**（spec §5.2.3）。所以当同一个 slave 端口
@@ -342,7 +482,282 @@ AXI4 刻意把依赖砍到最少，**只有这三条**：
 
 ---
 
-## §8 常见误解清单
+## §8 跟着代码走一遍：S2 写 M5
+
+前面全是概念。这一节跟一笔写事务从 S2 出发、经交叉矩阵格 `[2][5]` 到达 M5、
+再原路走回来，**每站贴真实 RTL**——就是图上那条蓝线加橙线。
+
+读之前先记住这张分工图：
+
+```
+axi_xbar.sv                     顶层：把 unmuxed 的输出按列喂给 mux
+├─ axi_xbar_unmuxed.sv          译码 + 分流 + 交叉矩阵
+│  ├─ addr_decode.sv              第 1 站：地址 → master 端口号
+│  ├─ axi_demux.sv                第 2-3 站：选路 + 保序 stall
+│  ├─ axi_multicut.sv             第 4 站：流水线切割
+│  └─ axi_err_slv.sv              岔路：地址查不到时的终点
+└─ axi_mux.sv                   第 5-6 站：仲裁 + 拼 ID + 回程分流
+```
+
+---
+
+### 第 1 站 `addr_decode`：地址怎么变成端口号
+
+事务刚进 S2，第一件事是查地址表。整个译码就是一个 `always_comb` 里的循环：
+
+```systemverilog
+// vendor/common_cells/src/addr_decode_dync.sv:101
+  always_comb begin
+    // 默认值：没使能 default port 就直接是 decode error
+    dec_valid_o = 1'b0;
+    dec_error_o = (en_default_idx_i) ? 1'b0 : 1'b1;
+    idx_o       = (en_default_idx_i) ? default_idx_i : '0;
+
+    for (int unsigned i = 0; i < NoRules; i++) begin
+      if (!Napot && (addr_i >= addr_map_i[i].start_addr) &&
+          ((addr_i < addr_map_i[i].end_addr) || (addr_map_i[i].end_addr == '0))) begin
+        dec_valid_o = 1'b1;
+        dec_error_o = 1'b0;
+        idx_o       = idx_t'(addr_map_i[i].idx);   // ← 命中的 rule 指向哪个 master 端口
+      end
+    end
+  end
+```
+
+三个能立刻确认的事实（都是 spec §3 的条款）：
+
+1. **区间是左闭右开**：`>= start_addr` 且 `< end_addr`。`end_addr == '0` 是
+   特例，表示"一直到地址空间末尾"。
+2. **循环不 break**：多条 rule 同时命中时，**下标最大的那条赢**。所以地址表
+   重叠不是语法错误，是**静默的优先级**。
+3. **`en_default_idx_i` 一开，`dec_error_o` 恒 0**——default master port 使能
+   后就不可能有 decode error 了。这正是 spec §3.3 / §4.2 那句"且该端口未使能
+   default master port"的由来。
+
+还有一条前面埋过的伏笔在这里收口：**译码只看 `addr_i` 一个地址**，也就是
+burst 的起始地址。这就是为什么 §4 那条"burst 不得跨 4KB 边界"对本项目是**结构
+性前提**——不是风格建议。
+
+📎 `addr_decode.sv:92` 是外壳，实际逻辑全在 `addr_decode_dync.sv`。
+
+---
+
+### 第 2 站 select：decode error 怎么变成"第 8 路"
+
+译码结果要变成 demux 的选择信号。这两行是整张图右侧红列的**全部来历**：
+
+```systemverilog
+// vendor/axi/src/axi_xbar_unmuxed.sv:131
+    assign slv_aw_select = (dec_aw_error) ?
+        mst_port_idx_t'(Cfg.NoMstPorts) : mst_port_idx_t'(dec_aw);
+    assign slv_ar_select = (dec_ar_error) ?
+        mst_port_idx_t'(Cfg.NoMstPorts) : mst_port_idx_t'(dec_ar);
+```
+
+译码失败时 select 被赋成 `Cfg.NoMstPorts`（基线 = 8）——一个**比任何真实
+master 端口号都大 1** 的值。而 demux 恰好被例化成 `NoMstPorts + 1` 路：
+
+```systemverilog
+// vendor/axi/src/axi_xbar_unmuxed.sv:174
+      .NoMstPorts ( Cfg.NoMstPorts + 1 ),
+// :209   第 NoMstPorts 路接给本端口专属的错误从机
+      .slv_req_i  ( slv_reqs[i][Cfg.NoMstPorts]  ),
+      .slv_resp_o ( slv_resps[i][cfg_NoMstPorts] ),
+```
+
+所以"decode error"在硬件里**不是一个特殊的错误分支，而就是多出来的一个普通
+出口**。图上那个红列画在矩阵框外，理由就是这段代码——它在
+`gen_slv_port_demux` 循环里，而交叉矩阵是另一对循环
+`gen_xbar_slv_cross` / `gen_xbar_mst_cross`（`:215`），`j` 只跑到
+`NoMstPorts-1`。
+
+---
+
+### 第 3 站 `axi_demux`：扇出很无聊，stall 才是重点
+
+扇出本身平淡无奇——一个 for 循环，只给选中那路拉 VALID：
+
+```systemverilog
+// vendor/axi/src/axi_demux_simple.sv:417
+      mst_reqs_o = '0;
+      for (int unsigned i = 0; i < NoMstPorts; i++) begin
+        mst_reqs_o[i].aw       = slv_req_i.aw;   // payload 广播给所有出口
+        mst_reqs_o[i].aw_valid = 1'b0;
+        if (aw_valid && (slv_aw_select_i == i)) begin
+          mst_reqs_o[i].aw_valid = 1'b1;         // 只有选中的那路 VALID
+        end
+      end
+```
+
+跟 §5.2 回程那段 `1 << switch_b_id` 是同一个套路：**payload 广播、VALID 独热**。
+
+真正值得读的是**这个 AW 什么时候才被允许放行**。§5.3 讲了半天的"保序
+stall"，落到代码就是一个 `if` 的三个条件：
+
+```systemverilog
+// vendor/axi/src/axi_demux_simple.sv:168
+        // 条件 A：ID 计数器和 W 计数器都没满
+        if (!aw_id_cnt_full && (w_open != {IdCounterWidth{1'b1}}) &&
+            (!(ar_id_cnt_full && slv_req_i.aw.atop[axi_pkg::ATOP_R_RESP]) || !AtopSupport)) begin
+          if (slv_req_i.aw_valid &&
+                // 条件 B：还有 W 没发完时，新 AW 不许换出口
+                ((w_open == '0) || (w_select == slv_aw_select_i)) &&
+                // 条件 C：同 ID 桶已经绑定了出口时，新 AW 必须去同一个出口
+                (!aw_select_occupied || (slv_aw_select_i == lookup_aw_select))) begin
+            aw_valid = 1'b1;   // ← 放行
+```
+
+**条件 C 就是 spec §5.2 的全部。** "同 ID、同方向、目标不同 master 端口的第二
+笔要等第一笔完成"——`aw_select_occupied` 表示这个 ID 桶当前绑着一个出口，
+`lookup_aw_select` 是绑的哪个。目标一样就放行，不一样就卡住。这个 crossbar
+**没有 reorder buffer**，只能靠这一行防止响应乱序。
+
+**条件 B 是另一件事，很多人会跟条件 C 搞混**：它防的是 **W 通道死锁**。因为
+AXI4 的 W 通道**没有 ID**（§5.1 那条"AXI4 取消了 WID"），W beats 只能按 AW 的
+顺序走。所以只要还有 AW 的 W 没发完（`w_open != 0`），新 AW 就不能指向别的
+出口——否则后面来的 W 会被送到错误的下游。
+
+> **这就是"结合代码才看得懂原理"的典型例子**：光看协议文档，"AXI4 取消 WID"
+> 像是一条无关痛痒的版本差异；看到条件 B 才明白它直接约束了 crossbar 什么时候
+> 能换向。
+
+至于"同 ID"到底怎么判，看 `lookup` 用了几位就知道：`AxiLookBits` 参数由
+`Cfg.AxiIdUsedSlvPorts` 喂进来（`axi_xbar_unmuxed.sv:176`），基线只有 3 位而
+ID 有 5 位——§5.4 说的**假冲突**就是从这里来的。
+
+---
+
+### 第 4 站 `axi_multicut`：最无聊的一站
+
+格 `[2][5]` 里是什么？如果 `Connectivity[2][5]=1`（基线全连通），就是纯粹的
+流水线：
+
+```systemverilog
+// vendor/axi/src/axi_multicut.sv:43
+  if (NoCuts == '0) begin : gen_no_cut
+    assign mst_req_o = slv_req_i;     // 直通，一根线
+  end else begin : gen_axi_cut
+    for (genvar i = 0; i < NoCuts; i++) begin : gen_axi_cuts
+      axi_cut #( ... )                // 每级 = 5 个 spill_register
+```
+
+而 `axi_cut` 就是把 §2 那个 spill_register 在五条通道上各放一个
+（`axi_cut.sv:49/63/77/91/105`）。
+
+**只加延迟，不改数据**——这一站不改变任何功能行为，只改拍数。也正因如此，
+spec §7.4 才敢说"周期数未定义、checker 必须延迟不敏感"。
+
+---
+
+### 第 5 站 `axi_mux`：仲裁、拼 ID、W 跟随
+
+矩阵第 5 列的 6 个格子（`[0][5]`..`[5][5]`）汇进 `axi_mux 5`。它干三件事：
+
+**① 轮询仲裁**——AW 和 AR 各一个 `rr_arb_tree`（`axi_mux.sv:264` / `:409`），
+决定这一拍放哪个 slave 端口走。
+
+**② 拼 ID**——见 §5.2 的 `axi_id_prepend`。
+
+**③ 让 W 跟上 AW**——这是最容易被忽略的一环。AW 仲裁完了，后面的 W beats 怎么
+知道该跟谁走？靠一个 FIFO 记住每次 AW 的胜者：
+
+```systemverilog
+// vendor/axi/src/axi_mux.sv:317
+    fifo_v3 #(
+      .DEPTH ( MaxWTrans   ),
+      .dtype ( switch_id_t )     // 只存一个端口号
+    ) i_aw_fifo (
+      // :329  AW 握手时把"赢家的端口号"推进去
+      .data_i ( mst_aw_chan.id[SlvAxiIDWidth+:MstIdxBits] ),
+```
+
+注意它存的东西：**从刚拼好的 ID 里再把高位剥出来**。同一个"端口号"信息在这里
+被用了三次——拼进 ID（找回家的路）、推进 FIFO（让 W 跟上）、回程时移位
+（分流响应）。
+
+> 这就解答了 spec §5.4.2 那条容易踩的坑：`MaxSlvTrans` 经 `axi_xbar.sv:141`
+> 映射成的 `MaxWTrans`，**是这个 FIFO 的深度**，不是什么"每 ID 在飞上限"。
+> 看一眼 `.DEPTH ( MaxWTrans )` 就一目了然——mux 侧根本不存在按 ID 分桶的计数
+> 机制。这条结论是 BUG-0016 / REV-007 查出来的。
+
+---
+
+### 第 6 站 回程：B 沿原路走回 S2
+
+M5 回一个 B。`axi_mux` 剥 ID 高位 → 得到 `2` → `1 << 2` → 只有 S2 那路看到
+VALID（代码见 §5.2 的 `📎`）。B 一路退回格 `[2][5]`、退回 demux，demux 侧用
+`rr_arb_tree` 在 `NoMstPorts+1` 路回程中仲裁（`axi_demux_simple.sv:265`），
+最后从 S2 吐给外部 master。
+
+**全程原路返回，不重新查地址表**——因为路由信息已经藏在 ID 里了。
+
+---
+
+### 岔路：如果地址根本查不到
+
+那么第 2 站的 select 会是 8，事务进入本端口的 `axi_err_slv`，在那里终结。它怎
+么造出"`AxLEN+1` 拍、末拍 `RLAST=1`"？
+
+先在 AR 握手时把 ID 和长度存进 FIFO：
+
+```systemverilog
+// vendor/axi/src/axi_err_slv.sv:158
+  assign r_fifo_push       = err_req.ar_valid & ~r_fifo_full;
+  assign err_resp.ar_ready = ~r_fifo_full;      // ← 只要 FIFO 没满就照单全收
+  assign r_fifo_inp.id     = err_req.ar.id;
+  assign r_fifo_inp.len    = err_req.ar.len;    // ← 记住要回几拍
+```
+
+然后用一个倒数计数器逐拍吐 R：
+
+```systemverilog
+// vendor/axi/src/axi_err_slv.sv:183
+  always_comb begin : proc_r_channel
+    err_resp.r.id   = r_fifo_data.id;      // ID 原样返回
+    err_resp.r.data = RespData;
+    err_resp.r.resp = Resp;                // ← 例化时钉成 RESP_DECERR
+    if (r_busy_q) begin
+      err_resp.r_valid = 1'b1;
+      err_resp.r.last  = (r_current_beat == '0);   // 倒数到 0 就是末拍
+      ...
+```
+
+`err_resp.ar_ready = ~r_fifo_full` 那行就是 spec §4.3 说的 **absorb**——错误
+从机不是"拒收"，而是**照单全收再回错误**。AXI 不允许请求悬空不应答，这是唯一
+合法的做法。
+
+> ⚠️ **一个必须知道的坑，正好说明为什么期望值不能从 RTL 抄。**
+> 上面代码里的 `RespData` 是参数，`axi_err_slv.sv:24-25` 的默认值是
+> `RespWidth = 64` / `RespData = 64'hCA11AB1EBADCAB1E`，而 `axi_xbar_unmuxed`
+> 例化时**没有覆盖它**。但上游文档 `vendor/axi/doc/axi_xbar.md` 和据此蒸馏的
+> spec §4.4 都写的是 `32'hBADCAB1E` 零扩展/截断。
+>
+> **文档与 RTL 在这里对不上。** 本仓库的规矩很清楚：期望值只从 spec 推导，
+> M3 的 DE01 场景跑起来若失配，按 `DUT_BUG` 分诊、走上游 issue——**而不是回头
+> 把 spec 改成 RTL 的样子**（`CLAUDE.md` 不变量 4、`workflow/bugs.md`）。
+> 如果当初"结合代码写 spec"，这个缺陷就被永久掩盖了。
+
+---
+
+### 代码路线图
+
+想自己再走一遍时的索引：
+
+| File | 负责什么 | 先看哪几行 |
+| --- | --- | --- |
+| `vendor/axi/include/axi/typedef.svh` | 五通道 struct 定义 | `34` / `84` / `95` |
+| `vendor/axi/src/axi_xbar.sv` | 顶层，unmuxed 输出按列喂 mux | `141`（`MaxSlvTrans`→`MaxWTrans`） |
+| `vendor/axi/src/axi_xbar_unmuxed.sv` | 译码 + demux + 交叉矩阵 | `131`（select）· `215`（矩阵 generate） |
+| `vendor/common_cells/src/addr_decode_dync.sv` | 地址匹配 | `101`（整个 always_comb） |
+| `vendor/axi/src/axi_demux_simple.sv` | 选路 + 保序 stall | `168`（三个条件）· `417`（扇出） |
+| `vendor/axi/src/axi_mux.sv` | 仲裁 + 拼 ID + 回程 | `227` · `317` · `387` · `445` |
+| `vendor/axi/src/axi_id_prepend.sv` | ID 拼接 | `89` |
+| `vendor/axi/src/axi_err_slv.sv` | 错误应答 | `158` · `183` |
+| `vendor/common_cells/src/spill_register_flushable.sv` | 握手切割 | `90` |
+
+---
+
+## §9 常见误解清单
 
 先记下来，能省掉大量 debug 时间：
 
