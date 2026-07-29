@@ -1,3 +1,4 @@
+{"date": "2026-07-28", "version": "0.3.0", "summary": "M2 里程碑签核 PASS（doc/evidence/v0.2.5/signoff-M2.md）：八行场景 ✅、regress 11/11 独立重跑、rubric #5 真做证伪（BUG-0027 缺陷放回见 336 条红后复原）、rubric #7 首次实战——四条 ACCEPTED@M3 带推翻意图复核全数通过；新登 FB-20（终态行的未兑现义务对条件 3 不可见）。转入 M3"}
 {"date": "2026-07-28", "version": "0.2.5", "summary": "拉框架 0.5.3：FB-18 当日闭环（rubric 条件 3 同步 + 新增人工抽查第 7 条，本仓库 REV-011 §4 G3 入 canon）、FB-11 fixed@0.5.2；BUG-0030 上游订正落页但不关闭（「恰为」判据未经实测，登记为待兑现守卫义务）。M2 签核卡解除暂停"}
 {"date": "2026-07-28", "version": "0.2.4", "summary": "FB-18（blocking）登记并当日送达框架侧：0.5.0 的 ACCEPTED@M<n> 只落到机器侧，signoff/rubric.md 机器条件 3 措辞未同步、且无任何条目要求复核 ACCEPTED 的 rationale。M2 签核卡按指令暂停派发，待框架闭环后 fwsync --pull 再派"}
 {"date": "2026-07-28", "version": "0.2.3", "summary": "REV-011 台账落地：0018/0024/0025 转 ACCEPTED@M3（0024 择 G4 (b)、0018 由 M4 提前至 M3）+ 新登 BUG-0031（stall_sva 用编译期地址表、误差双向）并由 rev 补裁 ACCEPTED@M3；signoff-check 条件 3 转 PASS，仅余签核文件"}

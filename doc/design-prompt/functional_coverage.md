@@ -124,7 +124,7 @@ M2-WO01、M2-TL01/TL02）内命中，复验**逐 test 看、不看 merged 报告
 
 §2/§4 登记的 bin 分别是 M2 与 M3 场景对应的最小集合，用于证明"该里程碑新增的判决
 机制不是靠空转/偶然通过"。M4 六类 ≥90% 收敛时若发现缺口，遵照
-`workflow/fail/coverage_hole.md` 的流程处理（先问"testplan 场景是否存在"，而非
+`workflow/bugs.md`「Dispatch: coverage hole」的流程处理（先问"testplan 场景是否存在"，而非
 直接派 DV 试图硬凑激励命中）；本文不预判 M4 的具体缺口。
 
 ## 引用的 spec 章节

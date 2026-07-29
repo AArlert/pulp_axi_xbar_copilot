@@ -78,8 +78,8 @@ spec §1；具体条目：
 - **cover property 配套（呼应 `functional_coverage.md` §3 的 assert 覆盖类）**：
   下列每条新增 `assert property` 均须配一条**同触发前提**的 `cover property`，
   用以在覆盖数据库中留痕"该属性的前提条件被真实激励到过"，而不仅是"从未失败"——
-  区分非空转通过与空转通过（呼应 `workflow/fail/coverage_hole.md` 的可证伪性
-  要求）。各条目下方逐条点出对应 cover 目标与哪个 M2 场景提供该激励。
+  区分非空转通过与空转通过（呼应 `workflow/bugs.md`「Dispatch: coverage hole」的
+  可证伪性要求）。各条目下方逐条点出对应 cover 目标与哪个 M2 场景提供该激励。
 
 ### C3.1 地址表/default port 运行时稳定性（依据 spec §3.4）
 

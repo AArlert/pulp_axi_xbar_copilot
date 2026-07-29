@@ -96,7 +96,7 @@ scoreboard（含参考模型）+ virtual sequencer + config。M1 只做**骨架 
   本条的计数上限判据，见 scoreboard_refmodel C5.3 的同一说明）。slave
   agent responder 需能按需**有界拖延** B/R（不违反协议的合法延迟）以维持在飞
   计数处于目标值附近，避免"响应过快、上限从未真正被顶到"的空转（呼应
-  `workflow/fail/coverage_hole.md` 的可证伪性要求）。
+  `workflow/bugs.md`「Dispatch: coverage hole」的可证伪性要求）。
   M2-TL02 的压测目标按 BUG-0016/REV-007 裁决更新：向同一 master 端口连发同
   （前缀后）ID、同方向事务，压到并**越过** `MaxSlvTrans`（spec §5.4.2 已撤销
   "≤ `MaxSlvTrans`" 作为可断言在飞上界——该参数实为 `axi_mux` 的 `MaxWTrans`

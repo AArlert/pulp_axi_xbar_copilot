@@ -2,6 +2,83 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.8] 2026-07-29 派 rev 仲裁卡 REV-012：BUG-0032→SPEC_CHANGED、否决 §4/§5.3 自引用提案、3 处 orch 自标越界均未越界
+
+**Done**
+- **派发首张按 0.8.0 新版 `/dispatch` + 静态角色卡实测的 rev 仲裁卡（L3）**，
+  一卡三事，`doc/review/REV-012.md` 落盘：
+  - **① BUG-0032 终判**：rev 亲跑 grep 复验五份许可来源（xbar.md/demux.md/
+    mux.md/axi_pkg.sv/xbar.sv 头注释）确认 err_slv 对要求读响应的 ATOP 应答
+    形态确系空白、非蒸馏遗漏；SPEC_ISSUE 分类与 env 构造性约束处置（同
+    BUG-0002/0003 先例）均确认成立。但**升级为 `SPEC_CHANGED`**（非
+    `ACCEPTED@M4`）——约束目前只活在 testplan/design-prompt/guard，spec §4
+    正文只字未提该缺口，与两条被引先例（约束均已写入 spec 正文）不同形。
+    **approve P-REV012-1**：补 §4 平行条款（四段模板同 §8.4）+ §6 clause 3
+    交叉引用；rev 明确"exact wording 由 orch/arch 拟，rev 不代写"——按
+    `CLAUDE.md` §0 与 `.claude/agents/arch.md`（"Proposals are arbitrated by
+    rev, then applied... by orch — you never edit the spec body yourself"），
+    实际起草者只能是 arch，orch 仅机械应用+重 pin。故 P-REV012-1 的文本草拟
+    是**下一张卡**（arch），本 chunk 不产出 spec 正文
+  - **② §4/§5.3 自引用提案：REJECTED**。rev 独立复核 FB-24 举证（spec 只有
+    两级标题、§4.2/§5.3.1 全程是 inline clause reference 而非标题）与
+    parent-anchored=15 的构成（现场重跑 chain-audit，15 条中确认多条正是
+    `SPEC-4.2/4.3/4.4→§4`、`SPEC-6.3→§6`、`SPEC-5.3.1/5.3.3→§5.3` 这类幻影
+    模式）——裁定这是内容迁就工具口径、零验证收益，持久归宿仍是 FB-24（上游
+    修解析器）
+  - **③ 复核 3 处 orch 自标越界**（0.3.4 design-prompt 3 行 token 迁移 /
+    0.3.6 `.claude/agents/*` 底盘移植+新增 orch.md / 0.3.7 删 orch.md 并入
+    `/dispatch`）：**三处均未越 dispatcher-only 实质边界**——§0 的禁令精确
+    列举四类技术制品（RTL/TB/design-prompt 内容/spec 内容），三处编辑全部是
+    机械可证、零语义的底盘/路径维护，本属 orch 职责。B、C 予以底盘豁免存档；
+    A 予以豁免，**并现场查出一条新 corrective**：0.8.0 重排已把
+    `workflow/fail/` 整个折进 `workflow/bugs.md`，A 当时改的三处
+    design-prompt 引用已再次变成死指针
+  - **rev 强制字段**：taxonomy-class anomaly = 否（BUG-0032 已是行；design-
+    prompt 死指针与 FB-24 均属框架/文档摩擦，非五分类项目失效）
+- **orch 落实 REV-012 查出的 corrective**：`doc/design-prompt/
+  {functional_coverage,sva_bind,uvm_env}.md` 三处 `workflow/fail/
+  coverage_hole.md` 死指针迁移至 0.8.0 现址 `workflow/bugs.md`「Dispatch:
+  coverage hole」节——纯 token 替换，referent 存在，word-diff 自证零语义，
+  与 rev 裁定的"orch 可对活文档做机械可证、零语义迁移"的豁免线相符，无需
+  另派卡
+- **卡分级 vs 实际**：本卡定级 L3，实际交付（spec 仲裁 + 3 处流程自审）与
+  定级相符，无失配
+
+**Not done**
+- **P-REV012-1 尚未应用**——spec §4 平行条款 + §6 交叉引用的具体文本待 arch
+  起草（rev 明确拒绝代写正文），本 chunk 只留下已批准的方向与模板；BUG-0032
+  行状态已改 `SPEC_CHANGED` 但 spec.md 正文与 sha256 pin 均未动，约束的活
+  载体暂仍是 testplan M3-DE01 + uvm_env C6.2 + guard
+- 本 chunk 不含任何仿真，testplan 计数不变（M3 仍 ✅0/11）
+- FB-24 仍 `open`（upstream 解析器修复，未回流）；FB-23/25/26/27 状态未动
+- 五张 M3 执行卡仍全部待派
+
+**Next**
+- 派 arch 卡（L2，草拟 spec 变更提案）：按 REV-012 approve 的模板（同 §4.2
+  BUG-0003 四段式、§8.4 BUG-0002 四段式）为 §4 起草平行条款 + 为 §6 clause 3
+  加交叉引用，原文/新文/rationale/impact 齐全，引用 REV-012 §Item 1 为基准；
+  orch 应用该提案时机械核对措辞落在批准模板内，写 change record + 重 pin
+- 五张 M3 执行卡（严格顺序，④ 先于 ⑤）：① BUG-0025+0031 同卡修 +
+  M3-DE01/DE02/OR04/CFG02（L2）② BUG-0024 (b) + M3-OR05（L2）③ BUG-0018 修 +
+  重跑 M2-OR01/WO01（L2）④ 多配置基建 + M3-CF01（L2）⑤ M3-CF02/03/04 +
+  M3-AT02（L1）
+- FB-23~27 按 0.3.7 的新性质裁决重新分类（local/noted/upstreamed）——本
+  chunk 未做，仍是欠框架的观察项
+
+**How verified**
+- `make check` 绿（docs-check passed；chain-audit 与升级前一致：dangling
+  仍 0、parent-anchored 仍 15——REV-012 否决 §4/§5.3 提案后本就不该变、rev
+  在裁决中现场重跑验证过这一点）
+- `doc/bugs.md` BUG-0032 行与 `doc/bugs/BUG-0032.md` `## arbitration` 段均
+  已写入 REV-012 引用与终判，`grep -n "BUG-0032" doc/bugs.md` 实读确认
+  ruling 列含 "REV-012 §Item 1 终判"字样
+- 三处 design-prompt 死指针迁移后 `grep -rn "workflow/fail/coverage_hole"
+  doc/design-prompt/` 零命中，`grep -n "Dispatch: coverage hole"
+  workflow/bugs.md` 确认目标锚点存在
+- 派卡自检：card 只含 scope list（文件路径/行号/commit sha）与判据源，未
+  夹带任何一方结论——rev 交付里三项 verdict 均为其独立复验产物（如 Item 1
+  的五源 grep、Item 2 的 chain-audit 现场重跑），非对 orch 卡面结论的背书
+
 ## [0.3.7] 2026-07-29 删除 orch.md 并入 /dispatch；反馈台账转为实践记录
 
 **Done**
@@ -208,89 +285,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
   读出；`git status` 0 未提交、`git log origin/master..HEAD` 0 未推送；
   `git log 05a49a0..upstream/master` 实跑返回 1 条，证明新加的上游基线机制
   确实可用而非又一条空指令
-
-## [0.3.5] 2026-07-29 pull 框架 0.7.1 + 压测 explore：§id 解析器幻影率 44%（FB-24）
-
-**Done**
-- **pull 框架 0.7.0 → 0.7.1**（27 files pinned）。与 0.3.4 那次不同，**本次是
-  行为变更**：两行从 deferred 台账**由用户裁决提前毕业**，CHANGELOG 明写
-  「to be stress-walked by the adopters」——那个 adopter 就是本仓库。同样先在
-  隔离 worktree 预演（fw-check / docs-check / chain-audit 全绿，chain-audit
-  逐项与 0.7.0 一致）后才落主树
-- **(a) spec-gap 探索器**（`docs.py --explore` / `make explore`）：chain-audit
-  图的规划视图，把 uncited 章节连同标题列成候选 testplan 行。附带一个
-  `--next` 规划期提示，**仅在当前里程碑零登记行时触发**——本仓库 M3 已有 11
-  行 ⇒ 实测正确保持沉默（无 FB-19 那种常驻唠叨）。新增 copilot 卡型
-  「arch spec-gap sweep」，契约要求 explore 列表**逐字进卡**且禁止 orch 掺入
-  自己的场景想法
-- **(b) L0–L3 风险分级**进 dispatch 手册，取代原「模型档位」清单：L0 文档/
-  构建 · L1 TB/序列/覆盖 · L2 RTL/SVA/scoreboard · L3 spec/豁免/签核。分级
-  **只调链条重量**，taxonomy 登记与 evidence 门禁在每一级都无条件。每张卡须
-  声明分级，且**每卡记录「分级 vs 实际」的失配**——该裁决推翻了 0.4.6 的
-  观察者设计，理由锋利：无人抱怨流程重 ≠ 流程轻，因为每个子代理只看见自己
-  那张卡、链条重量只有 orch 看得见、而**orch 不疼**。零记录 ≠ 零重量
-- **压测 `make explore` 当场命中一条实质缺陷 → 登记 FB-24**（annoyance，
-  open）：explore 交给 arch 的 9 条前沿里 **4 条不是 spec 章节，幻影率 44%**。
-  `§1.3` 实为 `spec.md:436` 的 **`REV-011 §1.3`**（评审记录章节号被吸进 spec
-  命名空间）；`§7.1.2`/`§7.4.3`/`§7.4.4` 是 `§7.1`/`§7.4` **正文有序列表的第
-  2/3/4 条**（实读 `spec.md:328-345`、`376-400` 确认 §7.4 body 是 1.–5. 列表、
-  无任何子标题）
-- **全谱实算**（脚本，非目测）：spec 有 **25 个真标题**，正文出现 **45 个
-  §id**，其中 **22 个无对应标题**——`§5.4.1` 被引 9 次、`§5.2.1`/`§5.2.3` 各
-  7 次。⇒ 本仓库 spec 的**主导引用惯例就是「§<标题>.<列表项>」**，是文体不是
-  笔误。0.6.0 引入 inline-token 解析本为让 `SPEC-5.2.1` 可解析（否则 100%
-  假阳），代价即 uncited 集合混入列表项
-- **定性：不是回归，是「无消费者的不精确，在获得消费者的当天暴露」**——
-  chain-audit 阶段它只是个没人行动的计数（FB-21 同族），0.7.1 把它变成派工
-  指令且**禁止 orch 过滤**，不精确遂变成错工单
-- **比幻影更糟的一类已识别**：`§7.4.3` 是真条款但内容为**禁令**（「任何
-  latency checker **不得**断言固定周期数」）。禁令由 checker 的**缺席**满足，
-  语义上永远无法被场景覆盖 ⇒ arch 只能逐条写 decline，而 decline 按卡契约是
-  narrowing 须 rev 门禁 ⇒ **解析器的不精确机械地制造 rev 工作量**
-- **同一根因解释了 parent-anchored=15**：`§4` 只有 `## 4.` 一个标题、条款是
-  列表项 4.1–4.5；testplan 引 SPEC-4.1~4.5，其中在正文被 inline 提及的
-  （§4.1/§4.5）解析成功，未提及的（§4.2/4.3/4.4）跌回父级 §4。**据此建议
-  否决 arch 在 0.3.3 提的「§4/§5.3 补自引用以降 parent-anchored」提案**——
-  那实质是往 spec 正文里写字去迁就解析器，spec 文体不该为工具让步；根因在
-  FB-24，修在框架侧
-- **对 FB-22 的自我订正已存证**：FB-22 举证「静默截断丢掉 §7.4.3/§7.4.4/
-  §8.3/§8.4」，按今日全谱统计**这四个 id 全是幻影**。FB-22 核心主张（字符串
-  序 + 无提示截断）不受影响且已正确修复；受影响的只是「被隐藏的是什么」这半
-  段举证。按 FB-23 同一裁决**不改 FB-22 原文**，在台账并列一行 `recorded` 存证
-
-**Not done**
-- **本 chunk 不含任何仿真**，无新证据，testplan 计数不变（M3 仍 ✅0/11）
-- FB-24 与 FB-23 均 `open`，尚未回流框架仓库
-- **L0–L3 分级机制一次也没实走**——本会话仍未派任何卡，「分级 vs 实际」失配
-  数据（0.7.1 明说这才是提前释出的目的）产量为 **0**。本条是欠框架的
-- M3 实质工作仍一步未动：rev 仲裁卡与五张执行卡全部待派
-- explore 的另外 5 条（§2.1/§2.2/§2.3/§7.1/§7.3，均为真标题）**未评估**是否
-  值得建行——那是 arch 的判断，orch 不代劳
-
-**Next**
-- **arch spec-gap 卡在 FB-24 闭环前不派**——卡契约要求 explore 列表逐字进卡
-  且禁止 orch 过滤，现在派就是让 arch 按 44% 错的清单干活
-- 派 rev 仲裁卡（L3）：BUG-0032 终判 + **§4/§5.3 自引用提案建议否决**（须把
-  FB-24 的根因分析一并入卡，否则 rev 会在不知道 parent-anchored 是解析器
-  产物的前提下裁决）。该卡同时是 L0–L3 分级与新版角色文件的首次实测
-- 五张 M3 执行卡（**严格顺序**，④ 先于 ⑤）：① BUG-0025+0031 同卡修 +
-  M3-DE01/DE02/OR04/CFG02（L2）② BUG-0024 (b) + M3-OR05（L2）③ BUG-0018 修 +
-  重跑 M2-OR01/WO01（L2）④ 多配置基建 + M3-CF01（L1/L2）⑤ M3-CF02/03/04 +
-  M3-AT02（L1）——分级为初判，派卡时按 dispatch 手册复核并记失配
-- 若 rev 认为 0.3.4 里 orch 动 design-prompt 三行越界，回退那三行
-
-**How verified**
-- `make fw-check` 绿（framework 0.7.1，27 files pinned）；`make docs-check` 绿
-- `make chain-audit` 逐项与 0.7.0 完全一致（dangling 仍 0 / sourceless 1 /
-  orphans 0 / parent-anchored 15 / uncited 9）⇒ 0.7.1 未改判据，explore 与
-  chain-audit 共用 `chain_gaps()` 属实
-- `make explore` 实跑，输出 9 条前沿 + 「M3, 11 scenario rows registered」；
-  `make next` 实跑确认规划期 nag **未**触发（M3 非零登记行）
-- 幻影认定非目测：逐个 `grep "^#\+ *§\?<id>"` 确认无标题，再 `sed -n` 实读
-  §7.1（L328-345）与 §7.4（L376-400）正文确认是有序列表；`§1.3` 实读
-  `spec.md:436` 确认前缀为 `REV-011`
-- 25/45/22 三个数字由一次性 python 脚本实算（正则提取标题集与 inline §id 集
-  求差），非估计
-- 升级前预演在 `git worktree` 隔离副本完成，主工作树全程干净，预演后
-  `worktree remove --force` + `prune`
 

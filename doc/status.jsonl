@@ -1,3 +1,4 @@
+{"date": "2026-07-29", "version": "0.3.8", "summary": "派 rev 仲裁卡 REV-012：BUG-0032→SPEC_CHANGED（approve P-REV012-1，待 arch 起草文本）；否决 §4/§5.3 自引用提案（归 FB-24）；3 处 orch 自标越界均未越界，顺带修复其中一处查出的 design-prompt 死指针"}
 {"date": "2026-07-29", "version": "0.3.7", "summary": "与上游关系反转：不再回流，自己实践、做好让上游 cherry-pick。删除 .claude/agents/orch.md——实测其正文只投递给被派发的子代理，主会话仅收到一行 description，唯一读不到它的就是目标读者；内容并入 /dispatch + CLAUDE.md §0。fw-feedback 转为实践记录，文件名与编号不动（29 处引用中 10 处在冻结记录）"}
 {"date": "2026-07-29", "version": "0.3.6", "summary": "框架 0.8.0 换底盘（fwsync 已删、无 pull 对端，手工移植）：workflow 27→4 份、agents 转静态含新 orch、四动词收成 make check、handover→handoff。数据层 100% 兼容，doc/ 未改一字。裁决不变量 5 自 M3 起生效、M0-M2 不回填 KILL。登记 FB-27（上游角色卡仍指令已退休动词）+ 订正 FB-25"}
 {"date": "2026-07-29", "version": "0.3.5", "summary": "pull 框架 0.7.1（spec-gap 探索器 + L0-L3 分级，交采纳者压测）；压测 explore 当场命中 FB-24——§id 解析器把章节内列表项与跨文档引用当成 spec 章节，前沿幻影率 4/9；同根因解释 parent-anchored=15，建议否决 arch 的 §4/§5.3 自引用提案；arch spec-gap 卡暂不派"}
@@ -5,4 +6,3 @@
 {"date": "2026-07-29", "version": "0.3.3", "summary": "arch 交付 M3 场景清单（11 行）+ 反驳 orch 的配置维 constrained-random 决定（三条机制事实已核实，改为声明式配置点）；四条 ACCEPTED@M3 债务逐条归属；新登 BUG-0032（err_slv×ATOP 应答未定义，待 rev 终判）"}
 {"date": "2026-07-28", "version": "0.3.2", "summary": "拉框架 0.6.1：FB-21/FB-22 当日闭环并实测验收——signoff 现内嵌 chain-audit 全文 + rubric 新增 #8（悬空引用只许修不许接受）；uncited 行改数值序全量打印，19 条全部列出。M3 开工底座就位"}
 {"date": "2026-07-28", "version": "0.3.1", "summary": "拉框架 0.6.0（chain-audit 毕业，触发器即本仓库 signoff-M2；首次运行 0 dangling / 19 uncited）。登记 FB-21（chain-audit 无任何门禁消费它，与 FB-11 判例同构，本仓库第三次撞同一家族）、FB-22（uncited 行静默截断 19/15/4，恒砍编号最大章节，丢的正是 M3 地盘）"}
-{"date": "2026-07-28", "version": "0.3.0", "summary": "M2 里程碑签核 PASS（doc/evidence/v0.2.5/signoff-M2.md）：八行场景 ✅、regress 11/11 独立重跑、rubric #5 真做证伪（BUG-0027 缺陷放回见 336 条红后复原）、rubric #7 首次实战——四条 ACCEPTED@M3 带推翻意图复核全数通过；新登 FB-20（终态行的未兑现义务对条件 3 不可见）。转入 M3"}
