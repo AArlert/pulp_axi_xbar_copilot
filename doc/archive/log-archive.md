@@ -1,4 +1,128 @@
 # Work log archive
+## [0.3.6] 2026-07-29 框架 0.8.0 换底盘：手工移植「repo 即模板」模型
+
+**Done**
+- **框架 0.7.1 → 0.8.0，性质是断裂而非升级**：上游删除 `fwsync.py`，
+  `make fw-pull` **没有对端**；官方升级路径是 `git cherry-pick`，而 0.8.0 是
+  一次 24 份契约→4 份的重排，cherry-pick 到本仓库（46 commit / 3 个里程碑
+  证据）只会得到冲突堆。⇒ **只能手工移植**，本 chunk 即该移植
+- **移植前先在隔离 worktree 实做一遍完整迁移**（删旧机械层→植入 0.8.0→
+  跑全部 target→观察），确认可行后才动主树；试迁移 worktree 已清理
+- **关键实测结论：数据层 100% 兼容，`doc/` 一个字未改**。`make handoff` /
+  `check` / `next` / `guards` 直接跑通既有 testplan / bugs / evidence /
+  feature-matrix；`ACCEPTED@M<n>`、`columns_preset` 均保留。换掉的纯是机械层
+- **机械层替换清单**：`workflow/` 27 份 → 4 份
+  （`discipline` / `bugs` / `records` / `review`）；删
+  `scripts/fwsync.py`、`scripts/iverif.manifest.json`、
+  `scripts/make/{core,evidence}.mk`；`.claude/agents/` 改为静态 5 份
+  （**新增 `orch.md`**，不再渲染）；根 `Makefile` 换成 canon 版 + 追加本项目
+  的 sim 转发（smoke/cov/lint/verdi/clean）
+- **命令改名对照**（已同步进所有活文件）：`handover`→`handoff` ·
+  `docs-check`/`chain-audit`/`signoff-check`/`explore` 四个动词收成一个
+  `check`（`SCEN=`/`MILESTONE=` 决定视图）· `docs-archive`→`archive` ·
+  `bump-minor`→`bump minor=1` · `replay` 取消（不变量 2 已保证首行即命令）·
+  新增 `commit`（add+commit，**永不 push**）与 `selftest`
+- **`scripts/regress.py` 保留，归属改为本项目**——0.8.0 删了它但同时明说
+  「canon 不再拥有循环，项目拥有循环」，而 `sim/Makefile:72` 实际调用它、
+  M2 签核的 11/11 独立重跑依赖它逐字工作。删掉重写属无谓风险
+- **`doc/design-prompt/` 路径未动**：核实 `iverif_config.py:181` 仍要求
+  `doc/design-prompt/README.md`，CLAUDE.md 表里写 `design-prompt/` 是简写。
+  省掉一次会再制造数十处死指针的路径迁移（FB-23 的教训）
+- **`CLAUDE.md` 重写**：0.8.0 把 L0–L3 分级表移入项目 CLAUDE.md **并加了
+  测试强制它在场**；同时旧文引用的 `constitution.md` / `profile.md` /
+  「hash 锁定的框架快照」/ `fw-check` / `docs-check` 全部已不存在。新版
+  保留 §0 隔离、§4 环境（xverif 体系与 VCS-2018 变通）、§6 项目专属，
+  新增五条不变量与分级表，里程碑定义移出至 `doc/milestone.md`
+- **新建 `doc/milestone.md`**（0.8.0 的 orch 自有文件）：M0–M4 出口条件逐条
+  落盘，含 M3 的多配置声明式子集裁决与 KILL 要求
+- **裁决：不变量 5「无击杀不采信」自 M3 起生效，M0/M1/M2 不回填 KILL 行**
+  （同 FB-23「冻结记录不回改」）。实测 `make check MILESTONE=2` 条件 4 现为
+  FAIL——但 M2 **确实做过**击杀自证，取证位置
+  `doc/evidence/v0.2.5/signoff-M2.md` rubric #5（BUG-0027 缺陷放回见 336 条
+  红后复原）。⇒ 已知**记账**缺口，非实质缺口；该判断连同取证位置同时写入
+  `CLAUDE.md` 不变量 5 与 `doc/milestone.md` 抬头，避免后人误读为真缺口
+- **四个 skill 保留为本地资产并重写**（0.8.0 上游已废弃 `.claude/skills/`）：
+  `handover`→`handoff` 目录改名以对齐 make 目标；`closeout` 的门禁步骤改
+  `check`+`selftest`；`dispatch` 的分级表**删除本地副本、改为指向 CLAUDE.md**
+  （0.8.0 移动它的用意就是终结双份漂移）；`evidence` 的 `replay`/
+  `signoff-check` 改为新形态
+- **CI 与 hook 修复**：`ci.yml` 两处失效调用（`docs.py --handover` 已改名、
+  `fwsync.py --check` 文件已删）→ 改为 `--handoff` + 以 `selftest` 顶替
+  fw-check 的位置；`.githooks/pre-commit` 删除 fwsync 那两行（原为
+  `|| echo`，不挡提交但会每次提交打一句假警告）
+- **登记 FB-27**（annoyance，open）：**0.8.0 删掉四个 make 动词，但它自己
+  发布的两张角色卡仍在指令角色执行其中两个**——`.claude/agents/arch.md:34`
+  写 `make explore`、`rev.md:51` 写 `make signoff-check`，二者均已 retire。
+  命中面精确落在最坏位置：这不是背景说明而是 arch 的 spec-gap sweep 与 rev
+  的里程碑签核**各自主任务的操作指令**，照做直接 `No rule to make target`。
+  两处已就地修并在代码旁注明 `见 FB-27`
+- **订正 FB-25（不改原文，并列存证）**：FB-25 断言「没有任何门禁读 CLAUDE.md
+  的内容」，0.8.0 起**部分不成立**——`scripts/tests/test_docs.py:477` 会读
+  项目 CLAUDE.md 断言 L0–L3 表在场；本仓库迁移时正是被这条挂掉 1/60 才发现。
+  FB-25 现只在「路径有效性」半边成立
+- **`doc/fw-feedback.md` 抬头仪式改写**：0.8.0 删掉三态漂移检测后，「绝不
+  本地修改 scripts/workflow」这条红线**在机制上已不存在**。本仓库改采
+  「**先登记、可就地修，两者都做**」，且就地修的每一处必须在台账留行 + 代码
+  旁注明 FB 编号——否则退化成 FB-7/BUG-0007 那个形状（变通只落注释、无人可
+  grep）
+- **收尾时补上一个自造的接手缺口**：迁移中我删掉了 `iverif.json` 的
+  `framework_repo`（fwsync 已亡，该字段无人读），但 CLAUDE.md §5 仍写着
+  「跟进上游：**保留 remote**」——而 `git remote -v` 里根本没有那个 remote，
+  上游位置遂无处可查。**这正是本会话反复报的「指令没有机制」，且是我自己
+  造的**。已补：加 `upstream` remote 指向 GitHub（`.git/config` 不随仓库走，
+  故同时把这条与 hooksPath 并列写进 CLAUDE.md §5 的一次性设置）；并**记录
+  移植基线 `upstream 05a49a0`（0.8.0）**，使「上游比我们多了什么」成为一条
+  机械命令：`git log 05a49a0..upstream/master --oneline`。实测该命令当场
+  返回 1 条（`e23d938 删除 VENDOR.md`——删的是上游 `doc/VENDOR.md` 壳文件，
+  本仓库用的是 `vendor/VENDOR.md`，不受影响）
+
+**Not done**
+- **本 chunk 不含任何仿真**，无新证据，testplan 计数不变（M3 仍 ✅0/11）
+- **M3 的 KILL 行尚未产生**——不变量 5 自 M3 生效，但注伤自证要到执行卡才
+  做得出来。`make check MILESTONE=3` 条件 4 现为 FAIL，属预期，须在 M3 签核
+  前由某张执行卡兑现
+- FB-23/24/25/26/27 五条均 `open`，本 chunk 只登记未回流
+- **L0–L3 分级仍是零实走**（连续第三个 chunk）：本会话三次框架变更、零张卡，
+  「定级 vs 实际」失配数据产量仍为 0。此即 FB-26 报告的现象在继续发生
+- 0.8.0 的 `workflow/` 四份契约（含新的 `bugs.md` 13.7KB）**未逐字通读**——
+  只核对了本仓库直接依赖的接口（KILL、ACCEPTED、五类判据名）。若其中有细则
+  变更，会在下一张卡的交付报告格式上暴露
+- `DESIGN.md`（上游 canon-only 沿革文档）未克隆进本仓库，需要时去框架 repo 读
+
+**Next**
+- 派 rev 仲裁卡（L3），一卡三事：① BUG-0032 终判 ② §4/§5.3 自引用提案
+  **建议否决**（须把 FB-24 的根因分析入卡，否则 rev 会在不知道
+  parent-anchored=15 是解析器产物的前提下裁决）③ 复核本 chunk 的两处 orch
+  越界判断——0.3.4 动 design-prompt 三行、本次动 `.claude/agents/` 两处
+  （后者在 0.8.0 语义下已属本地文件，但仍是 orch 改角色卡）
+- 五张 M3 执行卡（严格顺序，④ 先于 ⑤）：① BUG-0025+0031 同卡修 +
+  M3-DE01/DE02/OR04/CFG02（L2）② BUG-0024 (b) + M3-OR05（L2）③ BUG-0018 修 +
+  重跑 M2-OR01/WO01（L2）④ 多配置基建 + M3-CF01（L2）⑤ M3-CF02/03/04 +
+  M3-AT02（L1）。**其中至少一张须兑现 M3 的 KILL 行**
+- 首次派卡时同时验证：新版静态角色卡的实际行为、L0–L3 定级失配记录、
+  `/dispatch` skill 指向 CLAUDE.md 分级表是否真的可用
+
+**How verified**
+- `make check` 绿（docs-check passed + chain audit，dangling 仍 0）；
+  `make selftest` **60/60 OK**（移植过程中一度 59/60，挂的正是
+  `test_claude_md_carries_risk_grades`，重写 CLAUDE.md 后转绿——该失败即
+  FB-25 订正的直接证据）
+- `make handoff` / `make next` / `make guards FILES=...` 三条均实跑，输出与
+  0.7.1 下逐项一致（next 12 条动作、guards 正确命中 BUG-0007）
+- `make check MILESTONE=2` 与 `MILESTONE=3` 均实跑，条件 4 FAIL 系亲眼所见
+  而非推断；M2 击杀自证的取证位置经 `doc/status.jsonl` 0.3.0 行复核
+- 字节预算：`CLAUDE.md` + `workflow/*.md` = **38531 / 39500**，较迁移前
+  （39042）**更宽松**——旧 CLAUDE.md 9120B 换成新版后总量下降
+- 失效引用清扫：`grep` 全部活文件（CLAUDE.md / .claude/ / doc 表头 /
+  .githooks / .github）确认无残留旧命令名与旧 workflow 路径；命中的剩余项
+  全部位于 `doc/fw-feedback.md` 的**冻结历史行**，按 FB-23 裁决不动
+- 上游动词悬空（FB-27）非目测：`grep -o "^[a-z]*:" Makefile` 取实有目标集，
+  与 `grep -on "make [a-z-]*" .claude/agents/*.md` 求差得出
+- 接手性实测（本 chunk 收尾）：`make handoff` 实跑，版本/状态/log 尾块正常
+  读出；`git status` 0 未提交、`git log origin/master..HEAD` 0 未推送；
+  `git log 05a49a0..upstream/master` 实跑返回 1 条，证明新加的上游基线机制
+  确实可用而非又一条空指令
+
 ## [0.3.5] 2026-07-29 pull 框架 0.7.1 + 压测 explore：§id 解析器幻影率 44%（FB-24）
 
 **Done**

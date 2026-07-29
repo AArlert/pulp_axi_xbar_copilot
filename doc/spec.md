@@ -150,6 +150,20 @@
    §开篇；协议本身为基线，不在此复述）。
 6. decode error slave 的响应与同一 slave 端口其它事务之间的次序关系见
    §5.2.6（BUG-0025 裁决，REV-011）。
+7. **ATOP × 译码未命中的应答形态，许可来源未定义**：一笔 `aw.atop != '0`
+   且**要求读响应**的原子操作（atomic load），其地址不匹配任何 rule 且该
+   slave 端口未使能 default master port 时，被路由到本端口的 decode error
+   slave（§4.2）；此时 err_slv 是否也须为该 AW 产出一串 R beat（拍数 /
+   数据 / 响应码 DECERR）——**许可来源未定义**（xbar.md §Decode Errors and
+   Default Slave Port 全段无 atop/atomic；demux.md/mux.md 对 err_slv 无记载；
+   §4.3 只按读/写二分对写事务给**单拍 B**、§6.3 又要求原子读 **B 与 R 两通道
+   都应答**，两读互斥；禁读实现体定义之）。**环境约束（BUG-0032 裁决，
+   REV-012 §Item 1）**：M3 全部场景**不向译码未命中地址发起任何 ATOP**
+   （送往未命中地址的 AW 恒 `aw.atop ≡ '0`），使上述未定义情形**构造性
+   不可触发**。据此，decode-error 维度**不整体降级**，在"未命中地址上
+   `aw.atop ≡ '0`"的合法子集上正常写 checker。"若强行违反本约束触发该组合时
+   err_slv 如何应答"仍为许可来源未定义，作为**上游确认项**另行追踪，
+   **不阻塞** M3；未取 DUT_BUG（无任何波形/证据显示行为违规）。
 
 ## 5. ID 与保序
 
@@ -308,7 +322,9 @@
    验证 ATOP 硬件被裁剪后的普通读写数据通路），该约束使未定义情形不可达、
    不阻塞 M4。
 3. 原子读（atomic load，ATOP 带读响应）要求 **B 与 R 两个通道都返回响应**
-   （demux.md §Atomic Transactions）。
+   （demux.md §Atomic Transactions）。**本条与 §4 decode-error 应答形态的
+   交集——ATOP 落在译码未命中地址——许可来源未定义，见 §4 clause 7 的环境
+   约束（BUG-0032 裁决，REV-012 §Item 1）。**
 4. 环境约束（AXI5 协议要求，mux.md/demux.md 同述）：master 必须保证 ATOP
    事务的 ID 与当前**所有**（读+写）在飞事务的 ID 不同；ATOP 亦因此在读写
    通道间引入 AXI4 中不存在的依赖。验证侧激励必须满足此约束。
@@ -434,3 +450,4 @@
 | 4 | 2026-07-28 | 0.2.0 | §5.2、§7.4、§5.4 | M2-OR01 仿真新发现 BUG-0013 裁决应用（依据 REV-006，仅落地 REV-006 §3 逐条列明的"orch 应用范围"）：收窄 §5.2.1"接受边界"字面表述为"不早于完成、判决锚完成序（§5.2.3）"，消除与基线 `CUT_ALL_AX` spill register 弹性缓冲的假红；§7.4 新增第 5 条，把"接受/拒收边界即时性"通用归入延迟不敏感表现（同时覆盖 §5.2 stall 与 §5.4.3 拒收，预防 M2-TL01 独立撞见同类交互）；§5.4.3 MaxMstTrans 侧句尾加交叉指针至 §7.4.5。§5.2.3 正文未改动（现文已充分表述功能目的，surgical） | REV-006（doc/review/REV-006.md）；来源：vendor/axi/doc/axi_xbar.md §Ordering and Stalls（L84/L86）、vendor/axi/doc/axi_demux.md §Configuration（L31）/§Pipelining and Latency（L37）/§Implementation（L70-74）、vendor/axi/src/axi_demux.sv（L89-116/L189-209 spill-register 结构） @ v0.39.9（SHA a256a3b8） |
 | 5 | 2026-07-28 | 0.2.0 | §2.1、§5.4、§7.4 | M2-TL01/TL02 仿真新发现 BUG-0016 裁决应用（依据 REV-007，taxonomy 终判 SPEC_ISSUE，改判 DUT_BUG——DUT 未产生错误输出、`MaxTrans` 为 `idx_width` 定宽提示而非精确上限，许可来源三方矛盾；仅落地 REV-007 §5 逐条列明的"orch 应用范围"，不外溢）：§5.4.1 把每桶在飞上限由字面 `≤MaxMstTrans` 改为**有效上限 `2^idx_width(MaxMstTrans)−1 = 2^⌈log₂MaxMstTrans⌉−1`**（基线 10⇒15；`MaxTrans` 从不进比较器、full 判据为 `&in_flight` 全一）；§5.4.2 **撤销**"每 ID ≤ MaxSlvTrans"可断言上界（`MaxSlvTrans`→`axi_mux.MaxWTrans` = AW→W ID 高位 FIFO 深度、mux 无 per-ID 在飞计数机制），并正式收回 REV-005 为 M2-TL02 解锁的"≤MaxSlvTrans 绝不假红"可观测上界监视器；§5.4.3 把 MaxMstTrans 侧拒收门改锚有效上限、MaxSlvTrans 侧由"上游确认项"升级为"mux 侧机制不存在"已定结论；§7.4.5 把"上限最终被守"绑定 §5.4.1 有效上限公式、明确越字面值为位宽取整效应非 spill；§2.1 `MaxMstTrans`/`MaxSlvTrans` 字段行同步收口。§5.2 保序机制与 BUG-0010 分桶口径措辞未动 | REV-007（doc/review/REV-007.md）；来源：vendor/axi/src/axi_demux_simple.sv（L69 `IdCounterWidth=idx_width(MaxTrans)`、L168/L322 full 门、L557/L615 `&in_flight` 判满、L460-508 无 MaxTrans 合法性检查）、vendor/common_cells/src/cf_math_pkg.sv（L57-58 `idx_width`）、vendor/common_cells/src/delta_counter.sv（`overflow_o` 语义）、vendor/axi/src/axi_xbar.sv（L141 `MaxWTrans←MaxSlvTrans`）、axi_xbar_unmuxed.sv（L175 `MaxTrans←MaxMstTrans`）、axi_mux.sv（L46/L319 `MaxWTrans` FIFO 深度）、vendor/axi/doc/{axi_xbar.md L46/L47,axi_demux.md L72,axi_mux.md L29}、axi_pkg.sv L489-494（四处散文互相矛盾）@ v0.39.9（SHA a256a3b8） |
 | 6 | 2026-07-28 | 0.2.2 | §5.2、§4 | BUG-0025 SPEC_ISSUE 半边仲裁应用（依据 REV-011 §1.3，仅落地条款提案 P-REV011-1/P-REV011-2 原文，不外溢）：§5.2 新增第 6 条**译码未命中事务的保序地位**——(1) 走 §3.3 default master port 的事务目标是真实 master 端口，§5.2.1-4 原样适用；(2) 走 §4 decode error slave 的事务分两层，**完整 ID 维度可断言**（同一 slave 端口上完整 ID 相同、同方向事务的 B/rlast 完成序须与接受序一致，无论路由去向，checker 必须纳入判决）、**低位 ID 桶维度不可断言**（完整 ID 不同且其一走 err_slv 时次序许可来源未定义，不得写断言、以非判决 cover 留痕并列上游确认项、不阻塞里程碑）；(3) 该排除必须显式引本条，**不得**以"未登记⇒读默认值⇒比较恰好为假"实现（陈旧值会继续参与比较，既漏检也可产生无来源假红）。§4 新增第 6 条一行交叉指针至 §5.2.6。§5.2.1-5 与 §4.1-5 正文未改动（surgical） | REV-011（doc/review/REV-011.md §1）；来源：vendor/axi/doc/axi_xbar.md L33/L35（Decode Errors and Default Slave Port）、L84/L86（Ordering and Stalls）、§开篇（完整 AXI4+ATOP）；vendor/axi/doc/axi_demux.md L54-76、vendor/axi/doc/axi_mux.md（对 err_slv 无记载，作为"未定义"的否定性证据）；spec 内部 §1/§3.3/§4.1/§4.5/§5.2.1/§5.2.2/§5.2.3 @ v0.39.9（SHA a256a3b8）。**无 RTL 实现体来源**——REV-011 明确声明未读 axi_xbar.sv/axi_demux.sv 实现体，spec-from-RTL 红线未破 |
+| 7 | 2026-07-29 | 0.3.9 | §4、§6 | BUG-0032 SPEC_ISSUE 终判应用（依据 REV-012 §Item 1 approve P-REV012-1，经 REV-013 spec-review 门禁 conditional pass 后按其订正文本逐字应用，不外溢）：§4 新增第 7 条——err_slv 对**要求读响应的 ATOP（atomic load）**落在译码未命中地址时的应答形态**许可来源未定义**（§4.3 写事务单拍 B 与 §6.3 原子读 B+R 两读互斥）；**环境约束（BUG-0032 裁决，REV-012 §Item 1）**：M3 全部场景不向译码未命中地址发起任何 ATOP，使该未定义情形构造性不可触发，decode-error 维度不整体降级、在合法子集上正常写 checker；违反约束时的应答仍列上游确认项、不阻塞 M3、未取 DUT_BUG。§6 clause 3 尾部加一行交叉引用指回 §4 clause 7。**REV-013 门禁订正**：提案原文两处 `M3/M4` 收窄为 `M3`——M4 覆盖率收敛若需触发该组合须重开仲裁，spec 现无 M4 config-matrix 承载该约束，写 M4 会构成 spec-vs-artifact 的 Retention 不一致；reopening 路径由本条第四部分 + BUG-0032 guard 承接，不因收窄受损。§4.1-6、§6.1-2/4-5 正文未改动（surgical） | REV-012（doc/review/REV-012.md §Item 1）+ REV-013（doc/review/REV-013.md，spec-review 门禁 + 逐字订正文本）；来源：vendor/axi/doc/axi_xbar.md §Decode Errors and Default Slave Port（全段无 atop/atomic，REV-012/REV-013 各自复核 grep 空集）、vendor/axi/doc/axi_demux.md §Atomic Transactions（L79-87，只涉路由/ID 计数器注入，不涉 err_slv）、vendor/axi/doc/axi_mux.md（对 err_slv 零命中）@ v0.39.9（SHA a256a3b8）。**无 RTL 实现体来源**——REV-012/REV-013 均未读 axi_xbar.sv/axi_demux.sv 实现体，spec-from-RTL 红线未破 |
