@@ -104,12 +104,18 @@ make check               # 关闭任何卡前必做
 
 - Conventional commits。Evidence 与它所证明的代码落同一 commit。closeout 后
   `git push`（`make commit` 只到本地，推送是人的动作）。
-- Hooks：每次 clone 后执行一次 `git config core.hooksPath .githooks`。
+- 每次 clone 后执行两条一次性设置（`.git/config` 不随仓库走）：
+  `git config core.hooksPath .githooks` ·
+  `git remote add upstream https://github.com/AArlert/iverif-workflow.git`
 - **上游关系（0.8.0 起变更）**：`workflow/`、`scripts/`、`.claude/agents/` 是
   上游文件，但**不再有 fwsync/manifest/divergence 三态**——本地怎么改是自己的
-  事，不红。跟进上游：保留 remote，`git cherry-pick` 想要的提交。
+  事，不红。跟进上游：`git fetch upstream` 后 `git cherry-pick` 想要的提交。
+  **本仓库的移植基线 = upstream `05a49a0`（0.8.0）**；"上游比我们多了什么"因此
+  可机械回答：`git log 05a49a0..upstream/master --oneline`。每次跟进后更新此
+  基线 sha 与 `iverif.json` 的 `framework` 字段。
   `scripts/regress.py` 自 0.8.0 起**归本项目所有**（canon 只保留判据原语
-  `scripts/svacheck.py --judge`）。
+  `scripts/svacheck.py --judge`）。已就地修改的上游文件见
+  `doc/fw-feedback.md`（FB-27：`.claude/agents/{arch,rev}.md` 各一处）。
 - **框架反馈**：摩擦仍当场登记 `doc/fw-feedback.md` 并回流
   <https://github.com/AArlert/iverif-workflow>。机制上已无强制，但本仓库是
   框架首次实战应用，回馈仍按硬性交付物对待。

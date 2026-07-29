@@ -68,6 +68,16 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
   「**先登记、可就地修，两者都做**」，且就地修的每一处必须在台账留行 + 代码
   旁注明 FB 编号——否则退化成 FB-7/BUG-0007 那个形状（变通只落注释、无人可
   grep）
+- **收尾时补上一个自造的接手缺口**：迁移中我删掉了 `iverif.json` 的
+  `framework_repo`（fwsync 已亡，该字段无人读），但 CLAUDE.md §5 仍写着
+  「跟进上游：**保留 remote**」——而 `git remote -v` 里根本没有那个 remote，
+  上游位置遂无处可查。**这正是本会话反复报的「指令没有机制」，且是我自己
+  造的**。已补：加 `upstream` remote 指向 GitHub（`.git/config` 不随仓库走，
+  故同时把这条与 hooksPath 并列写进 CLAUDE.md §5 的一次性设置）；并**记录
+  移植基线 `upstream 05a49a0`（0.8.0）**，使「上游比我们多了什么」成为一条
+  机械命令：`git log 05a49a0..upstream/master --oneline`。实测该命令当场
+  返回 1 条（`e23d938 删除 VENDOR.md`——删的是上游 `doc/VENDOR.md` 壳文件，
+  本仓库用的是 `vendor/VENDOR.md`，不受影响）
 
 **Not done**
 - **本 chunk 不含任何仿真**，无新证据，testplan 计数不变（M3 仍 ✅0/11）
@@ -111,6 +121,10 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
   全部位于 `doc/fw-feedback.md` 的**冻结历史行**，按 FB-23 裁决不动
 - 上游动词悬空（FB-27）非目测：`grep -o "^[a-z]*:" Makefile` 取实有目标集，
   与 `grep -on "make [a-z-]*" .claude/agents/*.md` 求差得出
+- 接手性实测（本 chunk 收尾）：`make handoff` 实跑，版本/状态/log 尾块正常
+  读出；`git status` 0 未提交、`git log origin/master..HEAD` 0 未推送；
+  `git log 05a49a0..upstream/master` 实跑返回 1 条，证明新加的上游基线机制
+  确实可用而非又一条空指令
 
 ## [0.3.5] 2026-07-29 pull 框架 0.7.1 + 压测 explore：§id 解析器幻影率 44%（FB-24）
 
