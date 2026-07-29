@@ -2,6 +2,51 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.20] 2026-07-30 落地 M3-TL01：BUG-0010 跨桶定向回归守卫，M3 testplan 全绿
+
+**Done**
+- **DV 场景卡（L1/sonnet，fresh 实例）落地 `M3-TL01`**：单 slave 端口构造
+  2 个不同低位 ID 桶（低 `AxiIdUsedSlvPorts=3` 位互不相同），同方向背靠背
+  各压 10 笔（合计 20 > `MaxMstTrans=10`，仍在结构有效上限 15 之内，
+  BUG-0016 口径），两桶经同一 `axi_burst_item` 拼接后一次性 `drive_burst`
+  发出、无逐项等待，确保真正并发在飞而非先后填充
+- **判据 (1) 判决锚点**：scoreboard 路由/数据/响应/完成全绿，零 mismatch，
+  证明 DUT 在该合计规模下合法全部接受、无非预期停顿或拒收——**DUT 未表现
+  为扁平**，BUG-0010 分桶口径由"文档信任"实证升级为"波形经验确认"，未
+  触发对 demux.md 的 DUT_BUG/文档-实现分歧复核
+- **判据 (2) 达标覆盖**：新增非判决 covergroup `cg_xbucket_total`
+  （`tb/functional_coverage.sv`），由 scoreboard 既有 `or_open_q` 逐桶表
+  （`cg_tx_limit` 同源，非二次解码）在 `write_slv_req_accept` 处求和触发，
+  仅当"合计 > `Cfg.MaxMstTrans`（pinned spec 参数，非 RTL 观测值）且 ≥2
+  桶同时非空"时采样——命中 samples=20 inst_cov=100%。未新增/修改任何
+  assert（BUG-0016 红线：判决性上限仍只准锚定 spec 公式导出的有效上限，
+  非本卡范围）
+- **BUG-0028 checklist**：`sim/regress/regress.list` 追加
+  `m3_tl01_xbucket_test`；全回归 **21/21 PASS**
+- **evidence**：`doc/evidence/v0.3.19/M3-TL01.log`（`make evidence
+  SCEN=M3-TL01 TEST=m3_tl01_xbucket_test SEED=1`），testplan 行由
+  evidence.py 机械回填 🔲→✅
+
+**Not done**
+- M3 里程碑收尾（`make check MILESTONE=3` + rev 全 rubric，须显式引用
+  REV-015 residual risk 披露）与 lint-baseline 重生成——testplan M3 现已
+  11/11 全绿，可以着手评估签核前置条件，留给下一张 L3 signoff 卡
+- `make check` 既有记账缺口（M0-01 缺 spec_ref、8 处父节点锚定、10 个未引用
+  spec 子节、22/22 evidence 缺 spec_ref header）本卡未触碰、未变化
+
+**Next**
+- M3 里程碑签核卡：`make check MILESTONE=3` + rev 全 rubric + lint-baseline
+  重生成
+- 五条不变量 KILL 记账核对（M3 内已有 BUG-0033/BUG-0034 两次 KILL，签核卡
+  按 `make check MILESTONE=3` 条件 4 复核是否满足"每 milestone 每类
+  checker 至少一次"）
+
+**How verified**
+- `make run TEST=m3_tl01_xbucket_test SEED=1` PASS（0 UVM_ERROR/FATAL，自然
+  结束）；`make regress` 21/21 PASS；`make evidence` 生成证据文件、
+  `make check` chain audit 干净（无新增 dangling/gap，既有缺口数字不变）；
+  `make selftest`（60 tests）通过
+
 ## [0.3.19] 2026-07-30 closer 独立复验+收口，BUG-0034 全链路终结（诊断→REV-015→修复→CLOSED）
 
 **Done**
@@ -95,109 +140,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
 - `make selftest`（60 tests）通过
 - KILL 自证红→绿数字与 BUG-0034 记载的原始基线逐位吻合，非近似值
-
-## [0.3.17] 2026-07-30 5 个 M3 covergroup 落地；BUG-0034 三工具诊断→rev 否决 DUT_BUG、改判 TB_BUG
-
-**Done**
-- **卡⑥（DV，L2）**：落地 `doc/design-prompt/functional_coverage.md` §4
-  规划、`functional_coverage.sv` 此前未实现的 5 个 M3 covergroup
-  （`cg_decode_error`/`cg_decerr_shape`/`cg_miss_order`/
-  `cg_default_port_tracked`/`cg_live_addr_map`）——按用户明确原则，真正
-  实现而非走"文档指向已有 SVA cover"的捷径；两个与既有 `stall_sva.sv`
-  SVA cover（`c_bug25_default_*`/`c_bug31_livev1_*`）重叠的项，接的是
-  同一信号事实源（桥接静态句柄 `m_probe`，喂入已折叠的 always_comb/wire
-  事实，BUG-0015 安全），不重复实现判断逻辑；判决 assert/property 条件
-  零改动。回归防线逐位对照 HEAD 通过；全回归 20/20 PASS。副产物登记
-  **BUG-0035**（TOOL_ENV，回归防线期间手工 stash+增量编译触发
-  `VFS_ZLIB_ERROR`，clean rebuild 不复现，同 `scripts/regress.py` 已知
-  VFS_SDB_ERROR class；orch 收卡时发现该卡自行设成 CLOSED——违反
-  closer≠fixer 且证据列不合规，改判 **WONTFIX**，对齐 BUG-0017/BUG-0030
-  同类先例）
-- **卡⑦（DV 诊断卡）**：对 BUG-0034 用 xdebug（改用 `event.export`，
-  非上一轮踩坑的 `value.at`）+ xwave（独立实现交叉核对）+ xtrace（RTL
-  因果）三工具诊断，物理层证据扎实（两个独立 FSDB 解析器逐拍一致：id0
-  4 拍、id8 单拍插入其中）——但**诊断卡自己给出的 taxonomy 结论（DUT_BUG
-  candidate）经 rev 独立复核被否决**（见下）
-- **rev 卡 → REV-015**：独立复核 100% 采信诊断卡的 RTL/波形观测，但指出
-  其援引的"spec §1/§5.5.3 禁止读交织"在 spec 钉定本中**不存在**——真实
-  条款只在 §5.5.1 禁 **W** 通道交织，R/响应侧 §5.1.4 + 上游
-  `axi_mux.md:18` **明文允许**不同完整 ID 响应交织（框定为性能特性），
-  §5.5.4 明文禁止 checker 断言 round-robin 发生序。逐拍代入诊断卡自己
-  的表格，证明四路"证据"是 `slvport_agent.sv` monitor 与 `axi_chan_sva`
-  bind SVA **共模同一"R 永不交织"重建假设**在合法交织下的必然误报，非
-  DUT 协议违反；物理层收发计数全对、无数据丢失。**taxonomy 改判
-  TB_BUG，不发起上游 issue、不走 P-xxx**——DUT 行为与其自身上游文档
-  （`axi_demux.md` §Atomic Transactions 原文承认此交互"额外假冲突
-  stall"，从未框定为正确性问题）一致，二者无矛盾
-- `doc/bugs/BUG-0034.md` 按 fl_schema_enforce 的英文标准 section
-  （symptom/first_anomaly/taxonomy/rca/fix/rerun/regression_guard/
-  similar）重新组织（原文件全用中文自定 header，状态转终态后触发
-  schema 检查失败，趁此机会订正结构，内容无损）
-
-**Not done**
-- BUG-0034 修复（r_id 感知的 R burst 重建）未派发——按 REV-015 要求须
-  独立 TB 修复卡（不与诊断/落地同链），随后由非修复者复跑收 evidence
-- 遗留的 M3-AT02 多拍交织覆盖缺口尚未在任何签核记录里正式披露（REV-015
-  Item 4 要求 M3 签核时须记 residual risk 或 `ACCEPTED@M<n>`）
-
-**Next**
-- 派独立 TB 修复卡：`tb/slvport_agent.sv`/`tb/sva/axi_chan_sva.sv` 的 R
-  burst 重建改按逐拍 r_id 分流；修复后恢复 M3-AT02 多拍两腿复跑转绿，
-  regression_guard 由非修复者收口
-- M3 里程碑收尾：`make check MILESTONE=3` + rev 全 rubric，须显式引用
-  REV-015 的 residual risk 披露
-
-**How verified**
-- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap；
-  `doc/bugs/BUG-0034.md` schema 校验通过）
-- `make selftest`（60 tests）通过
-- rev 独立复核的方法学价值：证明"三个工具观测一致"不等于"观测解读正确"
-  ——这正是派发 REV-015 时特意提醒的陷阱，实测命中
-
-## [0.3.16] 2026-07-30 卡⑤（五张 M3 执行卡收官）：M3-CF02/03/04+AT02 转绿
-
-**Done**
-- **卡⑤（DV，L2，升级自原计划 L1）**：复用卡④建的多配置构建机制，扩展
-  `xbar_types_pkg.sv`/`sim/Makefile` 补齐 cfgB/C/D 三个配置点（`UniqueIds`/
-  `ATOPs`/`Connectivity`/地址表覆盖维度接入选点机制）；`tb/functional_
-  coverage.sv` 新增 `cg_cfg_point`（design-prompt functional_coverage.md
-  §4 规划、义务范围内的唯一一项，其余四个 M3 covergroup 明确留在范围外）。
-  落地并转绿四条 testplan 行：**M3-CF02**（cfgB 6×1+`CUT_ALL_PORTS`）、
-  **M3-CF03**（cfgC 4×4+`UniqueIds=1`，env 侧 `SB_UNIQUEIDS` 兜底监视）、
-  **M3-CF04**（cfgD 4×4+稀疏 `Connectivity`+`ATOPs=0`，按 tb_top.md C5.7
-  逐字构造）、**M3-AT02**（ATOP 跨方向假冲突守卫）。基线+cfgA 回归防线
-  在验证新场景前先行核对，逐位一致（C5.4 持续成立）。全回归 20/20 PASS
-- **KILL-0002**：为 cfgC 的 `SB_UNIQUEIDS` 兜底监视做注伤自证——植入
-  §5.3.1 违例（同完整 ID/同方向/异目标 master 端口）→ 红
-  （`violations=1`）→ 撤销 → 绿，证明该监视器非恒真空转
-- **新发 BUG-0034（OPEN，DUT/TB 未决，不阻塞）**：M3-AT02 构造多拍两腿
-  重叠时，slave 端口 R 通道四路独立证据（`MON_RNOAR`/`SVA_RLAST_LEN`/
-  `SB_RBEATS`/`SB_ATOP_DANGLING`）同时命中，疑似 atop 影子读 R 与同桶
-  普通读 R 交织（AXI4 §1 禁止读交织）；`r_ready` 恒 1 排除背压，xdebug
-  `signal.changes` 显示同一连续 `r_valid` 块内 `r_id` 跳变 3 次，是交织
-  的结构性证据。**DUT_BUG（真交织）vs TB_BUG（monitor/SVA 无交织重建
-  缺口）未决**——需波形逐 beat decode `r_id`/`r_last` 定性，本卡 `value.at`
-  在该 FSDB 上返回 unknown，未能落定，留待专卡。本卡**合法绕过**：
-  M3-AT02 改单拍两腿，§6.5 假冲突仍真实发生、三条判据完整满足，不阻塞
-  M3；未在判决本体加临时补丁、未把观测行为抄成期望值
-
-**Not done**
-- BUG-0034 定性未决（需要 xdebug 更细粒度取证或 Verdi 波形逐 beat decode，
-  留待独立诊断卡）
-- 遗留四个 M3 covergroup 缺口（`cg_decode_error`/`cg_decerr_shape`/
-  `cg_miss_order`/`cg_default_port_tracked`/`cg_live_addr_map`，早于本次
-  五卡序列即存在，design-prompt 已规划但 `functional_coverage.sv` 未实现）
-  ——非本卡引入，留给独立记账/整改卡
-- cfgC 的 §5.3.1 前置保证目前靠单发（single-outstanding）构造性满足；
-  若 M4 需要多发在飞需补集中式 ID 分配器（fixer 交付报告已记）
-
-**Next**
-- **五张 M3 执行卡序列至此全部完成**（①②③④⑤ + 各自 closer/rev 支线）。
-  剩余 M3 收尾项：BUG-0034 定性（独立诊断卡）、四个遗留 covergroup 缺口
-  （独立整改卡）、M3 里程碑签核（`make check MILESTONE=3` + rev 全 rubric）
-
-**How verified**
-- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
-- `make selftest`（60 tests）通过
-- 全回归 20/20 PASS（基线 + cfgA + 卡①②③④已交付场景 + 本卡四场景）
 

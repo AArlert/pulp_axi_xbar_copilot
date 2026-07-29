@@ -296,6 +296,28 @@ class xbar_functional_coverage extends uvm_component;
     }
   endgroup
 
+  // ---- cg_xbucket_total (non-decisional, testplan M3-TL01, BUG-0010
+  // regression_guard, spec §5.4.1) ------------------------------------------
+  // spec §5.4.1: each slave port counts in-flight transactions per (low
+  // AxiIdUsedSlvPorts-bit ID bucket x direction) independently. This bin
+  // records whether, at some accepted AW/AR, the SUM of that one slave
+  // port's per-bucket in-flight counts (same direction) exceeded the
+  // documented MaxMstTrans ceiling WHILE >=2 distinct buckets were
+  // simultaneously non-empty — the flat/aggregate reading M3-TL01 exists to
+  // exercise. Fed by the scoreboard's own or_open_q bookkeeping (the exact
+  // per-(port,bucket,direction) table cg_tx_limit already reads), summed
+  // across buckets — no second decode, no RTL-derived threshold (CLAUDE.md
+  // input boundary): the ceiling compared against is Cfg.MaxMstTrans from
+  // xbar_types_pkg, the pinned parameter-definition file. Sampled only when
+  // the condition holds (same "entered"-only convention as
+  // cg_default_port_tracked above).
+  covergroup cg_xbucket_total with function sample(bit combined_over_limit_multibucket);
+    option.per_instance = 1;
+    cp_combined: coverpoint combined_over_limit_multibucket {
+      bins hit = {1'b1};
+    }
+  endgroup
+
   // ---- cg_live_addr_map (non-decisional, BUG-0031 positive witness) -------
   // The target master port the STALL-SVA computed for a transaction hitting the
   // moved-rule region after reconfiguration — sampled from that module's aw_tgt /
@@ -323,6 +345,7 @@ class xbar_functional_coverage extends uvm_component;
   int unsigned n_miss_order;
   int unsigned n_default_port;
   int unsigned n_live_addr;
+  int unsigned n_xbucket_total;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -338,6 +361,7 @@ class xbar_functional_coverage extends uvm_component;
     cg_miss_order            = new();
     cg_default_port_tracked  = new();
     cg_live_addr_map         = new();
+    cg_xbucket_total         = new();
     // Publish this single instance for the stall-SVA instrumentation bridge
     // (see m_probe's declaration). One scoreboard builds one fcov, so the last
     // (only) assignment is the live collector.
@@ -414,6 +438,15 @@ class xbar_functional_coverage extends uvm_component;
     n_live_addr++;
   endfunction
 
+  // Driven directly by the scoreboard (scoreboard_refmodel.sv
+  // write_slv_req_accept), which owns the or_open_q per-(port,bucket,
+  // direction) table this bin sums — testplan M3-TL01 / BUG-0010
+  // regression_guard, spec §5.4.1.
+  function void sample_xbucket_total(bit combined_over_limit_multibucket);
+    cg_xbucket_total.sample(combined_over_limit_multibucket);
+    n_xbucket_total++;
+  endfunction
+
   // Per-run, log-visible coverage evidence: sample count + instance coverage
   // for every covergroup (the "非空转" proof functional_coverage.md §4 asks
   // for). A zero sample count means the scenario never produced that kind of
@@ -438,12 +471,13 @@ class xbar_functional_coverage extends uvm_component;
                  xbar_types_pkg::CFG_POINT_ID, xbar_types_pkg::CFG_NAME),
       UVM_LOW)
     `uvm_info("FCOV_SUMMARY",
-      $sformatf("cg_decode_error: samples=%0d inst_cov=%0.2f%% | cg_decerr_shape: samples=%0d inst_cov=%0.2f%% | cg_miss_order: samples=%0d inst_cov=%0.2f%% | cg_default_port_tracked: samples=%0d inst_cov=%0.2f%% | cg_live_addr_map: samples=%0d inst_cov=%0.2f%%",
+      $sformatf("cg_decode_error: samples=%0d inst_cov=%0.2f%% | cg_decerr_shape: samples=%0d inst_cov=%0.2f%% | cg_miss_order: samples=%0d inst_cov=%0.2f%% | cg_default_port_tracked: samples=%0d inst_cov=%0.2f%% | cg_live_addr_map: samples=%0d inst_cov=%0.2f%% | cg_xbucket_total: samples=%0d inst_cov=%0.2f%%",
                  n_decode_error, cg_decode_error.get_inst_coverage(),
                  n_decerr_shape, cg_decerr_shape.get_inst_coverage(),
                  n_miss_order,   cg_miss_order.get_inst_coverage(),
                  n_default_port, cg_default_port_tracked.get_inst_coverage(),
-                 n_live_addr,    cg_live_addr_map.get_inst_coverage()),
+                 n_live_addr,    cg_live_addr_map.get_inst_coverage(),
+                 n_xbucket_total, cg_xbucket_total.get_inst_coverage()),
       UVM_LOW)
     `uvm_info("FCOV_SUMMARY",
       $sformatf("cg_decode_error coverpoints: cp_route=%0.2f%% cp_src_port=%0.2f%% cp_dir=%0.2f%% x_route_src_dir=%0.2f%% | cg_decerr_shape cp_len=%0.2f%% cp_dir=%0.2f%% x_len_dir=%0.2f%% | cg_miss_order cp_miss=%0.2f%% | cg_default_port_tracked cp_entered=%0.2f%% | cg_live_addr_map cp_live_tgt=%0.2f%%",

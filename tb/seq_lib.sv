@@ -1717,3 +1717,85 @@ class m3_at02_atop_read_vseq extends uvm_sequence #(uvm_sequence_item);
     s.start(p_sequencer.slv_sqr[0]);
   endtask
 endclass
+
+// ----------------------------------------------------------------------------
+// M3-TL01 — BUG-0010 cross-bucket directed regression guard (testplan.md
+// M3-TL01, spec §5.4.1). ONE slave port (port 0, "单 slave 端口"), TWO distinct
+// low-AxiIdUsedSlvPorts-bit buckets (0 and 1 — differ in the low 3 ID bits, the
+// exact grouping spec §5.4.1 counts per), each filled to TX_PER_BUCKET=10
+// same-direction sub-transactions at the SAME target master port, all presented
+// on ONE axi_burst_item (build_txlimit_burst reused per bucket, items
+// concatenated) so drive_burst (slvport_agent.sv) fires every sub-transaction's
+// AW(+W)/AR back-to-back with no inter-item wait — the two buckets are
+// genuinely concurrently in flight, not filled one after the other. Combined
+// in-flight on this one port then reaches 2*10=20 > Cfg.MaxMstTrans=10 while
+// both buckets stay simultaneously non-empty, well inside the structural
+// per-bucket ceiling 2**ceil(log2(MaxMstTrans))-1=15 (spec §5.4.1/BUG-0016), so
+// no single bucket alone need be pushed past its own cap. Each bucket's 10
+// sub-transactions spread across its 4 sibling full ids (build_txlimit_burst's
+// spread_bucket=1, same TL01 rationale) so no id gets anywhere near
+// MaxSlvTrans=6. Judgement anchor is the scoreboard's routing/data/response/
+// completion correctness under this sustained combined pressure (spec
+// §1/§3.1/§5.1) — this construction asserts NOTHING about "when" combined
+// in-flight crosses 10 (delay-insensitive, spec §7.4.5); the non-decisional
+// "combined > MaxMstTrans with >=2 buckets non-empty" witness lives in
+// cg_xbucket_total (functional_coverage.sv), fed by the scoreboard's
+// write_slv_req_accept.
+// ----------------------------------------------------------------------------
+class slvport_tl01_xbucket_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_tl01_xbucket_seq)
+
+  int unsigned slv_port_idx;
+  int unsigned num_buckets   = 2;  // >= 2 distinct low-ID buckets (testplan floor)
+  int unsigned tx_per_bucket = 10; // combined = num_buckets*tx_per_bucket = 20 > MaxMstTrans=10
+
+  function new(string name = "slvport_tl01_xbucket_seq");
+    super.new(name);
+  endfunction
+
+  task body();
+    axi_burst_item wb, rb, tmp;
+    int unsigned    tgt;
+    tgt = slv_port_idx % xbar_types_pkg::NO_MST_PORTS;
+
+    wb = build_txlimit_burst($sformatf("m3tl01_w_%0d_b0", slv_port_idx),
+                              1'b1, tgt, tx_per_bucket, 32'h0010_0000, 1'b1, 0);
+    for (int unsigned bk = 1; bk < num_buckets; bk++) begin
+      tmp = build_txlimit_burst($sformatf("m3tl01_w_%0d_b%0d", slv_port_idx, bk),
+                                 1'b1, tgt, tx_per_bucket,
+                                 32'h0010_0000 + xbar_types_pkg::addr_t'(bk) * 32'h4000,
+                                 1'b1, bk);
+      foreach (tmp.items[i]) wb.items.push_back(tmp.items[i]);
+    end
+    start_item(wb);
+    finish_item(wb);
+
+    rb = build_txlimit_burst($sformatf("m3tl01_r_%0d_b0", slv_port_idx),
+                              1'b0, tgt, tx_per_bucket, 32'h0020_0000, 1'b1, 0);
+    for (int unsigned bk = 1; bk < num_buckets; bk++) begin
+      tmp = build_txlimit_burst($sformatf("m3tl01_r_%0d_b%0d", slv_port_idx, bk),
+                                 1'b0, tgt, tx_per_bucket,
+                                 32'h0020_0000 + xbar_types_pkg::addr_t'(bk) * 32'h4000,
+                                 1'b1, bk);
+      foreach (tmp.items[i]) rb.items.push_back(tmp.items[i]);
+    end
+    start_item(rb);
+    finish_item(rb);
+  endtask
+endclass
+
+class m3_tl01_xbucket_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_tl01_xbucket_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m3_tl01_xbucket_vseq"); super.new(name); endfunction
+  task body();
+    // Single slave port (testplan M3-TL01 "单 slave 端口") — deliberately not
+    // forked across all ports, same rationale as M3-AT02: this scenario is
+    // about ONE port's combined per-bucket bookkeeping, not cross-port
+    // interaction.
+    slvport_tl01_xbucket_seq s;
+    s = slvport_tl01_xbucket_seq::type_id::create("tl01_xbucket_seq");
+    s.slv_port_idx = 0;
+    s.start(p_sequencer.slv_sqr[0]);
+  endtask
+endclass

@@ -615,6 +615,35 @@ class xbar_scoreboard extends uvm_scoreboard;
       // no longer the late w_last, so the write-direction count is no longer
       // undercounted.)
       fcov.sample_tx_limit(or_open_q[k].size());
+
+      // ---- testplan M3-TL01 / BUG-0010 regression_guard (spec §5.4.1) ----
+      // Combined in-flight across ALL low-AxiIdUsedSlvPorts-bit buckets for
+      // THIS (slave port, direction) — the demux's own per-bucket counters
+      // (or_open_q, the exact table cg_tx_limit reads above) summed, never a
+      // second decode. Non-decisional witness only (functional_coverage.md
+      // §0): fires when the SUM exceeds the documented Cfg.MaxMstTrans ceiling
+      // while >=2 distinct buckets are simultaneously non-empty — precisely
+      // the aggregate-vs-flat reading the card constructs. Cfg.MaxMstTrans is
+      // read from xbar_types_pkg (the pinned parameter-definition file), not
+      // any RTL-observed value.
+      begin
+        int unsigned n_bkt;
+        int unsigned combined_total;
+        int unsigned nonzero_buckets;
+        n_bkt           = 1 << xbar_types_pkg::Cfg.AxiIdUsedSlvPorts;
+        combined_total  = 0;
+        nonzero_buckets = 0;
+        for (int unsigned bk = 0; bk < n_bkt; bk++) begin
+          int unsigned kb;
+          int unsigned sz;
+          kb = or_key(ro.port_idx, ro.is_write, bk);
+          sz = or_open_q.exists(kb) ? or_open_q[kb].size() : 0;
+          combined_total += sz;
+          if (sz != 0) nonzero_buckets++;
+        end
+        if (combined_total > xbar_types_pkg::Cfg.MaxMstTrans && nonzero_buckets >= 2)
+          fcov.sample_xbucket_total(1'b1);
+      end
     end
 
     // ---- C5.4/C5.5(b) (spec §5.5.1): register this write's expected master-

@@ -435,3 +435,32 @@ class m3_at02_atop_read_test extends base_test;
     phase.drop_objection(this, "m3_at02_atop_read_vseq done");
   endtask
 endclass
+
+// M3-TL01 BUG-0010 cross-bucket directed regression guard (testplan.md
+// M3-TL01, spec §5.4.1). Same bounded-hold rationale as M2-TL01: resp_hold
+// keeps B/R from draining the in-flight count before the whole 2-bucket burst
+// is presented, so the combined in-flight count on this one port genuinely
+// reaches 20 (> MaxMstTrans=10) with both buckets concurrently non-empty
+// rather than draining away as it fills ("空转").
+class m3_tl01_xbucket_test extends base_test;
+  `uvm_component_utils(m3_tl01_xbucket_test)
+
+  function new(string name = "m3_tl01_xbucket_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    // 20 sub-transactions this time (vs. M2-TL01's 12) — a slightly deeper
+    // hold keeps the same "hold outlasts the whole injection" margin.
+    uvm_config_db#(int)::set(this, "env.mst_agent*", "resp_hold", 40);
+    super.build_phase(phase);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_tl01_xbucket_vseq vseq;
+    phase.raise_objection(this, "m3_tl01_xbucket_vseq running");
+    vseq = m3_tl01_xbucket_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_tl01_xbucket_vseq done");
+  endtask
+endclass
