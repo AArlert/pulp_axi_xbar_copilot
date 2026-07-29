@@ -1,3 +1,4 @@
+{"date": "2026-07-29", "version": "0.3.10", "summary": "BUG-0025+0031 修复落地+新发 BUG-0033→REV-014 仲裁 SPEC_CHANGED→应用；ERR_RDATA 校正转绿 M3-DE01/DE02/OR04+KILL-0001；closer 复验全过但 fix_commit 空挡住关闭，已如实回退"}
 {"date": "2026-07-29", "version": "0.3.9", "summary": "应用 P-REV012-1：arch 起草→REV-013 门禁 conditional pass（M3/M4 收窄为 M3）→orch 应用。spec §4 新增 clause 7 + §6 交叉引用，重 pin，BUG-0032 约束归宿落地 spec 正文"}
 {"date": "2026-07-29", "version": "0.3.8", "summary": "派 rev 仲裁卡 REV-012：BUG-0032→SPEC_CHANGED（approve P-REV012-1，待 arch 起草文本）；否决 §4/§5.3 自引用提案（归 FB-24）；3 处 orch 自标越界均未越界，顺带修复其中一处查出的 design-prompt 死指针"}
 {"date": "2026-07-29", "version": "0.3.7", "summary": "与上游关系反转：不再回流，自己实践、做好让上游 cherry-pick。删除 .claude/agents/orch.md——实测其正文只投递给被派发的子代理，主会话仅收到一行 description，唯一读不到它的就是目标读者；内容并入 /dispatch + CLAUDE.md §0。fw-feedback 转为实践记录，文件名与编号不动（29 处引用中 10 处在冻结记录）"}
@@ -5,4 +6,3 @@
 {"date": "2026-07-29", "version": "0.3.5", "summary": "pull 框架 0.7.1（spec-gap 探索器 + L0-L3 分级，交采纳者压测）；压测 explore 当场命中 FB-24——§id 解析器把章节内列表项与跨文档引用当成 spec 章节，前沿幻影率 4/9；同根因解释 parent-anchored=15，建议否决 arch 的 §4/§5.3 自引用提案；arch spec-gap 卡暂不派"}
 {"date": "2026-07-29", "version": "0.3.4", "summary": "pull 框架 0.7.0（worktree 预演后执行；实测认定为纯结构重排、零行为规则变更，M2 证据与 M3 设计输入不受影响）；活文件路径迁移（CLAUDE.md + testplan/bugs 表头 + fw-feedback + 三份 design-prompt 死指针）；裁决冻结记录 16 份 39 处旧路径一律不动并登记 FB-23"}
 {"date": "2026-07-29", "version": "0.3.3", "summary": "arch 交付 M3 场景清单（11 行）+ 反驳 orch 的配置维 constrained-random 决定（三条机制事实已核实，改为声明式配置点）；四条 ACCEPTED@M3 债务逐条归属；新登 BUG-0032（err_slv×ATOP 应答未定义，待 rev 终判）"}
-{"date": "2026-07-28", "version": "0.3.2", "summary": "拉框架 0.6.1：FB-21/FB-22 当日闭环并实测验收——signoff 现内嵌 chain-audit 全文 + rubric 新增 #8（悬空引用只许修不许接受）；uncited 行改数值序全量打印，19 条全部列出。M3 开工底座就位"}

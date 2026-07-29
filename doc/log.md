@@ -2,6 +2,78 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.10] 2026-07-29 BUG-0025+0031 修复落地、BUG-0033 新发→REV-014 仲裁→应用，closer 卡查明关闭被 fix_commit 空挡住
+
+**Done**
+- **卡①（DV，L2）**：BUG-0025+BUG-0031 同卡修复落地——`tb/sva/axi_xbar_stall_sva.sv`
+  三层译码未命中保序改造（default port 半边入表 / 完整 ID 半边纳入判决 /
+  桶级半边显式排除引 §5.2.6）+ `tb/sva_bind.sv` 给该模块接入 `cfg_if` 活值
+  地址表（参照 `axi_xbar_route_sva` 现成接法）；M3-CFG02 转绿。M3-DE01/DE02/
+  OR04 首次仿真时浮出**新 SPEC_ISSUE：BUG-0033**（err_slv 译码错误读响应
+  数据值与 spec §4.4 矛盾，doc-vs-RTL，同 BUG-0016 家族）——按纪律无条件
+  登记、未抄 RTL 值入 checker、未派修复，交 rev 仲裁
+- **rev 仲裁卡（fresh 独立实例，L3）→ REV-014**：BUG-0033 taxonomy 终判
+  SPEC_ISSUE（**不改判 DUT_BUG**——错误响应 `RDATA` 协议上 don't-care，
+  DUT 未违反任何显式条款，`RespData` 魔数为刻意设计常量），处置
+  SPEC_CHANGED，提案 P-REV014-1：校正 spec §4 clause 4 为 err_slv 默认
+  `RespData=64'hCA11AB1EBADCAB1E` 按 `AxiDataWidth` 零扩展/截断（**保持
+  宽度参数化**——rev 追加核验发现原文档 L33 只在 32 位宽下恰好正确，不可
+  硬编码成 64 位常量）。orch 应用：spec §4 clause 4 外科手术式改写 + change
+  record #8 + 重 pin（新 sha `ad5bf8b7…6b3a2c`）；`doc/bugs.md`/
+  `doc/bugs/BUG-0033.md` 回填裁决、状态转 `SPEC_CHANGED`；补齐详情页此前
+  缺失的 `## regression_guard` 段（docs-check 一度因此报红，已修）
+- **卡①.6（DV fixer，L2）**：`tb/scoreboard_refmodel.sv` 的 `ERR_RDATA`
+  常量从 pinned spec §4.4 推导校正（不引 RTL 行号），转绿 M3-DE01/DE02/
+  OR04；按 CLAUDE.md 不变量 5（本仓库 M3 起生效）做**注伤自证**——
+  `KILL-0001`：植入缺陷（高 32 位改回 0）→红（12/3/18 处，落 BUG-0033.md
+  §scope 基线区间）→恢复→绿；`sim/regress/regress.list` 补录三行
+- **closer 卡（fresh 独立实例）**：独立复验 BUG-0025（三层判据）+ BUG-0031
+  （六条判据），逐条核对 cover/assert 命中数（不采信任何转述），**技术判据
+  全部通过**；执行 `make evidence BUG=BUG-0025 ...` 时被 `docs.py --check`
+  的 `fix_commit` 空值硬门拦下（此前全部修复尚未提交，无 sha 可填）——
+  closer 正确回退了这次误关闭尝试、清理孤儿 evidence 文件，**未强行绕过**，
+  如实退回 orch
+- 顺带：应用 REV-014 时同步 `doc/testplan.md` M3-DE01 crit(2) 措辞；根
+  `Makefile` 新增 `help` 目标（列全部 16 个目标+用法，含 `evidence` 三种
+  调用形式）+ `.DEFAULT_GOAL := help`（用户直接请求的构建层改动，未走
+  dispatch，orch 自行完成并用 `make help`/裸 `make` 验证）；`git fetch
+  upstream` 跟进框架仓库（新增 1 个纯文档提交，删除框架自己的
+  `doc/VENDOR.md` 模板，与本仓库无关，仅推进移植基线指针至 `e23d938`，
+  CLAUDE.md 已记）；`git pull` origin 三个已推送的文档提交（README 数据流图
+  微调 + 新增 `doc/axi.md` 面向人的 AXI 入门读物 + `doc/attach/` 配图）
+
+**Not done**
+- **BUG-0025/BUG-0031 仍 `ACCEPTED@M3`**（未转 `CLOSED`）——技术判据已满足，
+  纯粹卡在 `fix_commit` 空。本次 closeout 提交落定后需**另派一张新 closer
+  卡**（非本次任何 fixer/前一 closer 实例）用本 commit 的 sha 填 `fix_commit`
+  列、重跑 `make evidence BUG=... TEST=... SEED=...` 完成关闭；预期触发
+  终态行数 5>4 归档阈值，须随附 `make archive`
+- 五张 M3 执行卡序列中，②③④⑤仍未派（BUG-0024 (b) 收窄 + M3-OR05；BUG-0018
+  修 + 重跑 M2-OR01/WO01；多配置基建 + M3-CF01；M3-CF02/03/04 + M3-AT02）
+- `doc/testplan.md` M3-DE02/OR04 判据措辞未同步校正后 SPEC-4.4——REV-014
+  §4.1 判定不需要（两行不逐字引旧值 `32'hBADCAB1E`，随 refmodel 常量自动
+  生效），非遗漏
+
+**Next**
+- 派新 closer 卡：commit 落定后为 BUG-0025/BUG-0031 走独立复验→关闭闭环
+  （fix_commit 已有 sha 可填），随附 `make archive`
+- 卡②起严格顺序：② BUG-0024 (b) + M3-OR05（L2）→ ③ BUG-0018 修 + 重跑
+  M2-OR01/WO01（L2）→ ④ 多配置基建 + M3-CF01（L2，须先于⑤）→ ⑤
+  M3-CF02/03/04 + M3-AT02（L1）
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap；
+  `KILL-0001` 使 `make check MILESTONE=3` 条件 4 由红转绿）
+- closer 卡独立复验（不采信任何转述数字）：BUG-0025 三层判据（`c_bug25_
+  default_aw/ar`、完整 ID 完成序 `order_violations=0`、`c_bug25_errbucket_
+  aw/ar`）+ BUG-0031 六条判据（`c_sib_diff_*`、`c_bug31_livev1_*`、双向
+  无假红）逐条核对通过；全回归 10 个历史场景 + 4 个新场景全 PASS、
+  UVM_ERROR=0、0 assertion failures
+- `python3 scripts/docs.py --pin-spec` 的 anti-sneak-edit 检查在 REV-014
+  应用时再次验证生效（先加 change-record 行才允许重 pin）
+- 注伤自证 `KILL-0001` 数字（12/3/18）精确落在 `doc/bugs/BUG-0033.md`
+  §scope 基线区间（12/3-4/18-19）内
+
 ## [0.3.9] 2026-07-29 应用 P-REV012-1：spec §4 新增 clause 7 + §6 交叉引用，BUG-0032 落地闭环
 
 **Done**
@@ -141,87 +213,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - 派卡自检：card 只含 scope list（文件路径/行号/commit sha）与判据源，未
   夹带任何一方结论——rev 交付里三项 verdict 均为其独立复验产物（如 Item 1
   的五源 grep、Item 2 的 chain-audit 现场重跑），非对 orch 卡面结论的背书
-
-## [0.3.7] 2026-07-29 删除 orch.md 并入 /dispatch；反馈台账转为实践记录
-
-**Done**
-- **裁决：与上游的关系反转。** 0.8.0 删掉 fwsync/manifest/divergence 三态后
-  已无回流机制，用户裁定新姿势为——**我们先实践，做得好让上游来
-  cherry-pick**。本 chunk 落实这条裁决的两个后果
-- **删除 `.claude/agents/orch.md`，内容并入 `/dispatch` skill + `CLAUDE.md`
-  §0**（登记 FB-28，status `local`）。**机制事实为本会话直接观测所得、非
-  推断**：`.claude/agents/*.md` 在 Claude Code 里只注册**可派发的子代理
-  类型**，正文仅在派发时注入**新实例**；主会话收到的只有 frontmatter 的
-  `description` 一行。⇒ 那 87 行通篇写着 "You are orch — the main session"
-  的硬规则，**唯一读不到它的就是主会话**，直到有人显式 `Read`
-- **它也不该被派发**：嵌套 orch 会同时违反它自己两条规则——(1) §"Handoffs
-  are records, not conversation" 禁止只传上下文的旁路，而子代理唯一的回传
-  形式就是口头摘要；(2) §"Closer ≠ fixer is your call" 要求 orch 自己追踪
-  路由，嵌套实例的路由对持有台账的主会话不可见。且它写不了
-  `status.jsonl`/`log.md`。**唯一站得住的用法是反过来**：当独立的组卡
-  审查员（审隔离与共模防火墙），那是审计不是编排
-- **放大风险已识别**：0.8.0 同时废弃 `.claude/skills/`（orch 手册原本住那儿、
-  主会话会读）**又**把规则搬进 agent 卡（主会话读不到）⇒ 对严格照上游默认
-  走的采纳者，orch 的隔离硬规则**没有任何人读得到**。本仓库侥幸没事，只因
-  0.3.6 选择保留四个 skill 作本地资产——那个选择比当时看起来重要得多
-- **并入 `/dispatch` 的三块是它原本没有的**：① **closer ≠ fixer 的路由判断**
-  （skill 此前完全没提这四个字）② **rev 卡只给范围不给结论**（"a card that
-  hands rev a conclusion instead of a scope list is malformed"）③ 新增
-  **§3b「旁路即漂移」**——两角色需要同一背景时指向同一份归档记录而非互相
-  转述；一方挖出的上下文另一方要重挖是**留存失败**而非效率损失，修法是把
-  发现写到下一张卡找得到的地方，**永不为此放宽防火墙**
-- **分层理由记明**：`CLAUDE.md` 是常驻但**字节受限**层，skill 是用时载入、
-  不受预算约束层，而 `/dispatch` 恰在每次派卡前被调用 ⇒ **消费时机比
-  CLAUDE.md 更准**。故 §0 留简版 + 指针，操作细则全在 skill
-- **`doc/fw-feedback.md` 性质变更，但文件名与 `FB-` 编号一律不动**。用户提
-  "甚至可以删掉"，实测否决：`FB-xx` 被引用 **165 次 / 20 个文件**，文件名
-  被引 **29 次**，其中 **10 处在冻结记录里**（`signoff-M0`/`signoff-M2`、
-  `REV-004`/`REV-010`、三份 bug 详情页、三份归档）——按 FB-23 裁决那些不得
-  回改。⇒ 删或改名会一次性制造死引用，且**我们自己规定了不许去修**。
-  改的是这个文件**是什么**，不是它在哪
-- **新旧性质写进抬头**：旧（FB-1~27）= 向上游提交的反馈台账；新（FB-28 起）
-  = **实践记录**，每行回答"我们改了什么、为什么、上游要不要抄"。新 status
-  词表 `local` / `noted` / `upstreamed` 取代 `open`/`reported`/`fixed@ver`
-- **唯一的硬要求反而更重了**：既然已无 manifest 记录我们动过哪些上游文件，
-  **本台账就是那份记录本身**。任何对 `workflow/`/`scripts/`/`.claude/` 的
-  本地改动必须留行 + 代码旁注明 `见 doc/fw-feedback.md FB-xx`，漏了就退化成
-  FB-7/BUG-0007 那个形状，**而这次连 `fw-check` 都不会再提醒**。该要求同时
-  写进 `CLAUDE.md` §5
-
-**Not done**
-- **本 chunk 不含任何仿真**，无新证据，testplan 计数不变（M3 仍 ✅0/11）
-- **字节预算逼近上限：39369 / 39500，仅剩 131 字节**。下次往 `CLAUDE.md`
-  加任何东西必须先删等量内容。结构性成因已看清但**暂不登记**（痛点未真正
-  发生）：该预算覆盖 `CLAUDE.md` + `workflow/*.md`，而 `workflow/` 的
-  29922 字节是上游文风、我们不控制 ⇒ 上游一长，采纳者记录项目事实的空间
-  就被挤压，而"抬高上限"按纪律属于为过卡放宽门。真撞上再登记
-- **L0–L3 分级仍是零实走**（连续第四个 chunk），失配数据产量仍为 0
-- FB-23/24/25/26/27 五条仍 `open`；按新裁决它们不再是"等上游修"，而是
-  "我们可以自己动手" —— 尚未逐条重新分类
-- `/dispatch` 的新增内容（closer≠fixer 路由、rev 范围卡、§3b）**未经真实
-  派卡检验**
-
-**Next**
-- 派 rev 仲裁卡（L3），一卡四事：① BUG-0032 终判 ② §4/§5.3 自引用提案
-  **建议否决**（须带 FB-24 根因入卡）③ 复核 orch 三处越界判断（0.3.4 动
-  design-prompt 三行、0.3.6 动两张角色卡、本次删 orch.md 并改写 skill）
-  ④ 该卡本身即 `/dispatch` 新内容的首次实检
-- 五张 M3 执行卡（严格顺序，④ 先于 ⑤）：① BUG-0025+0031 同卡修 +
-  M3-DE01/DE02/OR04/CFG02（L2）② BUG-0024 (b) + M3-OR05（L2）③ BUG-0018 修 +
-  重跑 M2-OR01/WO01（L2）④ 多配置基建 + M3-CF01（L2）⑤ M3-CF02/03/04 +
-  M3-AT02（L1）。**其中至少一张须兑现 M3 的 KILL 行**
-- 把 FB-23~27 按新性质重新分类：哪些我们直接动手（转 `local`）、哪些只是
-  记录（转 `noted`）
-
-**How verified**
-- `make check` 绿；`make selftest` **60/60 OK**（删除 orch.md 未触发任何
-  测试——已先 `grep` 确认 `scripts/*.py` 与 `scripts/tests/*.py` 对
-  `orch.md`/`agents/` **零引用**，删除是机械无风险的）
-- `.claude/agents/` 现为 arch/de/dv/rev 四份，`ls` 实测
-- 删除决策的证据非目测：`grep -ro "FB-[0-9]*"` 得 165 处 id 引用、
-  `grep -ro "fw-feedback"` 得 29 处文件名引用，再对
-  `doc/{evidence,review,bugs,archive}` 单独求交得出 10 处落在冻结记录
-- orch.md 正文不可达的判断源自**本会话的直接观测**：该文件出现时系统提示
-  只给了一行 `description`，正文直到显式 `Read` 才可见——非查文档推断
-- 字节预算 `wc -c CLAUDE.md workflow/*.md` = 39369 / 39500，实测
 

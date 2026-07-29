@@ -86,6 +86,32 @@ class xbar_scoreboard extends uvm_scoreboard;
   int unsigned resp_route_match_cnt;
   int unsigned resp_route_mismatch_cnt;
 
+  // ---- decode-error / same-full-ID completion-order bookkeeping (spec §4,
+  // §5.2.6 clause 2.a; M3-DE01/DE02/OR04). Per (source port, direction, full
+  // slv-side id) FIFO of "is this owed response a decode-error (err_slv) one?"
+  // bits, pushed in AW/AR-accept order at write_slv_req and popped at each
+  // completion in write_resp. Two uses:
+  //   (a) spec §4: decides whether write_resp expects a normal (OKAY) response or
+  //       a decode-error one (single B(DECERR) for writes; AxLEN+1 beats of the
+  //       spec §4.4 err data, all DECERR, for reads);
+  //   (b) spec §5.2.6 clause 2.a (assertable, the BUG-0025 full-ID dimension):
+  //       two same-FULL-ID same-direction transactions — regardless of whether one
+  //       is routed to a master port and the other to err_slv — must complete in
+  //       accept order; the FIFO front (accept order) must therefore match the
+  //       err-class actually observed at completion (SB_DECERR_ORDER otherwise).
+  // A decode-miss transaction is NOT pushed to pending_by_id (it never reaches an
+  // external master port — err_slv is internal, spec §4.1) nor to or_open_q (spec
+  // §5.2.6 clause 2.b excludes the low-bucket dimension from any verdict).
+  local bit err_order_q[int unsigned][$];
+  // spec §4.4 (corrected per REV-014 / BUG-0033): each decode-error read beat
+  // carries err_slv default RespData = 64'hCA11AB1EBADCAB1E, taken as r.data by
+  // zero-extend/truncate to AxiDataWidth. Baseline AxiDataWidth=64 => the full
+  // 64-bit value. Traces to pinned spec SPEC-4.4 — NOT read from RTL.
+  localparam xbar_types_pkg::data_t ERR_RDATA =
+    xbar_types_pkg::data_t'(64'hCA11AB1EBADCAB1E);
+  int unsigned decerr_resp_cnt;
+  int unsigned decerr_order_violation_cnt;
+
   int unsigned route_match_cnt;
   int unsigned route_mismatch_cnt;
   int unsigned resp_match_cnt;
@@ -325,9 +351,27 @@ class xbar_scoreboard extends uvm_scoreboard;
                snap.en_def[ro.port_idx], snap.def_port[ro.port_idx], exp_port);
     end
     if (!hit) begin
-      `uvm_error("SB_DECODE",
-        $sformatf("slv port %0d addr 'h%0h matched no rule and no enabled default master port at accept_time %0t — stimulus must not send a decode-error address (spec §3.2/§3.3/§4)",
-                   ro.port_idx, ro.addr, ro.accept_time))
+      // spec §4 decode error: unmapped address with no enabled default master
+      // port → routed to this slave port's internal err_slv, which answers with
+      // RESP_DECERR (M3-DE01/DE02). The transaction never reaches an external
+      // master port, so it is registered ONLY for the response-side judgement:
+      //   - resp_expect: the DECERR B/R comes back on this same source port (spec
+      //     §4.5/§5.1 response routing);
+      //   - err_order_q: marks this owed response is_err=1 so write_resp expects a
+      //     decode-error response and can order-check it (spec §5.2.6 clause 2.a).
+      // NOT pushed to pending_by_id (no master-side observation) or or_open_q (spec
+      // §5.2.6 clause 2.b: the low-bucket dimension of a decode-miss transaction is
+      // undefined and must not be judged).
+      // Env constraint (BUG-0032, spec §4.7): no ATOP is ever sent to an unmapped
+      // address; a stray one here is an env-side violation, flagged (not judged).
+      if (ro.is_write && ro.atop != '0)
+        `uvm_error("SB_ATOP_DECODE",
+          $sformatf("slv port %0d sent an ATOP (atop='h%0h) to unmapped address 'h%0h — env violated the BUG-0032 / spec §4.7 no-ATOP-to-decode-error constraint (TB_BUG)",
+                     ro.port_idx, ro.atop, ro.addr))
+      resp_expect[resp_key(ro.port_idx, ro.is_write,
+                           ro.id[xbar_types_pkg::ID_W_SLV-1:0])]++;
+      err_order_q[resp_key(ro.port_idx, ro.is_write,
+                           ro.id[xbar_types_pkg::ID_W_SLV-1:0])].push_back(1'b1);
       return;
     end
 
@@ -357,6 +401,10 @@ class xbar_scoreboard extends uvm_scoreboard;
     // this (direction, slv-side id) back on its own port (spec §5.1.2/§5.1.3).
     resp_expect[resp_key(ro.port_idx, ro.is_write,
                          ro.id[xbar_types_pkg::ID_W_SLV-1:0])]++;
+    // spec §5.2.6 clause 2.a full-ID ordering: this hit's owed response is a
+    // normal (is_err=0) one, queued in accept order (see err_order_q comment).
+    err_order_q[resp_key(ro.port_idx, ro.is_write,
+                         ro.id[xbar_types_pkg::ID_W_SLV-1:0])].push_back(1'b0);
 
     // ---- C6.3 (spec §6.3, M2-AT01): an atomic load owes its source port
     // *two* responses — the B (already registered by the write-direction
@@ -383,6 +431,10 @@ class xbar_scoreboard extends uvm_scoreboard;
       atop_pend[ak] = '{b_seen: 1'b0, r_seen: 1'b0, collide_read: collide};
       resp_expect[resp_key(ro.port_idx, 1'b0,
                            ro.id[xbar_types_pkg::ID_W_SLV-1:0])]++;
+      // The atomic load's R half is likewise a normal (is_err=0) owed response;
+      // its B half was already queued by the write-direction push above.
+      err_order_q[resp_key(ro.port_idx, 1'b0,
+                           ro.id[xbar_types_pkg::ID_W_SLV-1:0])].push_back(1'b0);
     end
 
     // ---- C5.1/C5.2/C5.5: register this AW/AR's accept as a new open
@@ -569,6 +621,8 @@ class xbar_scoreboard extends uvm_scoreboard;
   // ---- response-side (slv port round trip only): payload/resp-code
   // judgement (§1, C4.2) --------------------------------------------------
   virtual function void write_resp(axi_resp_obs ro);
+    bit observed_err;    // this completion is a decode-error (all beats DECERR)
+    bit expected_is_err; // accept-order-expected err class for this (port,dir,id)
     // C3.2 source-port response-routing check (spec §5.1.2/§5.1.3): this B/R
     // landed on slv port ro.port_idx — verify that port actually has an
     // outstanding request with this (direction, slv-side id). A miss means
@@ -587,6 +641,34 @@ class xbar_scoreboard extends uvm_scoreboard;
         resp_expect[rk]--;
         resp_route_match_cnt++;
       end
+    end
+
+    // ---- decode-error class + spec §5.2.6 clause 2.a same-full-ID completion-
+    // order check (M3-DE01/DE02/OR04). `observed_err` is what actually came back
+    // (all err_slv beats are DECERR); `expected_is_err` is the accept-order front
+    // of err_order_q for this (port,dir,full-id). For two same-full-ID same-
+    // direction transactions (one via a master port → OKAY, one via err_slv →
+    // DECERR) the two must complete in accept order (spec §5.2.6 clause 2.a); a
+    // swapped completion pops the wrong err-class expectation and is flagged here.
+    // This is the assertable BUG-0025 full-ID dimension (falsifiable: a reversed
+    // completion order or a corrupted queue front turns it red).
+    observed_err = (ro.resp.size() > 0) && (ro.resp[0] === axi_pkg::RESP_DECERR);
+    begin
+      int unsigned rk;
+      rk = resp_key(ro.port_idx, ro.is_write, ro.id);
+      if (err_order_q.exists(rk) && err_order_q[rk].size() != 0)
+        expected_is_err = err_order_q[rk].pop_front();
+      else
+        expected_is_err = observed_err; // no queued expectation (already flagged above)
+      if (expected_is_err != observed_err) begin
+        decerr_order_violation_cnt++;
+        `uvm_error("SB_DECERR_ORDER",
+          $sformatf("slv port %0d %s id 'h%0h completed as %s but accept order expected %s — same-full-ID responses out of order (spec §5.2.6 clause 2.a / §4)",
+                     ro.port_idx, ro.is_write ? "B(write)" : "R(read)", ro.id,
+                     observed_err ? "DECERR" : "OKAY",
+                     expected_is_err ? "DECERR" : "OKAY"))
+      end
+      if (err_order_q.exists(rk) && err_order_q[rk].size() == 0) err_order_q.delete(rk);
     end
 
     // ---- C6.3 (spec §6.3): mark this port+id's atomic-load pair half. Safe
@@ -623,6 +705,10 @@ class xbar_scoreboard extends uvm_scoreboard;
     // BUG-0013 — because this reading is independent of how quickly the
     // DUT's own elastic pipelining (`LatencyMode=CUT_ALL_AX`, spec §7.2)
     // externally accepts a same-bucket request relative to an older one.
+    // spec §5.2.6 clause 2.b: a decode-miss (err_slv) completion is excluded from
+    // the low-bucket ordering verdict (it was never pushed to or_open_q). Skip the
+    // whole block for it — never attribute a hit sibling's or_open record to it.
+    if (!observed_err)
     begin
       int unsigned bucket;
       int unsigned k;
@@ -678,6 +764,44 @@ class xbar_scoreboard extends uvm_scoreboard;
       end
     end
 
+    // ---- spec §4 decode-error response judgement (M3-DE01/DE02). The err_slv
+    // absorbs the whole transaction and answers DECERR with the proper beat count
+    // (spec §4.3): a WRITE gets a single B(DECERR); a READ gets AxLEN+1 R beats,
+    // each carrying the spec §4.4 err data, all DECERR, RLAST on the last (the
+    // slv monitor only builds this resp_obs at r_last). Expected values trace to
+    // spec §4.3/§4.4 only — never read from RTL.
+    if (observed_err) begin
+      if (ro.is_write) begin
+        if (ro.resp.size() != 1 || ro.resp[0] !== axi_pkg::RESP_DECERR) begin
+          resp_mismatch_cnt++;
+          `uvm_error("SB_DECERR_BRESP",
+            $sformatf("slv port %0d id 'h%0h decode-error write expected a single B(DECERR): got %0d beat(s), resp[0]='b%0b (spec §4.3)",
+                       ro.port_idx, ro.id, ro.resp.size(), ro.resp[0]))
+          return;
+        end
+      end else begin
+        if (ro.rdata.size() != int'(ro.len) + 1) begin
+          resp_mismatch_cnt++;
+          `uvm_error("SB_DECERR_RBEATS",
+            $sformatf("slv port %0d id 'h%0h decode-error read beat count %0d != AxLEN+1 (%0d) (spec §4.3)",
+                       ro.port_idx, ro.id, ro.rdata.size(), int'(ro.len) + 1))
+          return;
+        end
+        foreach (ro.rdata[k]) begin
+          if (ro.rdata[k] !== ERR_RDATA || ro.resp[k] !== axi_pkg::RESP_DECERR) begin
+            resp_mismatch_cnt++;
+            `uvm_error("SB_DECERR_RDATA",
+              $sformatf("slv port %0d id 'h%0h decode-error R beat %0d: got data='h%0h resp='b%0b expected data='h%0h resp=DECERR (spec §4.3/§4.4)",
+                         ro.port_idx, ro.id, k, ro.rdata[k], ro.resp[k], ERR_RDATA))
+            return;
+          end
+        end
+      end
+      decerr_resp_cnt++;
+      resp_match_cnt++;
+      return;
+    end
+
     if (ro.is_write) begin
       if (ro.resp[0] !== axi_pkg::RESP_OKAY) begin
         resp_mismatch_cnt++;
@@ -724,13 +848,13 @@ class xbar_scoreboard extends uvm_scoreboard;
     pending_total = 0;
     foreach (pending_by_id[k]) pending_total += pending_by_id[k].size();
     `uvm_info("SB_SUMMARY",
-      $sformatf("route: match=%0d mismatch=%0d | resp: match=%0d mismatch=%0d | resp-route(C3.2): match=%0d mismatch=%0d | pending(unmatched at end)=%0d | stall(C5.1/C5.2): violations=%0d open(unmatched at end)=%0d | atop(C6.3): pairs=%0d open(unpaired at end)=%0d | worder(C5.4): match=%0d mismatch=%0d open(unmatched at end)=%0d",
+      $sformatf("route: match=%0d mismatch=%0d | resp: match=%0d mismatch=%0d | resp-route(C3.2): match=%0d mismatch=%0d | pending(unmatched at end)=%0d | stall(C5.1/C5.2): violations=%0d open(unmatched at end)=%0d | atop(C6.3): pairs=%0d open(unpaired at end)=%0d | worder(C5.4): match=%0d mismatch=%0d open(unmatched at end)=%0d | decerr(§4): resp=%0d order_violations=%0d",
                  route_match_cnt, route_mismatch_cnt, resp_match_cnt,
                  resp_mismatch_cnt, resp_route_match_cnt,
                  resp_route_mismatch_cnt, pending_total,
                  or_stall_violation_cnt, or_open_total, atop_pair_cnt,
                  atop_pend.num(), worder_match_cnt, worder_mismatch_cnt,
-                 worder_open_total),
+                 worder_open_total, decerr_resp_cnt, decerr_order_violation_cnt),
       UVM_LOW)
     if (pending_total != 0) begin
       `uvm_error("SB_DANGLING",

@@ -1005,3 +1005,358 @@ class m2_cfg01_reconfig_vseq extends uvm_sequence #(uvm_sequence_item);
     run_batch(1'b1); // batch 2 — routed by V1
   endtask
 endclass
+
+// ----------------------------------------------------------------------------
+// M3 error-path / spec §5.2.6 scenarios (testplan M3-DE01/DE02/OR04/CFG02).
+// Addresses outside every rule (rules cover [0, NoAddrRules*REGION_SIZE) =
+// [0, 0x8000_0000)) are decode-error / default-port addresses (spec §3.2/§4).
+// M3_UNMAPPED_BASE is comfortably above that window. No M3 stimulus ever sets
+// aw.atop on an unmapped address (env constraint, spec §4.7 / BUG-0032).
+// ----------------------------------------------------------------------------
+localparam xbar_types_pkg::addr_t M3_UNMAPPED_BASE = 32'h9000_0000;
+
+// One same-direction pair with fully explicit ids + addresses for each leg
+// (either leg may be an unmapped/decode-error address). Same drive_pair path as
+// build_or_pair, but the caller controls both ids and both addresses so a hit
+// leg and an err_slv leg can share (or not) a full ID / low-ID bucket.
+function automatic axi_pair_item build_m3_pair(
+    input string        name,
+    input bit           is_write,
+    input xbar_types_pkg::id_slv_t id_a, input xbar_types_pkg::addr_t addr_a,
+    input xbar_types_pkg::id_slv_t id_b, input xbar_types_pkg::addr_t addr_b,
+    input axi_pkg::len_t len, input int unsigned gap_cycles);
+  axi_pair_item item;
+  item = axi_pair_item::type_id::create(name);
+  item.is_write = is_write;
+  item.id       = id_a;
+  item.addr     = addr_a;
+  item.len      = len;
+  if (is_write) begin
+    item.wdata.delete();
+    item.wstrb.delete();
+    for (int unsigned b = 0; b <= len; b++) begin
+      item.wdata.push_back({$urandom(), $urandom()});
+      item.wstrb.push_back('1);
+    end
+  end
+  item.second_item = axi_seq_item::type_id::create({name, "_b"});
+  item.second_item.is_write = is_write;
+  item.second_item.id       = id_b;
+  item.second_item.addr     = addr_b;
+  item.second_item.len      = len;
+  if (is_write) begin
+    item.second_item.wdata.delete();
+    item.second_item.wstrb.delete();
+    for (int unsigned b = 0; b <= len; b++) begin
+      item.second_item.wdata.push_back({$urandom(), $urandom()});
+      item.second_item.wstrb.push_back('1);
+    end
+  end
+  item.gap_cycles = gap_cycles;
+  return item;
+endfunction
+
+// ---- M3-DE01: decode-error slave basic response (testplan M3-DE01, spec §4).
+// Each slave port issues writes and reads to unmapped addresses, AxLEN spanning
+// 0 and >0 so the beat-count judgement is non-vacuous. Single-outstanding (plain
+// axi_seq_item), no ATOP (spec §4.7 env constraint). The scoreboard judges the
+// err_slv DECERR responses (spec §4.3/§4.4/§4.5).
+class slvport_de01_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_de01_seq)
+  int unsigned slv_port_idx;
+  function new(string name = "slvport_de01_seq"); super.new(name); endfunction
+
+  task automatic send(input bit is_write, input xbar_types_pkg::addr_t addr,
+                      input xbar_types_pkg::id_slv_t id, input axi_pkg::len_t len);
+    axi_seq_item it;
+    it = axi_seq_item::type_id::create(
+        $sformatf("de01_%0d_%s_%0h", slv_port_idx, is_write ? "w" : "r", addr));
+    start_item(it);
+    it.is_write = is_write; it.addr = addr; it.len = len; it.id = id;
+    it.atop = '0; // spec §4.7: never ATOP to an unmapped address
+    if (is_write) begin
+      it.wdata.delete(); it.wstrb.delete();
+      for (int unsigned b = 0; b <= len; b++) begin
+        it.wdata.push_back({$urandom(), $urandom()});
+        it.wstrb.push_back('1);
+      end
+    end
+    finish_item(it);
+  endtask
+
+  task body();
+    xbar_types_pkg::addr_t base;
+    base = M3_UNMAPPED_BASE + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h1000;
+    // AxLEN 0 and >0, both directions (spec §4.3 beat-count both ways).
+    send(1'b1, base + 32'h000, xbar_types_pkg::id_slv_t'(slv_port_idx),      axi_pkg::len_t'(0));
+    send(1'b1, base + 32'h040, xbar_types_pkg::id_slv_t'(slv_port_idx + 4),  axi_pkg::len_t'(3));
+    send(1'b0, base + 32'h080, xbar_types_pkg::id_slv_t'(slv_port_idx + 8),  axi_pkg::len_t'(0));
+    send(1'b0, base + 32'h0c0, xbar_types_pkg::id_slv_t'(slv_port_idx + 12), axi_pkg::len_t'(3));
+  endtask
+endclass
+
+class m3_de01_decerr_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_de01_decerr_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m3_de01_decerr_vseq"); super.new(name); endfunction
+  task body();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork begin
+        slvport_de01_seq s;
+        s = slvport_de01_seq::type_id::create($sformatf("de01_seq_%0d", ii));
+        s.slv_port_idx = ii;
+        s.start(p_sequencer.slv_sqr[ii]);
+      end join_none
+    end
+    wait fork;
+  endtask
+endclass
+
+// ---- M3-DE02: default master port vs decode error slave split (testplan
+// M3-DE02, spec §3.3/§4). Per-slave-port mixed en_default (even ports enabled
+// → default master port; odd ports disabled → err_slv). Each port sends an
+// unmapped write+read (→ default port OKAY on enabled ports, err_slv DECERR on
+// disabled) plus a rule-hit write+read (unaffected by default enable). The
+// mixed config is applied once, in an all-idle window, by the vseq below.
+class slvport_de02_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_de02_seq)
+  int unsigned slv_port_idx;
+  function new(string name = "slvport_de02_seq"); super.new(name); endfunction
+
+  task automatic send(input bit is_write, input xbar_types_pkg::addr_t addr,
+                      input xbar_types_pkg::id_slv_t id, input axi_pkg::len_t len);
+    axi_seq_item it;
+    it = axi_seq_item::type_id::create(
+        $sformatf("de02_%0d_%s_%0h", slv_port_idx, is_write ? "w" : "r", addr));
+    start_item(it);
+    it.is_write = is_write; it.addr = addr; it.len = len; it.id = id;
+    it.atop = '0;
+    if (is_write) begin
+      it.wdata.delete(); it.wstrb.delete();
+      for (int unsigned b = 0; b <= len; b++) begin
+        it.wdata.push_back({$urandom(), $urandom()});
+        it.wstrb.push_back('1);
+      end
+    end
+    finish_item(it);
+  endtask
+
+  task body();
+    xbar_types_pkg::addr_t umap, hit;
+    umap = M3_UNMAPPED_BASE + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h1000;
+    // rule-hit control transaction: region (slv%NoMst) -> that master port.
+    hit  = xbar_types_pkg::addr_t'(slv_port_idx % xbar_types_pkg::NO_MST_PORTS)
+           * xbar_types_pkg::REGION_SIZE + 32'h0000_2000;
+    send(1'b1, umap + 32'h000, xbar_types_pkg::id_slv_t'(slv_port_idx),      axi_pkg::len_t'(1));
+    send(1'b0, umap + 32'h080, xbar_types_pkg::id_slv_t'(slv_port_idx + 8),  axi_pkg::len_t'(1));
+    send(1'b1, hit  + 32'h000, xbar_types_pkg::id_slv_t'(slv_port_idx + 16), axi_pkg::len_t'(1));
+    send(1'b0, hit  + 32'h100, xbar_types_pkg::id_slv_t'(slv_port_idx + 24), axi_pkg::len_t'(1));
+  endtask
+endclass
+
+class m3_de02_default_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_de02_default_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  virtual xbar_cfg_if cfg_vif; // set by the test
+
+  function new(string name = "m3_de02_default_vseq"); super.new(name); endfunction
+
+  // Apply the mixed per-port default-master-port config once, in an all-idle
+  // window (spec §3.4 restriction — no AW/AR valid during the change).
+  task automatic set_mixed_default();
+    logic [xbar_types_pkg::NO_SLV_PORTS-1:0]                             en;
+    logic [xbar_types_pkg::NO_SLV_PORTS-1:0][xbar_types_pkg::MST_PORT_IDX_W-1:0] dm;
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      en[i] = (i % 2 == 0);                                  // even ports enabled
+      dm[i] = i[xbar_types_pkg::MST_PORT_IDX_W-1:0];         // distinct default master port
+    end
+    do @(posedge cfg_vif.clk_i); while (!cfg_vif.all_ax_idle);
+    cfg_vif.en_default_mst_port <= en;
+    cfg_vif.default_mst_port    <= dm;
+    repeat (3) @(posedge cfg_vif.clk_i);
+  endtask
+
+  task body();
+    if (cfg_vif == null)
+      `uvm_fatal("NOCFGVIF", "m3_de02_default_vseq: cfg_vif not set")
+    set_mixed_default();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork begin
+        slvport_de02_seq s;
+        s = slvport_de02_seq::type_id::create($sformatf("de02_seq_%0d", ii));
+        s.slv_port_idx = ii;
+        s.start(p_sequencer.slv_sqr[ii]);
+      end join_none
+    end
+    wait fork;
+  endtask
+endclass
+
+// ---- M3-OR04: decode-miss transactions' ordering position (testplan M3-OR04,
+// spec §5.2.6). Baseline config (en_default=0 for every port). Per slave port:
+//   crit (1) full-ID dimension (assertable): two SAME full ID, same-direction
+//     transactions in flight — one rule hit (a real master port), one decode miss
+//     (err_slv) — built both orders (hit-first, miss-first), mirrored read/write.
+//     Their B/rlast completion order must equal accept order regardless of routing
+//     (scoreboard err_order_q / SB_DECERR_ORDER).
+//   crit (2) bucket dimension (undefined, excluded): a same-low-bucket, DIFFERENT
+//     full ID pair with one leg via err_slv — no completion-order verdict is made
+//     on it (stall_sva excludes it, scoreboard never queues the miss leg for the
+//     bucket check); the stall_sva §5.2.6-2.b cover records the corner is reached.
+class slvport_or04_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_or04_seq)
+  int unsigned slv_port_idx;
+  function new(string name = "slvport_or04_seq"); super.new(name); endfunction
+
+  task body();
+    axi_pair_item p;
+    int unsigned  bkt;
+    xbar_types_pkg::addr_t hit_a, miss_a;
+    bkt    = slv_port_idx % (1 << xbar_types_pkg::Cfg.AxiIdUsedSlvPorts);
+    // rule-hit region for this port's hit leg (a real master port), and an
+    // unmapped address for the err_slv leg.
+    hit_a  = xbar_types_pkg::addr_t'(slv_port_idx % xbar_types_pkg::NO_MST_PORTS)
+             * xbar_types_pkg::REGION_SIZE + 32'h0000_3000;
+    miss_a = M3_UNMAPPED_BASE + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h1000 + 32'h200;
+
+    // crit (1) same full ID X, hit-first then miss (write, then read mirror).
+    for (int unsigned dir = 0; dir < 2; dir++) begin
+      xbar_types_pkg::id_slv_t x;
+      x = xbar_types_pkg::id_slv_t'({2'd0, bkt[2:0]});
+      p = build_m3_pair($sformatf("or04_hf_%s_%0d", dir ? "w" : "r", slv_port_idx),
+                        dir[0], x, hit_a, x, miss_a, axi_pkg::len_t'(0), 2);
+      start_item(p); finish_item(p);
+      // same full ID Y, miss-first then hit.
+      p = build_m3_pair($sformatf("or04_mf_%s_%0d", dir ? "w" : "r", slv_port_idx),
+                        dir[0], x, miss_a + 32'h40, x, hit_a + 32'h40,
+                        axi_pkg::len_t'(0), 2);
+      start_item(p); finish_item(p);
+    end
+
+    // crit (2) DIFFERENT full IDs sharing the low bucket, one leg via err_slv —
+    // the §5.2.6 clause 2.b excluded corner (no verdict; cover records the touch).
+    for (int unsigned dir = 0; dir < 2; dir++) begin
+      xbar_types_pkg::id_slv_t ida, idb;
+      ida = xbar_types_pkg::id_slv_t'({2'd0, bkt[2:0]});
+      idb = xbar_types_pkg::id_slv_t'({2'd1, bkt[2:0]}); // same bucket, different full ID
+      p = build_m3_pair($sformatf("or04_bkt_%s_%0d", dir ? "w" : "r", slv_port_idx),
+                        dir[0], ida, hit_a + 32'h80, idb, miss_a + 32'h80,
+                        axi_pkg::len_t'(0), 2);
+      start_item(p); finish_item(p);
+    end
+  endtask
+endclass
+
+class m3_or04_order_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_or04_order_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m3_or04_order_vseq"); super.new(name); endfunction
+  task body();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork begin
+        slvport_or04_seq s;
+        s = slvport_or04_seq::type_id::create($sformatf("or04_seq_%0d", ii));
+        s.slv_port_idx = ii;
+        s.start(p_sequencer.slv_sqr[ii]);
+      end join_none
+    end
+    wait fork;
+  endtask
+endclass
+
+// ---- M3-CFG02: runtime address-table live value visible on the judgement path
+// (testplan M3-CFG02, BUG-0031, spec §3.4/§5.2). Reuses the M2-CFG01 reconfig
+// discipline (change only in an all-idle window). After V0->V1 (moved rule
+// region0 -> CFG01_MOVED_IDX, default port enabled), one slave port presents a
+// same-low-bucket, DIFFERENT full ID cross-target sibling pair whose leg-A target
+// (region0) now resolves to CFG01_MOVED_IDX under the live V1 table — the three
+// coincident elements BUG-0031's guard needs (post-reconfig + different-full-ID
+// bucket siblings + target crossing master ports). stall_sva must now see the
+// live table (sibling covers > 0, live-V1 cover > 0) and raise no spurious
+// reorder (bidirectional guard).
+class slvport_cfg02_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_cfg02_seq)
+  int unsigned slv_port_idx;
+  function new(string name = "slvport_cfg02_seq"); super.new(name); endfunction
+
+  task body();
+    axi_pair_item p;
+    int unsigned  bkt, tgt_b;
+    xbar_types_pkg::addr_t addr_moved, addr_other;
+    bkt    = slv_port_idx % (1 << xbar_types_pkg::Cfg.AxiIdUsedSlvPorts);
+    // leg A: the moved-rule region (V1 routes it to CFG01_MOVED_IDX).
+    addr_moved = xbar_types_pkg::addr_t'(xbar_types_pkg::CFG01_MOVED_RULE)
+                 * xbar_types_pkg::REGION_SIZE + 32'h0000_5000
+                 + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+    // leg B: a different, unchanged region -> a different master port (so the two
+    // legs cross master ports: CFG01_MOVED_IDX vs tgt_b).
+    tgt_b  = (xbar_types_pkg::CFG01_MOVED_IDX + 1) % xbar_types_pkg::NO_MST_PORTS;
+    addr_other = xbar_types_pkg::addr_t'(tgt_b) * xbar_types_pkg::REGION_SIZE
+                 + 32'h0000_5000 + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+    // write pair then read pair; different full IDs sharing the low bucket.
+    for (int unsigned dir = 0; dir < 2; dir++) begin
+      p = build_m3_pair($sformatf("cfg02_%s_%0d", dir ? "w" : "r", slv_port_idx),
+                        dir[0],
+                        xbar_types_pkg::id_slv_t'({2'd0, bkt[2:0]}), addr_moved,
+                        xbar_types_pkg::id_slv_t'({2'd1, bkt[2:0]}), addr_other,
+                        axi_pkg::len_t'(3), 0);
+      start_item(p); finish_item(p);
+    end
+  endtask
+endclass
+
+class m3_cfg02_reconfig_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_cfg02_reconfig_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  virtual xbar_cfg_if cfg_vif; // set by the test
+
+  function new(string name = "m3_cfg02_reconfig_vseq"); super.new(name); endfunction
+
+  // Batch-1 drain (rule hits under V0) so the reconfiguration lands in an idle
+  // window (same discipline as m2_cfg01_reconfig_vseq.run_batch).
+  task automatic run_batch_v0();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork begin
+        slvport_basic_seq s;
+        s = slvport_basic_seq::type_id::create($sformatf("cfg02_v0_%0d", ii));
+        s.slv_port_idx = ii;
+        s.num_iter     = 2;
+        s.start(p_sequencer.slv_sqr[ii]);
+      end join_none
+    end
+    wait fork;
+  endtask
+
+  task automatic do_reconfig();
+    do @(posedge cfg_vif.clk_i); while (!cfg_vif.all_ax_idle);
+    cfg_vif.addr_map            <= xbar_types_pkg::ADDR_MAP_V1;
+    cfg_vif.en_default_mst_port <= xbar_types_pkg::EN_DEFAULT_V1;
+    cfg_vif.default_mst_port    <= xbar_types_pkg::DEFAULT_MST_V1;
+    repeat (3) @(posedge cfg_vif.clk_i);
+  endtask
+
+  task automatic run_batch_v1();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork begin
+        slvport_cfg02_seq s;
+        s = slvport_cfg02_seq::type_id::create($sformatf("cfg02_v1_%0d", ii));
+        s.slv_port_idx = ii;
+        s.start(p_sequencer.slv_sqr[ii]);
+      end join_none
+    end
+    wait fork;
+  endtask
+
+  task body();
+    if (cfg_vif == null)
+      `uvm_fatal("NOCFGVIF", "m3_cfg02_reconfig_vseq: cfg_vif not set")
+    run_batch_v0();
+    do_reconfig();
+    run_batch_v1();
+  endtask
+endclass

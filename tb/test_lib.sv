@@ -223,3 +223,92 @@ class m2_wo01_worder_test extends base_test;
     phase.drop_objection(this, "m2_wo01_worder_vseq done");
   endtask
 endclass
+
+// M3-DE01 decode-error slave basic response (testplan.md M3-DE01, spec §4).
+class m3_de01_decerr_test extends base_test;
+  `uvm_component_utils(m3_de01_decerr_test)
+
+  function new(string name = "m3_de01_decerr_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_de01_decerr_vseq vseq;
+    phase.raise_objection(this, "m3_de01_decerr_vseq running");
+    vseq = m3_de01_decerr_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_de01_decerr_vseq done");
+  endtask
+endclass
+
+// M3-DE02 default master port vs decode error slave split (testplan.md M3-DE02,
+// spec §3.3/§4). Fetches the runtime config bus so the vseq can drive the mixed
+// per-port en_default in an all-idle window before traffic.
+class m3_de02_default_test extends base_test;
+  `uvm_component_utils(m3_de02_default_test)
+
+  virtual xbar_cfg_if cfg_vif;
+
+  function new(string name = "m3_de02_default_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual xbar_cfg_if)::get(this, "", "cfg_vif", cfg_vif))
+      `uvm_fatal("NOCFGVIF", "m3_de02_default_test: cfg_vif not set")
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_de02_default_vseq vseq;
+    phase.raise_objection(this, "m3_de02_default_vseq running");
+    vseq = m3_de02_default_vseq::type_id::create("vseq");
+    vseq.cfg_vif = cfg_vif;
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_de02_default_vseq done");
+  endtask
+endclass
+
+// M3-OR04 decode-miss ordering position (testplan.md M3-OR04, spec §5.2.6).
+class m3_or04_order_test extends base_test;
+  `uvm_component_utils(m3_or04_order_test)
+
+  function new(string name = "m3_or04_order_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_or04_order_vseq vseq;
+    phase.raise_objection(this, "m3_or04_order_vseq running");
+    vseq = m3_or04_order_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_or04_order_vseq done");
+  endtask
+endclass
+
+// M3-CFG02 runtime address-table live value on the judgement path (testplan.md
+// M3-CFG02, BUG-0031). Same cfg_vif plumbing as M2-CFG01.
+class m3_cfg02_reconfig_test extends base_test;
+  `uvm_component_utils(m3_cfg02_reconfig_test)
+
+  virtual xbar_cfg_if cfg_vif;
+
+  function new(string name = "m3_cfg02_reconfig_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual xbar_cfg_if)::get(this, "", "cfg_vif", cfg_vif))
+      `uvm_fatal("NOCFGVIF", "m3_cfg02_reconfig_test: cfg_vif not set")
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_cfg02_reconfig_vseq vseq;
+    phase.raise_objection(this, "m3_cfg02_reconfig_vseq running");
+    vseq = m3_cfg02_reconfig_vseq::type_id::create("vseq");
+    vseq.cfg_vif = cfg_vif;
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_cfg02_reconfig_vseq done");
+  endtask
+endclass

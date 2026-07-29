@@ -10,3 +10,6 @@ m2_tl01_txlimit_test 1
 m2_tl02_slvtrans_test 1
 m2_wo01_worder_test 1
 m2_at01_atop_test 1
+m3_de01_decerr_test 1
+m3_de02_default_test 1
+m3_or04_order_test 1

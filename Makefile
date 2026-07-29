@@ -1,8 +1,34 @@
 # Mechanical layer, single entry point. See CLAUDE.md for the target table
 # and the invariants each target backs.
 
-.PHONY: handoff next run evidence regress check guards bump commit archive \
-        selftest
+.DEFAULT_GOAL := help
+
+.PHONY: help handoff next run evidence regress check guards bump commit \
+        archive selftest
+
+# Bare `make` (no target) lands here. Keep in sync with the target comments
+# below — this is a manual list, not comment-scraped, so a new target needs
+# a line here too.
+help:
+	@echo "pulp_axi_xbar_copilot — mechanical layer targets"
+	@echo ""
+	@echo "  handoff                    print current status/testplan/bugs summary (session start)"
+	@echo "  next                       mechanically derived next-action list"
+	@echo "  run TEST= SEED=            forward to sim/Makefile: run one simulation"
+	@echo "  evidence ...               register evidence (scenario pass or bug closure) — see below"
+	@echo "  regress                    forward to sim/Makefile: run the regression suite"
+	@echo "  check [SCEN=] [MILESTONE=] docs-check + chain audit; narrow to one scenario or a milestone"
+	@echo "  guards FILES=\"...\"         print registered regression_guards binding the given files"
+	@echo "  bump [minor=1]             VERSION + CHANGELOG skeleton bump (patch by default)"
+	@echo "  commit                     git add -A + commit with a handoff summary (never pushes)"
+	@echo "  archive                    archive old log/testplan entries"
+	@echo "  selftest                   run scripts/tests unit tests"
+	@echo "  smoke / cov / lint / verdi / clean   forward to sim/Makefile"
+	@echo ""
+	@echo "evidence usage:"
+	@echo "  make evidence SCEN=<id> TEST=<t> SEED=<n> [SPEC_REF=SPEC-x.y] [LOG=<path>]"
+	@echo "  make evidence BUG=<id> TEST=<t> SEED=<n>            bug closure (closer != fixer)"
+	@echo "  make evidence BUG=<id> CMD='<cmd>' EXPECT='<regex>' non-sim re-verification"
 
 handoff:
 	@python3 scripts/docs.py --handoff

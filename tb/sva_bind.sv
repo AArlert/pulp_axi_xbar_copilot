@@ -28,10 +28,19 @@ for (genvar j = 0; j < xbar_types_pkg::NO_MST_PORTS; j++) begin : gen_mst_sva
   ) u_axi_chan_sva (.axi(mst_if[j]));
 end
 
-// M2 same-ID cross-port ordering/stall SVA (sva_bind.md §3 C3.2, spec
-// §5.2.1/§5.2.2/§5.2.4) — slave ports only (C3.2 "适用端口：仅 slave 端口").
+// M2/M3 same-ID cross-port ordering/stall SVA (sva_bind.md §3 C3.2, spec
+// §5.2.1/§5.2.2/§5.2.4/§5.2.6) — slave ports only (C3.2 "适用端口：仅 slave 端口").
+// Beyond this port's AW/AR/B/R, each instance reads the *live* cfg_if.addr_map
+// and this port's own en_default_mst_port[k]/default_mst_port[k] so it decodes
+// the runtime table version (BUG-0031) and tracks default-master-port / err_slv
+// transactions (BUG-0025) — same wiring as gen_slv_route_sva below (:41-47).
 for (genvar k = 0; k < xbar_types_pkg::NO_SLV_PORTS; k++) begin : gen_slv_stall_sva
-  axi_xbar_stall_sva u_axi_xbar_stall_sva (.axi(slv_if[k]));
+  axi_xbar_stall_sva u_axi_xbar_stall_sva (
+    .axi        (slv_if[k]),
+    .addr_map   (cfg_if.addr_map),
+    .en_default (cfg_if.en_default_mst_port[k]),
+    .default_mst(cfg_if.default_mst_port[k])
+  );
 end
 
 // M2 address-table / default-port runtime stability SVA (sva_bind.md §3 C3.1,

@@ -1,6 +1,6 @@
-// tb/sva/axi_xbar_stall_sva.sv — M2 same-ID cross-port ordering/stall SVA
-// (design-prompt sva_bind.md §3 C3.2, spec §5.2.1/§5.2.2/§5.2.3/§5.2.4). One
-// instance per crossbar *slave* port interface (6 instances — C3.2 "适用
+// tb/sva/axi_xbar_stall_sva.sv — M2/M3 same-ID cross-port ordering/stall SVA
+// (design-prompt sva_bind.md §3 C3.2, spec §5.2.1/§5.2.2/§5.2.3/§5.2.4/§5.2.6).
+// One instance per crossbar *slave* port interface (6 instances — C3.2 "适用
 // 端口：仅 slave 端口"), direct-instantiated from tb/sva_bind.sv (mirrors
 // tb/sva/axi_chan_sva.sv's attachment-mechanism note: VCS-2018.09-SP2
 // rejects `bind <slvport_if> ...`, REV-003 — the module stays independent/
@@ -8,34 +8,45 @@
 // `interface axi` port + manual field copies, same pattern as
 // axi_chan_sva.sv, so it compiles the same known-working way.
 //
-// Reads only the slvport_if AXI4 channel signals plus the shared, spec-
-// derived xbar_types_pkg::decode_mst_port() function — the exact same
-// routing function the M1 scoreboard already uses for "target master
-// port" (single source of truth, sva_bind.md §3 "译码复用"). No DUT-
-// internal signal is read (CLAUDE.md input-boundary rule).
+// Reads only the slvport_if AXI4 channel signals plus the *live* config the
+// crossbar itself is driven by — the shared addr_map and this slave port's own
+// en_default / default_mst are wired in from tb_top's cfg_if exactly like
+// axi_xbar_route_sva.sv (sva_bind.sv:41-47). Decoding the target master port
+// uses the shared, spec-derived xbar_types_pkg::decode_mst_port() function
+// against that *runtime* table — the exact same routing function/table version
+// the M1 scoreboard uses (single source of truth, sva_bind.md §3 "译码复用").
+// No DUT-internal signal is read (CLAUDE.md input-boundary rule).
 //
-// Judgement-gate note (BUG-0013, OPEN, pending rev arbitration): a first
-// draft of this module asserted spec §5.2.1's literal external-boundary
-// reading — "the second same-bucket/direction, different-target request's
-// AW/AR handshake must not be accepted before the first one's B/rlast".
-// `make run TEST=m2_or01_stall_test SEED=1` reproduced that assert failing
-// deterministically on this repo's pinned baseline (`LatencyMode=
-// CUT_ALL_AX`, spec §7.2): `axi_demux.sv` wraps the core per-ID-bucket
-// counter/target-lock decision logic (`axi_demux_simple`) in `SpillAw`/
-// `SpillAr` spill registers *ahead* of it, so a second request can be
-// externally accepted into that elastic buffering before the core decision
-// logic has evaluated it against the still-open first one. Crucially, the
-// completion *order* (B/rlast arrival) was still exactly preserved in the
-// same repro — the AXI-ordering purpose spec §5.2.3 states for this
-// mechanism ("...故以 stall 方式防止跨 master 端口乱序返回") held, even
-// though the boundary-level acceptance timing did not match §5.2.1's literal
-// wording. Filed as BUG-0013 (SPEC_ISSUE, non-blocking) rather than assumed
-// away. Until rev arbitrates, this module's PASS/FAIL gate is the
-// reading-independent property directly derivable from §5.2.3 (no
-// completion reordering across different targets within one same-bucket/
-// direction group); the stricter boundary-level reading is kept only as a
-// non-decisional cover (so it can be promoted to an assert immediately if
-// rev picks that reading) — see BUG-0013 ## fix and ## regression_guard.
+// Runtime-live decode (BUG-0031): before, this call passed the compile-time
+// localparam ADDR_MAP and hard-coded en_default=1'b0, so after an M2-CFG01-style
+// runtime reconfiguration the module decoded against a stale table (target
+// mis-recorded, error double-sided) AND dropped every default-master-port /
+// err_slv transaction from tracking. Both are fixed by decoding against the live
+// addr_map/en_default/default_mst wired in below. See doc/bugs.md BUG-0031.
+//
+// Decode-miss (err_slv) tracking (BUG-0025, spec §5.2.6): the per-full-ID table
+// now registers EVERY accepted AW/AR (not only rule/default hits) and marks the
+// decode-miss ones with an explicit is_err bit, so:
+//   - spec §5.2.6 clause 1 (default master port is a real master port): default-
+//     routed transactions enter the table and the §5.2.1-4 checks apply to them
+//     unchanged;
+//   - spec §5.2.6 clause 2.a (same FULL ID ordering, assertable regardless of
+//     routing): judged by the scoreboard's per-(port,dir,full-id) completion FIFO
+//     (scoreboard_refmodel.sv), not here — this module's single-bit-per-full-ID
+//     table cannot represent two same-full-ID transactions in flight (BUG-0024);
+//   - spec §5.2.6 clause 2.b/3 (low-ID-BUCKET dimension, DIFFERENT full IDs, one
+//     via err_slv: UNDEFINED): the bucket-level reorder assertion below EXPLICITLY
+//     excludes any transaction marked is_err (see w_reorder/r_reorder), and a
+//     non-judgemental cover records the excluded corner being reached. The
+//     exclusion is by the is_err marker, NOT by "unregistered ⇒ stale/default
+//     value ⇒ comparison happens to be false" (spec §5.2.6 clause 3 red line).
+// See doc/bugs.md BUG-0025.
+//
+// Judgement-gate note (BUG-0013, arbitrated by REV-006, spec §5.2.1 收窄):
+// this module's PASS/FAIL gate is the reading-independent property directly
+// derivable from §5.2.3 (no completion reordering across different targets
+// within one same-bucket/direction group). The stricter boundary-level reading
+// (§5.2.1 literal accept-time) is kept only as a non-decisional cover.
 //
 // Companion-property (spec §5.2.4) realization note: a matching-target
 // pending request never contributes a "different-target" term to either
@@ -45,16 +56,20 @@
 //
 // Range boundary (spec §5.2.5/§6.5, sva_bind.md C3.2): only externally
 // observable AW/AR/B/R handshakes are modelled; the ATOP-atomic-read
-// "shadow AR" mechanism (BUG-0012) is out of scope by design — a cross-
-// direction stall it causes cannot satisfy this module's same-key/
-// same-direction match condition and so cannot trigger either property.
+// "shadow AR" mechanism (BUG-0012) is out of scope by design.
 import uvm_pkg::*;
 `include "uvm_macros.svh"
 
 module axi_xbar_stall_sva
   import xbar_types_pkg::*;
 (
-  interface axi
+  interface axi,
+  // Live crossbar config (wired from tb_top's cfg_if, sva_bind.sv gen_slv_stall_sva):
+  // the shared runtime address table + this slave port's own default-master-port
+  // config. BUG-0031: decode against these, never the compile-time ADDR_MAP.
+  input rule_t [NO_ADDR_RULES-1:0] addr_map,
+  input logic                      en_default,
+  input logic [MST_PORT_IDX_W-1:0] default_mst
 );
 
   logic clk_i, rst_ni;
@@ -86,81 +101,101 @@ module axi_xbar_stall_sva
   localparam int unsigned HI_W         = ID_W_SLV - BUCKET_W;
   localparam int unsigned NUM_SIBLINGS = 2**HI_W;
 
-  // ---- target-port decode (shared function, spec §3.1/§3.2 — same one the
-  // scoreboard uses; no second decode logic, sva_bind.md §3 "译码复用").
-  int unsigned aw_tgt, ar_tgt;
-  bit          aw_hit, ar_hit;
-  // Baseline table + no default master port: the OR-stall scenarios
-  // (M2-OR01/OR02) never reconfigure, so the compile-time ADDR_MAP is the
-  // live table throughout; the runtime-variable table path (M2-CFG01) uses
-  // single-outstanding-per-port stimulus, so this module's sibling-comparison
-  // tracking below stays quiescent there regardless. Same one decode
-  // implementation the scoreboard uses (sva_bind.md §3 "译码复用").
-  always_comb aw_hit = decode_mst_port(aw_addr, ADDR_MAP, 1'b0, '0, aw_tgt);
-  always_comb ar_hit = decode_mst_port(ar_addr, ADDR_MAP, 1'b0, '0, ar_tgt);
+  // Bounds of the M2-CFG01/M3-CFG02 "moved rule" region (spec §3.1/§3.4). Only
+  // its idx changes V0->V1 (0 -> CFG01_MOVED_IDX), start/end are stable, so the
+  // baseline ADDR_MAP gives the correct region window for the BUG-0031 live-table
+  // positive cover below.
+  localparam addr_t MOVED_LO = ADDR_MAP[CFG01_MOVED_RULE].start_addr;
+  localparam addr_t MOVED_HI = ADDR_MAP[CFG01_MOVED_RULE].end_addr;
+
+  // ---- target-port decode against the LIVE table (BUG-0031). aw_hit/ar_hit is
+  // 1 for a rule hit OR the enabled default master port (both real master ports,
+  // spec §5.2.6 clause 1), 0 only on a genuine decode error (err_slv, spec §4).
+  // aw_rule_hit re-decodes with default forced off, so aw_via_default marks a
+  // transaction that matched NO rule but was routed to the default master port —
+  // the BUG-0025 clause-1 witness that default traffic now enters the table.
+  int unsigned aw_tgt, ar_tgt, aw_rule_tgt, ar_rule_tgt;
+  bit          aw_hit, ar_hit, aw_rule_hit, ar_rule_hit;
+  always_comb aw_hit      = decode_mst_port(aw_addr, addr_map, en_default, default_mst, aw_tgt);
+  always_comb ar_hit      = decode_mst_port(ar_addr, addr_map, en_default, default_mst, ar_tgt);
+  always_comb aw_rule_hit = decode_mst_port(aw_addr, addr_map, 1'b0, '0, aw_rule_tgt);
+  always_comb ar_rule_hit = decode_mst_port(ar_addr, addr_map, 1'b0, '0, ar_rule_tgt);
+  wire aw_via_default = aw_hit && !aw_rule_hit; // spec §5.2.6 clause 1
+  wire ar_via_default = ar_hit && !ar_rule_hit;
+  // BUG-0031 live-table positive witness: a transaction into the moved-rule
+  // region whose LIVE-table target equals the V1 idx (CFG01_MOVED_IDX) — can only
+  // be true if the module decoded the *runtime* table (V1), never the compile-time
+  // V0 (which routes this region to idx 0). Structurally 0 before the fix.
+  wire aw_moved_live_v1 = aw_hit && (aw_addr >= MOVED_LO) && (aw_addr < MOVED_HI)
+                          && (aw_tgt == CFG01_MOVED_IDX);
+  wire ar_moved_live_v1 = ar_hit && (ar_addr >= MOVED_LO) && (ar_addr < MOVED_HI)
+                          && (ar_tgt == CFG01_MOVED_IDX);
 
   logic [BUCKET_W-1:0] aw_bkt, ar_bkt;
   assign aw_bkt = aw_id[BUCKET_W-1:0];
   assign ar_bkt = ar_id[BUCKET_W-1:0];
 
-  // ---- per-full-ID open/target/accept-order table (spec §5.2.1/§5.2.2),
-  // kept separately per direction. Indexed by the *full* slv-side ID (not
-  // just its low bucket bits) so that two different IDs sharing a bucket
-  // (the exact construction uvm_env.md C5.2 uses) can each be tracked
-  // individually — needed both for the boundary-precondition covers below
-  // and for the completion-order assert (BUG-0013 ## fix).
+  // ---- per-full-ID open/target/accept-order/err table (spec §5.2.1/§5.2.2/
+  // §5.2.6). Indexed by the *full* slv-side ID. is_err marks a decode-miss
+  // (err_slv) transaction so the bucket-level reorder check can EXCLUDE it
+  // (spec §5.2.6 clause 2.b) by an explicit marker, not a stale value.
   int unsigned w_id_tgt[NUM_IDS];
   bit          w_id_open[NUM_IDS];
+  bit          w_id_is_err[NUM_IDS];
   int unsigned w_id_seq[NUM_IDS];
   int unsigned r_id_tgt[NUM_IDS];
   bit          r_id_open[NUM_IDS];
+  bit          r_id_is_err[NUM_IDS];
   int unsigned r_id_seq[NUM_IDS];
   int unsigned w_seq_ctr, r_seq_ctr;
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       for (int unsigned i = 0; i < NUM_IDS; i++) begin
-        w_id_open[i] <= 1'b0;
-        r_id_open[i] <= 1'b0;
+        w_id_open[i]   <= 1'b0;
+        r_id_open[i]   <= 1'b0;
+        w_id_is_err[i] <= 1'b0;
+        r_id_is_err[i] <= 1'b0;
       end
       w_seq_ctr <= '0;
       r_seq_ctr <= '0;
     end else begin
-      if (aw_valid && aw_ready && aw_hit) begin
-        w_id_tgt[aw_id]  <= aw_tgt;
-        w_id_open[aw_id] <= 1'b1;
-        w_id_seq[aw_id]  <= w_seq_ctr;
-        w_seq_ctr        <= w_seq_ctr + 1;
+      // BUG-0025: registration now covers EVERY accepted AW/AR, not only
+      // rule/default hits. The old `aw_hit`-gated registration silently dropped
+      // decode-miss err_slv transactions (making their completion invisible) and
+      // left a stale target/seq behind (spec §5.2.6 clause 3 red line). Decode-miss
+      // transactions register WITH an is_err marker so the reorder check excludes
+      // them explicitly rather than by an unregistered/default value.
+      if (aw_valid && aw_ready) begin
+        w_id_tgt[aw_id]    <= aw_tgt;
+        w_id_open[aw_id]   <= 1'b1;
+        w_id_is_err[aw_id] <= !aw_hit;
+        w_id_seq[aw_id]    <= w_seq_ctr;
+        w_seq_ctr          <= w_seq_ctr + 1;
       end
-      if (ar_valid && ar_ready && ar_hit) begin
-        r_id_tgt[ar_id]  <= ar_tgt;
-        r_id_open[ar_id] <= 1'b1;
-        r_id_seq[ar_id]  <= r_seq_ctr;
-        r_seq_ctr        <= r_seq_ctr + 1;
+      if (ar_valid && ar_ready) begin
+        r_id_tgt[ar_id]    <= ar_tgt;
+        r_id_open[ar_id]   <= 1'b1;
+        r_id_is_err[ar_id] <= !ar_hit;
+        r_id_seq[ar_id]    <= r_seq_ctr;
+        r_seq_ctr          <= r_seq_ctr + 1;
       end
-      // Same-edge accept+complete on one full ID would otherwise clobber:
-      // two NBAs to the same element, the later one (the clear) wins (IEEE
-      // 1800 §10.4.2), swallowing the *new* transaction's open record and
-      // silently retiring that ID from the reorder check (BUG-0023). Each
-      // clear therefore stands down when this same edge already registered
-      // the same ID — the net effect is "old one closed, new one open",
-      // which is what the tgt/seq writes above assume. Same guard shape as
+      // Symmetric deregistration (BUG-0025 rca): registration no longer requires a
+      // hit, so the same-edge re-registration guard no longer tests aw_hit/ar_hit
+      // either (otherwise a same-edge accept+complete on one full ID with a
+      // decode-miss accept would clobber, BUG-0023 shape). Same guard rationale as
       // axi_xbar_atop_sva.sv's pair-flag clears.
-      if (b_valid && b_ready
-          && !(aw_valid && aw_ready && aw_hit && (aw_id == b_id)))
+      if (b_valid && b_ready && !(aw_valid && aw_ready && (aw_id == b_id)))
         w_id_open[b_id] <= 1'b0;
-      if (r_valid && r_ready && r_last
-          && !(ar_valid && ar_ready && ar_hit && (ar_id == r_id)))
+      if (r_valid && r_ready && r_last && !(ar_valid && ar_ready && (ar_id == r_id)))
         r_id_open[r_id] <= 1'b0;
     end
   end
 
-  // ---- BUG-0023 regression witness: remembers a same-edge "accept + complete
-  // on one full ID" collision and the ID it hit, so the covers at the bottom
-  // can observe, one cycle later, whether that new transaction's open record
-  // actually survived the collision. Falsifying by construction: with the
-  // unguarded clear the record is swallowed and the "survived" cover can
-  // never match.
+  // ---- BUG-0023 regression witness (UNCHANGED, gated on aw_hit — M2-OR03 is an
+  // all-rule-hit scenario; see doc/bugs.md BUG-0023). Remembers a same-edge
+  // "accept + complete on one full ID" collision so the covers below can observe,
+  // one cycle later, whether that new transaction's open record survived.
   bit      w_collide_q, r_collide_q;
   id_slv_t w_collide_id_q, r_collide_id_q;
   always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -177,18 +212,9 @@ module axi_xbar_stall_sva
     end
   end
 
-  // ---- BUG-0024 corner witness (non-judgemental, per-FULL-ID). REV-009 §2.3:
-  // every predicate below (`w_sibling_open`/`w_reorder`) skips the queried ID
-  // itself (`cand != id`), so nothing in this module can observe how many
-  // transactions ONE full ID has in flight — which is exactly the state spec
-  // §5.2.4 allows to stack up and BUG-0024's single-bit `w_id_open` cannot
-  // represent. This adds that missing self-referential observable as a plain
-  // witness: a per-full-ID in-flight count, plus (while all of them share one
-  // target) that target. The judgement table above (w_id_tgt/w_id_open/
-  // w_id_seq) is NOT touched — these signals feed covers only.
-  // `w_uni` is conservative: a completion never re-raises it (a non-uniform
-  // set may become uniform again without being noticed), so the covers below
-  // can only under-claim, never over-claim.
+  // ---- BUG-0024 corner witness (UNCHANGED, gated on aw_hit — see doc/bugs.md
+  // BUG-0024, a separate ACCEPTED@M3 debt). Per-full-ID in-flight count + uniform
+  // target; feeds covers only, never the judgement table above.
   int unsigned w_n[NUM_IDS],    r_n[NUM_IDS];
   int unsigned w_utgt[NUM_IDS], r_utgt[NUM_IDS];
   bit          w_uni[NUM_IDS],  r_uni[NUM_IDS];
@@ -268,14 +294,23 @@ module axi_xbar_stall_sva
   // True if some *other*, *earlier-accepted* (lower seq), same-bucket,
   // different-target ID is still open on the write/read side when
   // `completing_id` completes — i.e. `completing_id`'s response overtook
-  // that older, different-target request (spec §5.2.3's no-reordering
-  // purpose, the BUG-0013-safe judgement anchor).
+  // that older, different-target request (spec §5.2.3's no-reordering purpose,
+  // the BUG-0013-safe judgement anchor).
+  //
+  // spec §5.2.6 clause 2.b/3 EXCLUSION (BUG-0025): the low-ID-bucket ordering
+  // relationship between a decode-miss (err_slv) transaction and a DIFFERENT
+  // full ID sharing its bucket is UNDEFINED in the permitted sources (err_slv is
+  // an internal per-slave-port module, not a master port — spec §4.1/§5.2.6). So
+  // this check must not judge any pair where EITHER side is is_err. The exclusion
+  // is by the explicit is_err marker (registered above), never by a stale/default
+  // target value making the `!=` term happen to be false (spec §5.2.6 clause 3).
   function automatic bit w_reorder(input int unsigned completing_id);
     w_reorder = 1'b0;
+    if (w_id_is_err[completing_id]) return w_reorder; // §5.2.6 2.b: completing side excluded
     for (int unsigned hi = 0; hi < NUM_SIBLINGS; hi++) begin
       int unsigned cand;
       cand = sibling_id(completing_id, hi);
-      if (cand != completing_id && w_id_open[cand]
+      if (cand != completing_id && w_id_open[cand] && !w_id_is_err[cand] // §5.2.6 2.b
           && (w_id_tgt[cand] != w_id_tgt[completing_id])
           && (w_id_seq[cand] < w_id_seq[completing_id]))
         w_reorder = 1'b1;
@@ -284,23 +319,48 @@ module axi_xbar_stall_sva
 
   function automatic bit r_reorder(input int unsigned completing_id);
     r_reorder = 1'b0;
+    if (r_id_is_err[completing_id]) return r_reorder; // §5.2.6 2.b: completing side excluded
     for (int unsigned hi = 0; hi < NUM_SIBLINGS; hi++) begin
       int unsigned cand;
       cand = sibling_id(completing_id, hi);
-      if (cand != completing_id && r_id_open[cand]
+      if (cand != completing_id && r_id_open[cand] && !r_id_is_err[cand] // §5.2.6 2.b
           && (r_id_tgt[cand] != r_id_tgt[completing_id])
           && (r_id_seq[cand] < r_id_seq[completing_id]))
         r_reorder = 1'b1;
     end
   endfunction
 
+  // §5.2.6 clause 2.b excluded-corner witness (non-judgemental): at an AW/AR
+  // accept, is there a same-bucket, DIFFERENT full ID sibling open whose err
+  // status differs from this transaction's (exactly one of the pair via err_slv)?
+  // That is precisely the combination the reorder check above must NOT judge — this
+  // cover only proves the excluded corner is reached (spec §5.2.6 clause 2.b), never
+  // a verdict.
+  function automatic bit w_err_bucket(input int unsigned id, input bit this_is_err);
+    w_err_bucket = 1'b0;
+    for (int unsigned hi = 0; hi < NUM_SIBLINGS; hi++) begin
+      int unsigned cand;
+      cand = sibling_id(id, hi);
+      if (cand != id && w_id_open[cand] && (w_id_is_err[cand] ^ this_is_err))
+        w_err_bucket = 1'b1;
+    end
+  endfunction
+
+  function automatic bit r_err_bucket(input int unsigned id, input bit this_is_err);
+    r_err_bucket = 1'b0;
+    for (int unsigned hi = 0; hi < NUM_SIBLINGS; hi++) begin
+      int unsigned cand;
+      cand = sibling_id(id, hi);
+      if (cand != id && r_id_open[cand] && (r_id_is_err[cand] ^ this_is_err))
+        r_err_bucket = 1'b1;
+    end
+  endfunction
+
   // All tracking-state predicates are folded into combinational *signals*
   // referenced directly by the properties below, so they get preponed
-  // (pre-clock-edge) sampling. Calling the functions inside the property
-  // expression instead evaluates them in the observed region — *after* this
-  // same edge's NBA updates — i.e. against the in-flight set as it stands
-  // *after* this very handshake registers, which is not what spec §5.2.3
-  // constrains (BUG-0015 regression_guard; BUG-0021 F1/F2).
+  // (pre-clock-edge) sampling — calling the functions inside the property
+  // expression instead evaluates them in the observed region, after this same
+  // edge's NBA updates, which is not what spec §5.2.3 constrains (BUG-0015).
   logic w_reorder_now, r_reorder_now;
   always_comb w_reorder_now = w_reorder(b_id);
   always_comb r_reorder_now = r_reorder(r_id);
@@ -312,23 +372,20 @@ module axi_xbar_stall_sva
   logic w_collide_kept_now, r_collide_kept_now;
   always_comb w_collide_kept_now = w_collide_q && w_id_open[w_collide_id_q];
   always_comb r_collide_kept_now = r_collide_q && r_id_open[r_collide_id_q];
+  // §5.2.6 2.b excluded corner, evaluated at this AW/AR accept.
+  logic aw_err_bucket_now, ar_err_bucket_now;
+  always_comb aw_err_bucket_now = w_err_bucket(aw_id, !aw_hit);
+  always_comb ar_err_bucket_now = r_err_bucket(ar_id, !ar_hit);
   // BUG-0024 corner (M2-OR03): this full ID already has >= 2 transactions in
-  // flight, all at one target, and the AW/AR being accepted now carries the
-  // same full ID for a *different* target — which spec §5.2.1 forbids
-  // forwarding until every one of those completes, i.e. it is pending
-  // forwarding from this edge on.
+  // flight, all at one target, and the AW/AR being accepted now carries the same
+  // full ID for a *different* target.
   logic aw_stack_diff_now, ar_stack_diff_now;
   always_comb aw_stack_diff_now = (w_n[aw_id] >= 2) && w_uni[aw_id]
                                   && (w_utgt[aw_id] != aw_tgt);
   always_comb ar_stack_diff_now = (r_n[ar_id] >= 2) && r_uni[ar_id]
                                   && (r_utgt[ar_id] != ar_tgt);
-  // BUG-0024 defect witness: some full ID demonstrably still has transactions
-  // in flight (accepted, not yet completed) while the judgement table above has
-  // already dropped it from the open set — i.e. the reorder check has silently
-  // stopped watching it. Reverse polarity to the covers above: it is expected
-  // to MATCH while `w_id_open`/`r_id_open` stay single bits and must fall to
-  // zero once BUG-0024's fix makes them represent multiple in-flight
-  // transactions per full ID.
+  // BUG-0024 defect witness (UNCHANGED). NOT reused for BUG-0025/0031 (its
+  // regression_guard proved it insensitive to those, REV-010 §2.2).
   logic w_lost_now, r_lost_now;
   always_comb begin
     w_lost_now = 1'b0;
@@ -339,9 +396,10 @@ module axi_xbar_stall_sva
     end
   end
 
-  // ---- main judgement (spec §5.2.3, BUG-0013-safe anchor): a completing
-  // B/rlast must not overtake an older, still-open, same-bucket/direction,
-  // different-target request — no cross-master-port response reordering.
+  // ---- main judgement (spec §5.2.3, BUG-0013-safe anchor; spec §5.2.6 clause
+  // 2.b exclusion built into w_reorder/r_reorder): a completing B/rlast must not
+  // overtake an older, still-open, same-bucket/direction, different-target,
+  // NON-err_slv request — no cross-master-port response reordering.
   assert property (@(posedge clk_i) disable iff (!rst_ni)
     (b_valid && b_ready) |-> !w_reorder_now)
     else `uvm_error("SVA_OR_W_REORDER",
@@ -356,49 +414,68 @@ module axi_xbar_stall_sva
   ;
 
   // ---- covers: main-property precondition actually exercised (激励来源
-  // M2-OR01) — a request is *presented* against a live conflicting record.
-  cover property (@(posedge clk_i) disable iff (!rst_ni)
+  // M2-OR01, and post-reconfig M3-CFG02) — a request is *presented* against a
+  // live conflicting record. Under M3-CFG02 (BUG-0031 crit 4) these fire only
+  // *after* the runtime reconfiguration created cross-target siblings; today's
+  // M2-CFG01 baseline leaves this whole file at 0 match (single-outstanding).
+  c_sib_diff_aw: cover property (@(posedge clk_i) disable iff (!rst_ni)
     aw_valid && aw_hit && aw_sib_diff_now);
-  cover property (@(posedge clk_i) disable iff (!rst_ni)
+  c_sib_diff_ar: cover property (@(posedge clk_i) disable iff (!rst_ni)
     ar_valid && ar_hit && ar_sib_diff_now);
 
-  // ---- covers: companion-property precondition actually exercised
-  // (激励来源 M2-OR02) — a matching-target request presented while a
-  // same-bucket/direction record is open.
+  // ---- covers: companion-property precondition actually exercised (M2-OR02).
   cover property (@(posedge clk_i) disable iff (!rst_ni)
     aw_valid && aw_hit && aw_sib_same_now);
   cover property (@(posedge clk_i) disable iff (!rst_ni)
     ar_valid && ar_hit && ar_sib_same_now);
 
-  // ---- cover: BUG-0013's literal boundary-level precondition — a request
-  // is *accepted* (not just presented) while an older, different-target,
-  // same-bucket/direction sibling is still open. Non-decisional (BUG-0013
-  // OPEN): proves the exact symptom precondition is reproducible, ready to
-  // promote to an assert the moment rev arbitrates that reading.
+  // ---- cover: BUG-0013's literal boundary-level precondition (non-decisional).
   cover property (@(posedge clk_i) disable iff (!rst_ni)
     aw_valid && aw_ready && aw_hit && aw_sib_diff_now);
   cover property (@(posedge clk_i) disable iff (!rst_ni)
     ar_valid && ar_ready && ar_hit && ar_sib_diff_now);
 
-  // ---- covers: BUG-0023 regression guard. The first of each pair proves the
-  // same-edge accept+complete corner is reached at all (else the second is
-  // vacuous); the second proves the newly accepted transaction is still
-  // registered one cycle later, i.e. the collision did not retire that ID
-  // from the reorder check above.
+  // ---- covers: BUG-0023 regression guard.
   cover property (@(posedge clk_i) disable iff (!rst_ni) w_collide_q);
   cover property (@(posedge clk_i) disable iff (!rst_ni) w_collide_kept_now);
   cover property (@(posedge clk_i) disable iff (!rst_ni) r_collide_q);
   cover property (@(posedge clk_i) disable iff (!rst_ni) r_collide_kept_now);
 
   // ---- covers: BUG-0024 regression guard (testplan M2-OR03 criterion (2)).
-  // First of each pair: the §5.2.4 stack + different-target same-full-ID
-  // request corner is actually reached by the stimulus. Second: the tracking
-  // table lost a still-in-flight record there (see w_lost_now above).
   cover property (@(posedge clk_i) disable iff (!rst_ni)
     aw_valid && aw_ready && aw_hit && aw_stack_diff_now);
   cover property (@(posedge clk_i) disable iff (!rst_ni)
     ar_valid && ar_ready && ar_hit && ar_stack_diff_now);
   cover property (@(posedge clk_i) disable iff (!rst_ni) w_lost_now);
   cover property (@(posedge clk_i) disable iff (!rst_ni) r_lost_now);
+
+  // ---- cover: BUG-0025 clause-1 guard (spec §5.2.6 clause 1; testplan M3-DE02
+  // criterion (4)). A transaction routed via the default master port has ENTERED
+  // this tracking table — structurally 0 before the fix (the old call hard-coded
+  // en_default=1'b0 so default traffic was dropped). >0 once M3-DE02 enables a
+  // default master port and sends unmapped-address traffic to it.
+  c_bug25_default_aw: cover property (@(posedge clk_i) disable iff (!rst_ni)
+    aw_valid && aw_ready && aw_via_default);
+  c_bug25_default_ar: cover property (@(posedge clk_i) disable iff (!rst_ni)
+    ar_valid && ar_ready && ar_via_default);
+
+  // ---- cover: BUG-0025 clause-2.b guard (spec §5.2.6; testplan M3-OR04
+  // criterion (2)). The excluded low-ID-bucket corner is reached: an AW/AR is
+  // accepted while a same-bucket, DIFFERENT full ID sibling of the OPPOSITE err
+  // status is open (exactly one of the pair via err_slv). Non-judgemental — the
+  // reorder assert above deliberately renders no verdict on this pair.
+  c_bug25_errbucket_aw: cover property (@(posedge clk_i) disable iff (!rst_ni)
+    aw_valid && aw_ready && aw_err_bucket_now);
+  c_bug25_errbucket_ar: cover property (@(posedge clk_i) disable iff (!rst_ni)
+    ar_valid && ar_ready && ar_err_bucket_now);
+
+  // ---- cover: BUG-0031 live-table positive witness (testplan M3-CFG02
+  // criterion (3)). Fires iff the module decoded the *runtime* V1 table for a
+  // moved-rule-region transaction (target == CFG01_MOVED_IDX). Structurally 0
+  // before the fix (compile-time V0 routes this region to idx 0). Non-decisional.
+  c_bug31_livev1_aw: cover property (@(posedge clk_i) disable iff (!rst_ni)
+    aw_valid && aw_ready && aw_moved_live_v1);
+  c_bug31_livev1_ar: cover property (@(posedge clk_i) disable iff (!rst_ni)
+    ar_valid && ar_ready && ar_moved_live_v1);
 
 endmodule
