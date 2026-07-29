@@ -13,6 +13,7 @@ SHA 锁定见 `vendor/VENDOR.md`）。
 本仓库的验证成果（spec 蒸馏、testplan、UVM 环境、覆盖率收敛过程）供
 隔壁人工学习仓库 `pulp_axi_xbar` 参考。
 
+- 不熟 AXI：先读 [`doc/axi.md`](doc/axi.md)（从零讲到本 DUT 的入门读物）
 - 上手：`make handover && make next`
 - 仿真（VM 内）：`make smoke` / `make run TEST=<t> SEED=<n>` / `make regress`
 - 文档约定：表头/机制英文（columns_preset=en），正文中文
