@@ -27,20 +27,23 @@ X_X, X_W = D_X + D_W + GAP, 86             # axi_demux
 COL_W, COL_PITCH = 84, 94
 COL_X0 = X_X + X_W + GAP
 ERR_K = NM                                 # 最右一列 = demux 第 NoMstPorts 路（decode error）
+ERR_GAP = 46                               # 错误列额外右移量：它不属于交叉矩阵，视觉上须与矩阵断开
 
 RY = [ROW_Y0 + i * ROW_PITCH for i in range(NS)]
 
-def cx(k): return COL_X0 + k * COL_PITCH
+def cx(k): return COL_X0 + k * COL_PITCH + (ERR_GAP if k == ERR_K else 0)
 def cc(k): return cx(k) + COL_W // 2
 
-MAT_X0, MAT_X1 = COL_X0 - 10, cx(ERR_K) + COL_W + 10
+# 矩阵框只包住 j = 0..NoMstPorts-1；错误列另起一个独立虚线框（ERR_X0/ERR_X1）
+MAT_X0, MAT_X1 = COL_X0 - 10, cx(NM - 1) + COL_W + 10
+ERR_X0, ERR_X1 = cx(ERR_K) - 10, cx(ERR_K) + COL_W + 10
 MAT_Y0, MAT_Y1 = RY[0] - CELL_H // 2 - 6, RY[-1] + CELL_H // 2 + 12
 
 MUX_Y, MUX_H = MAT_Y1 + 30, 50             # axi_mux 一排
 MP_Y, MP_H = MUX_Y + MUX_H + 34, 48        # 外部 AXI slave 一排
 LY = MP_Y + MP_H + 38                      # 图例起始 y
 
-W = MAT_X1 + 14
+W = ERR_X1 + 20
 H = LY + 118
 
 FONT = "'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Helvetica, Arial, sans-serif"
@@ -78,6 +81,15 @@ a(f'  <rect x="{MAT_X0}" y="{MAT_Y0}" width="{MAT_X1-MAT_X0}" height="{MAT_Y1-MA
   f'fill="#f7f6ff" stroke="#6d28d9" stroke-width="1.4" stroke-dasharray="7,4"/>')
 a(f'  <text x="{MAT_X0+4}" y="{MAT_Y0-10}" font-size="12.5" font-weight="700" fill="#4338ca">'
   f'交叉连接矩阵（axi_xbar_unmuxed 内，gen_xbar_slv_cross / gen_xbar_mst_cross 双层 generate）</text>')
+
+# 错误列独立虚线框：它是 demux 多出的第 NoMstPorts 路，在 gen_slv_port_demux 里例化，
+# 不在交叉矩阵的双层 generate 内，故与矩阵框分开画并额外右移 ERR_GAP。
+a(f'  <rect x="{ERR_X0}" y="{MAT_Y0}" width="{ERR_X1-ERR_X0}" height="{MAT_Y1-MAT_Y0}" rx="10" '
+  f'fill="#fff7f7" stroke="#b91c1c" stroke-width="1.4" stroke-dasharray="7,4"/>')
+a(f'  <text x="{cc(ERR_K)}" y="{MAT_Y0-24}" text-anchor="middle" font-size="11" font-weight="700" fill="#991b1b">'
+  f'不属于交叉矩阵</text>')
+a(f'  <text x="{cc(ERR_K)}" y="{MAT_Y0-10}" text-anchor="middle" font-size="10" fill="#b91c1c">'
+  f'demux 多出的第 {NM} 路</text>')
 
 # 行 rail（demux 的 NoMstPorts+1 路扇出），画在格子底下
 for y in RY:
@@ -165,7 +177,7 @@ a(f'  <text x="94" y="{LY+52}" font-size="11.5" fill="#334155">'
 a(f'  <rect x="24" y="{LY+65}" width="56" height="13" rx="3" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.1"/>')
 a(f'  <text x="94" y="{LY+76}" font-size="11.5" fill="#334155">'
   f'<tspan font-weight="700">红列 = axi_err_slv</tspan>：每个 slave 端口专属的 decode error 从机（地址不匹配任何 rule，'
-  f'且该端口未使能 default master port 时走这里）</text>')
+  f'且该端口未使能 default master port 时走这里）；<tspan font-weight="700">它是 demux 多出的第 {NM} 路，不属于交叉矩阵</tspan></text>')
 a(f'  <text x="94" y="{LY+100}" font-size="11.5" fill="#334155">'
   f'<tspan font-weight="700">格内标号 [i][j]</tspan> = 该格在 axi_xbar_unmuxed 里的信号索引 slv_reqs[i][j] / slv_resps[i][j]；'
   f'j = {NM} 即 demux 多出的那一路（decode error）</text>')
