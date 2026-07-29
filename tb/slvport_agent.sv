@@ -349,10 +349,25 @@ class slvport_monitor extends uvm_monitor;
     axi_pkg::burst_t         burst;
   } ar_rec_t;
   local ar_rec_t                 ar_pending_q[$];
-  local bit                      r_busy;
-  local ar_rec_t                 r_cur;
-  local xbar_types_pkg::data_t   r_data_q[$];
-  local axi_pkg::resp_t          r_resp_q[$];
+  // BUG-0034 / REV-015: R bursts of DIFFERENT full IDs may legitimately
+  // beat-interleave on one shared slave-port R channel — spec §5.1.4/§5.5.3
+  // (different-full-ID responses are round-robin merged and MAY interleave;
+  // upstream axi_mux.md frames it as a performance feature), and §5.5.4
+  // forbids a checker from asserting any particular grant order. The earlier
+  // single r_busy/r_cur slot assumed "R never interleaves": once a burst
+  // started it blindly absorbed every following beat until r_last, misattribut-
+  // ing an interleaved other-id beat into the wrong burst (the MON_RNOAR /
+  // SB_RBEATS / SB_ATOP_DANGLING false-report cascade). Reconstruct one
+  // in-progress R burst PER r_id concurrently, keyed by the slave-side id, so
+  // each beat is paired/appended/closed against its own transaction. Same-full-
+  // id R beats are never interleaved with each other (AXI4 §5.2.3), so at most
+  // one open burst exists per id at any instant. This does NOT assert that
+  // interleaving must/mustn't happen (§5.5.4 red line) — it only reconstructs
+  // correctly whether or not it does.
+  local bit                    r_busy_by_id [xbar_types_pkg::id_slv_t];
+  local ar_rec_t               r_cur_by_id  [xbar_types_pkg::id_slv_t];
+  local xbar_types_pkg::data_t r_data_qq    [xbar_types_pkg::id_slv_t][$];
+  local axi_pkg::resp_t        r_resp_qq    [xbar_types_pkg::id_slv_t][$];
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -371,7 +386,6 @@ class slvport_monitor extends uvm_monitor;
 
   virtual task run_phase(uvm_phase phase);
     w_busy = 1'b0;
-    r_busy = 1'b0;
     forever begin
       @(posedge vif.clk_i);
       if (!vif.rst_ni) continue;
@@ -501,18 +515,21 @@ class slvport_monitor extends uvm_monitor;
       end
 
       if (vif.r_valid && vif.r_ready) begin
-        if (!r_busy) begin
-          // Pair the starting R burst with its pending read record by ID
-          // (AXI4: R.id identifies the transaction, spec §1) rather than
-          // strict FIFO — with an atomic load's R (queued at its AW accept,
-          // above) and a normal read both pending, arrival order need not
-          // match acceptance order. First match = oldest same-ID record,
-          // which preserves the same-ID in-order property (spec §5.2) the
-          // FIFO scheme relied on.
+        xbar_types_pkg::id_slv_t rid;
+        rid = vif.r_id;
+        if (!(r_busy_by_id.exists(rid) && r_busy_by_id[rid])) begin
+          // Start of an R burst for THIS r_id. Pair it with the oldest pending
+          // read record of the same ID (a normal read's AR, or an atomic
+          // load's AW-registered shadow-read record queued above, spec
+          // §6.3/§6.5) — AXI4: R.id identifies the transaction (spec §1), and
+          // same-ID responses return in acceptance order (spec §5.2.3), so the
+          // first same-ID match is the right one. Keying the whole burst by
+          // r_id means a concurrently-interleaving burst of a DIFFERENT full ID
+          // (legal, spec §5.1.4) can never be misattributed into this one.
           int r_match_idx;
           r_match_idx = -1;
           foreach (ar_pending_q[qi]) begin
-            if (ar_pending_q[qi].id == vif.r_id) begin
+            if (ar_pending_q[qi].id == rid) begin
               r_match_idx = qi;
               break;
             end
@@ -521,29 +538,32 @@ class slvport_monitor extends uvm_monitor;
             `uvm_error("MON_RNOAR",
               "slv monitor saw an R beat with no matching accepted AR/atomic-load AW queued (AR/R pairing violated at slave port)")
           else begin
-            r_cur = ar_pending_q[r_match_idx];
+            r_cur_by_id[rid] = ar_pending_q[r_match_idx];
             ar_pending_q.delete(r_match_idx);
           end
-          r_data_q.delete();
-          r_resp_q.delete();
-          r_busy = 1'b1;
+          r_data_qq[rid].delete();
+          r_resp_qq[rid].delete();
+          r_busy_by_id[rid] = 1'b1;
         end
-        r_data_q.push_back(vif.r_data);
-        r_resp_q.push_back(vif.r_resp);
+        r_data_qq[rid].push_back(vif.r_data);
+        r_resp_qq[rid].push_back(vif.r_resp);
         if (vif.r_last) begin
           axi_resp_obs ro = axi_resp_obs::type_id::create("slv_rresp_obs");
           ro.port_idx      = port_idx;
           ro.is_write      = 1'b0;
-          ro.id            = r_cur.id;
-          ro.addr          = r_cur.addr;
-          ro.len           = r_cur.len;
-          ro.size          = r_cur.size;
-          ro.burst         = r_cur.burst;
-          ro.rdata         = r_data_q;
-          ro.resp          = r_resp_q;
+          ro.id            = r_cur_by_id[rid].id;
+          ro.addr          = r_cur_by_id[rid].addr;
+          ro.len           = r_cur_by_id[rid].len;
+          ro.size          = r_cur_by_id[rid].size;
+          ro.burst         = r_cur_by_id[rid].burst;
+          ro.rdata         = r_data_qq[rid];
+          ro.resp          = r_resp_qq[rid];
           ro.complete_time = $time;
           resp_ap.write(ro);
-          r_busy = 1'b0;
+          r_busy_by_id[rid] = 1'b0;
+          r_data_qq.delete(rid);
+          r_resp_qq.delete(rid);
+          r_cur_by_id.delete(rid);
         end
       end
     end

@@ -1,3 +1,5 @@
+{"date": "2026-07-29", "version": "0.3.10", "summary": "BUG-0025+0031 修复落地+新发 BUG-0033→REV-014 仲裁 SPEC_CHANGED→应用；ERR_RDATA 校正转绿 M3-DE01/DE02/OR04+KILL-0001；closer 复验全过但 fix_commit 空挡住关闭，已如实回退"}
+{"date": "2026-07-29", "version": "0.3.9", "summary": "应用 P-REV012-1：arch 起草→REV-013 门禁 conditional pass（M3/M4 收窄为 M3）→orch 应用。spec §4 新增 clause 7 + §6 交叉引用，重 pin，BUG-0032 约束归宿落地 spec 正文"}
 {"date": "2026-07-29", "version": "0.3.8", "summary": "派 rev 仲裁卡 REV-012：BUG-0032→SPEC_CHANGED（approve P-REV012-1，待 arch 起草文本）；否决 §4/§5.3 自引用提案（归 FB-24）；3 处 orch 自标越界均未越界，顺带修复其中一处查出的 design-prompt 死指针"}
 {"date": "2026-07-29", "version": "0.3.7", "summary": "与上游关系反转：不再回流，自己实践、做好让上游 cherry-pick。删除 .claude/agents/orch.md——实测其正文只投递给被派发的子代理，主会话仅收到一行 description，唯一读不到它的就是目标读者；内容并入 /dispatch + CLAUDE.md §0。fw-feedback 转为实践记录，文件名与编号不动（29 处引用中 10 处在冻结记录）"}
 {"date": "2026-07-29", "version": "0.3.6", "summary": "框架 0.8.0 换底盘（fwsync 已删、无 pull 对端，手工移植）：workflow 27→4 份、agents 转静态含新 orch、四动词收成 make check、handover→handoff。数据层 100% 兼容，doc/ 未改一字。裁决不变量 5 自 M3 起生效、M0-M2 不回填 KILL。登记 FB-27（上游角色卡仍指令已退休动词）+ 订正 FB-25"}

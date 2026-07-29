@@ -1667,12 +1667,14 @@ class slvport_at02_seq extends uvm_sequence #(axi_seq_item);
     p.id       = xbar_types_pkg::id_slv_t'({2'd0, bkt[2:0]});
     p.addr     = xbar_types_pkg::addr_t'(tgt_a) * xbar_types_pkg::REGION_SIZE
                  + 32'h0000_0900 + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
-    p.len      = axi_pkg::len_t'(0); // single beat: the read + atomic-load R bursts
-                                     // are each 1 beat, so the two same-slave-port
-                                     // R streams cannot beat-interleave (AXI4 forbids
-                                     // R interleaving; a multi-beat read here lets the
-                                     // §6.5 shadow-read R and the normal read R return
-                                     // beat-mixed on the shared slave-port R channel)
+    p.len      = axi_pkg::len_t'(3); // 4-beat read (BUG-0034 restored): the atomic
+                                     // load's single-beat shadow R may legally
+                                     // beat-interleave into this multi-beat read's R
+                                     // on the shared slave-port R channel — different
+                                     // full IDs, spec §5.1.4/§5.5.3 permit it. The
+                                     // slv monitor + axi_chan_sva now reconstruct R
+                                     // per r_id (BUG-0034 fix), so this interleave is
+                                     // handled, not false-reported.
     // leg B: atomic load requiring read response, SAME low bucket (bkt) but
     // DIFFERENT full ID and DIFFERENT target (tgt_b) — the §6.5 cross-direction
     // collision that must NOT be judged an §5.2.1 violation (sva_bind C3.2 range

@@ -1,4 +1,80 @@
 # Work log archive
+## [0.3.15] 2026-07-30 卡④：M3 多配置构建机制落地 + M3-CF01（cfgA）转绿
+
+**Done**
+- **卡④（DV，L2）**：落地 `doc/design-prompt/tb_top.md` §5 C5.1-C5.6 的多
+  配置构建机制——`tb/xbar_types_pkg.sv` 把硬编码的 `NO_SLV_PORTS`/
+  `NO_MST_PORTS`/`LatencyMode` 等改为按编译期宏（`` `ifdef``/`` `elsif``）
+  选点，缺省（无宏）逐位等于今日基线（C5.4）；`sim/Makefile` 建立
+  `TEST` 名 → 配置点宏 + 独立 `OUT` 子目录（`out/cfgA/`）的映射，基线
+  `TEST` 的产物路径/`-l` 目标不变（C5.1/C5.2）；仿真开头新增
+  `[CFG_REPORT]` 自报生效的完整 13 字段 `Cfg` + `ATOPs` + `Connectivity`
+  + 地址表（C5.3）；`scoreboard_refmodel.sv`/`axi_xbar_worder_sva.sv`/
+  `axi_xbar_txlimit_sva.sv` 的 ID 前缀改为移位表达式 + `PREFIX_SW=
+  max(PREFIX_W,1)` 存储宽，支持 `NoSlvPorts=1` 的 0 位前缀退化（C5.6）
+  不触碰 `scripts/make/vcs-2018.mk`（上游 pinned，C5.1/C5.2 全在
+  `sim/Makefile` 本地层解决，无需 fw-feedback）
+- 落地 **M3-CF01**（cfgA：1×8 拓扑 + `LatencyMode=NO_LATENCY`），
+  `m3_cf01_cfga_test` 转绿：route/resp/resp-route 零失配、decode error
+  应答正确、`[CFG_REPORT]` 确认 `PREFIX_W=0`/`Connectivity=0xff`/
+  `LatencyMode` 全 0
+- **C5.4 基线不变验证（fixer 自证 + orch 独立复核）**：fixer 用
+  `git stash` 隔离本卡改动后在 HEAD 重跑关键场景做逐位对照，确认零影响；
+  orch 落盘前额外直接核查 `sim/out/simv` 与 `sim/out/cfgA/simv` 是**两个
+  独立文件**（非共享产物），佐证 C5.2 落地属实，非文档声明
+- 全回归 16/16 PASS（含新场景）；`make check`/`make selftest` 绿
+
+**Not done**
+- 机制目前只路由了 cfgA 实际用到的三维（NoSlvPorts/NoMstPorts/
+  LatencyMode）；cfgB/C/D 还需要的 UniqueIds/ATOPs/Connectivity/地址表
+  覆盖维度尚未接入选点机制——留给卡⑤在同一 `` `ifdef`` 块内补齐
+  （fixer 已在交付报告里列出各配置点的坑，见卡⑤派发依据）
+- lint-diff 相对冻结基线新增 20 个站点（全部风格类、行号平移导致，非
+  新类别）——按 BUG-0021 WONTFIX 载体的既定纪律，属里程碑内正常漂移，
+  留给 M3 签核卡重生成基线，非本卡范围
+- 五张 M3 执行卡序列中，⑤仍未派（M3-CF02/03/04 + M3-AT02）
+
+**Next**
+- 卡⑤：M3-CF02/03/04 + M3-AT02（L1，复用卡④机制，需先补齐 UniqueIds/
+  ATOPs/Connectivity/地址表覆盖维度的选点分支）
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
+- `make selftest`（60 tests）通过
+- 高风险项（C5.2 产物隔离、C5.4 基线不变）均有独立于 fixer 自述的核验：
+  fixer 的 git-stash 隔离对照 + orch 直接核查两份 simv 物理独立
+
+## [0.3.14] 2026-07-29 closer 独立复推 cp_stall_state 论证一致，BUG-0018 转 CLOSED
+
+**Done**
+- **closer 卡（fresh 独立实例，非卡③ fixer）**：独立重跑 M2-OR01/M2-WO01 +
+  15 场景全回归，全 PASS、UVM_ERROR=0；历史守卫（M2-OR03 的 collide/
+  stack_diff/w_lost/r_lost 系列）字节级未受判决输入管线改动影响
+- **独立重新推导 cp_stall_state 几何论证**（不采信 fixer 结论，从
+  `cg_stall` covergroup 定义 + `stall_cls` 赋值逻辑 + M2-OR01 激励构造
+  逐步重推）：确认 `cp_stall_state` 只有 3 个 bin（SC_STALLED/SC_SAME_TGT/
+  SC_DIFF_DIR），M2-OR01 的构造（同方向、不同目标 master 端口）结构性只能
+  触达 SC_STALLED 一类，天花板即 33.33%、且读腿在修复前已达标——**closer
+  独立复核后与 fixer 结论一致**：REV-011 §3.3 该子句对 M2-OR01 几何不可达，
+  实质判据是 `x_state_dir[stalled][write]`（已由空转非空达标）。订正写入
+  `doc/bugs.md`/`doc/bugs/BUG-0018.md`
+- 填 `fix_commit=7a1c912`（`git show --stat` 核实确含三份修复文件），
+  `make evidence BUG=BUG-0018 TEST=m2_or01_stall_test SEED=1` 一次通过，
+  **BUG-0018 转 CLOSED**
+
+**Not done**
+- 五张 M3 执行卡序列中，④⑤仍未派（多配置基建 + M3-CF01；M3-CF02/03/04 +
+  M3-AT02）
+
+**Next**
+- 卡④：多配置基建 + M3-CF01（L2，须先于⑤）→ ⑤ M3-CF02/03/04 + M3-AT02（L1）
+
+**How verified**
+- `make check` 绿（docs-check passed；无 terminal rows/blocks 溢出，未跑
+  archive）
+- closer≠fixer 落地形态：关闭实例独立重跑+独立推导，未采信任何转述数字或
+  结论，最终结论与 fixer 一致但过程完全独立
+
 ## [0.3.13] 2026-07-29 卡③：BUG-0018 修复落地——scoreboard 增 AW/AR 接受事件流，M2-OR01/WO01 覆盖率转绿
 
 **Done**

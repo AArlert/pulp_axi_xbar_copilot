@@ -29,13 +29,14 @@
 // pipeline-stage count (spec §7.4 / C2.4) and none asserts a specific
 // round-robin grant order (spec §5.5.4 / C2.5).
 //
-// C2.3's beat-count bookkeeping (aw/ar-len FIFO paired to the following
-// W/R burst) assumes bursts on this interface are not interleaved across
-// sources, which holds for every port this env drives/responds on (each
-// slvport_driver/mstport_responder instance processes one burst per
-// direction/queue slot at a time — see tb/slvport_agent.sv,
-// tb/mstport_agent.sv); a future M2 env that allows genuine interleaving
-// would need this reworked to track per-ID state.
+// C2.3's beat-count bookkeeping is split by direction. The W side pairs an
+// aw-len FIFO to the following (never-interleaved, AXI4 §5.5.1) W burst. The
+// R side is keyed PER r_id (BUG-0034 / REV-015): R bursts of different full
+// IDs MAY legitimately beat-interleave on one shared channel (spec §5.1.4/
+// §5.5.3; §5.5.4 forbids asserting any grant order), so the R beat index,
+// active flag and expected-length FIFO are all associative-array state keyed
+// by r_id — each RLAST is checked against its own transaction's length, and
+// the checker neither requires nor forbids interleaving.
 import uvm_pkg::*;
 `include "uvm_macros.svh"
 
@@ -209,20 +210,36 @@ module axi_chan_sva #(
   // the exact cycle WLAST/RLAST fires (still counted by the native
   // "-assert verbose" Summary line — svacheck.py layer 2).
   axi_pkg::len_t aw_len_q[$];
-  axi_pkg::len_t ar_len_q[$];
+  // BUG-0034 / REV-015: per-r_id expected R length. Filled from that id's AR
+  // handshake, OR — for an atomic load's shadow read, which has NO AR of its
+  // own (spec §6.3/§6.5) — from the atomic-load AW's own AxLEN. All per-id
+  // state below is read/updated ONLY inside this always_ff and checked by an
+  // immediate assertion at the RLAST cycle; no concurrent property/cover reads
+  // it (BUG-0015 red line).
+  axi_pkg::len_t r_exp_len_q [logic [ID_WIDTH-1:0]][$];
 
-  logic [7:0] w_beat_idx_r, r_beat_idx_r; // registered index of the last beat seen
-  logic       w_active, r_active;
+  logic [7:0] w_beat_idx_r; // registered index of the last W beat seen
+  logic       w_active;
+  logic [7:0] r_beat_idx_by_id [logic [ID_WIDTH-1:0]]; // per-id last R beat index
+  logic       r_active_by_id   [logic [ID_WIDTH-1:0]]; // per-id burst in progress
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       aw_len_q.delete();
-      ar_len_q.delete();
+      r_exp_len_q.delete();
       w_beat_idx_r <= '0; w_active <= 1'b0;
-      r_beat_idx_r <= '0; r_active <= 1'b0;
+      r_beat_idx_by_id.delete();
+      r_active_by_id.delete();
     end else begin
-      if (aw_valid && aw_ready) aw_len_q.push_back(aw_len);
-      if (ar_valid && ar_ready) ar_len_q.push_back(ar_len);
+      if (aw_valid && aw_ready) begin
+        aw_len_q.push_back(aw_len);
+        // Atomic load owes an R burst with no AR of its own (spec §6.3/§6.5):
+        // register its expected R length (the AW's own AxLEN) under the AW id
+        // so the shadow read's RLAST checks a real length, not a default 0.
+        if (aw_atop[axi_pkg::ATOP_R_RESP])
+          r_exp_len_q[aw_id].push_back(aw_len);
+      end
+      if (ar_valid && ar_ready) r_exp_len_q[ar_id].push_back(ar_len);
 
       if (w_valid && w_ready) begin
         logic [7:0] this_idx;
@@ -242,16 +259,20 @@ module axi_chan_sva #(
 
       if (r_valid && r_ready) begin
         logic [7:0] this_idx;
-        this_idx     = r_active ? (r_beat_idx_r + 8'd1) : 8'd0;
-        r_beat_idx_r <= this_idx;
-        r_active     <= !r_last;
+        // Per-r_id beat index: a legally-interleaving beat of a different id
+        // (spec §5.1.4) advances ITS OWN counter, never this id's.
+        this_idx = (r_active_by_id.exists(r_id) && r_active_by_id[r_id])
+                     ? (r_beat_idx_by_id[r_id] + 8'd1) : 8'd0;
+        r_beat_idx_by_id[r_id] <= this_idx;
+        r_active_by_id[r_id]   <= !r_last;
         if (r_last) begin
           axi_pkg::len_t exp_len;
-          exp_len = (ar_len_q.size() > 0) ? ar_len_q.pop_front() : 8'd0;
+          exp_len = (r_exp_len_q.exists(r_id) && r_exp_len_q[r_id].size() > 0)
+                      ? r_exp_len_q[r_id].pop_front() : 8'd0;
           assert (this_idx == exp_len) else
             `uvm_error("SVA_RLAST_LEN",
-              $sformatf("RLAST beat index %0d != AxLEN %0d (spec §1; §4.3 decode-error beat-count as secondary reference)",
-                         this_idx, exp_len))
+              $sformatf("RLAST beat index %0d != AxLEN %0d for r_id 'h%0h (spec §1; §4.3 decode-error beat-count as secondary reference)",
+                         this_idx, exp_len, r_id))
           ;
         end
       end
