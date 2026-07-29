@@ -15,11 +15,35 @@ package xbar_types_pkg;
   `include "axi/typedef.svh"
   import axi_pkg::*;
 
+  // ---- config-point selection (design-prompt tb_top.md §5, spec §0 row 3) ---
+  // A config point is chosen UNIQUELY by a compile-time `+define` (C5.1: the
+  // TEST name maps to the macro in sim/Makefile — never env var / file /
+  // random). No macro ⇒ baseline, whose every value below is bit-for-bit the
+  // spec §0 row-2 pin (C5.4). Adding a config point = one `elsif branch here +
+  // one Makefile mapping line (extensible per C5.5). Config points vary ONLY
+  // the spec §0 row-3 dimensions; all other Cfg fields and the address-table
+  // layout follow baseline (C5.5).
+`ifdef XBAR_CFG_A
+  // cfgA (M3-CF01): topology 1×8 + LatencyMode=NO_LATENCY (spec §0 row 3 /
+  // §7.2). NoSlvPorts=1 ⇒ $clog2(1)=0 ⇒ 0-bit ID prefix (spec §5.1, C5.6).
+  localparam int unsigned            NO_SLV_PORTS = 1;
+  localparam int unsigned            NO_MST_PORTS = 8;
+  localparam axi_pkg::xbar_latency_e CFG_LATENCY  = axi_pkg::NO_LATENCY;
+  localparam string                  CFG_NAME     = "cfgA (1x8, NO_LATENCY)";
+`else
+  // baseline (M1/M2): spec §0 row 2, values pinned (C5.4 anchor — unchanged).
+  localparam int unsigned            NO_SLV_PORTS = 6;
+  localparam int unsigned            NO_MST_PORTS = 8;
+  localparam axi_pkg::xbar_latency_e CFG_LATENCY  = axi_pkg::CUT_ALL_AX;
+  localparam string                  CFG_NAME     = "baseline (6x8, CUT_ALL_AX)";
+`endif
+
   // ---- port counts / widths (spec §0 row 2, §2.1, §5.1.1) --------------
-  localparam int unsigned NO_SLV_PORTS   = 6;
-  localparam int unsigned NO_MST_PORTS   = 8;
   localparam int unsigned ID_W_SLV       = 5;
-  localparam int unsigned ID_W_MST       = ID_W_SLV + $clog2(NO_SLV_PORTS); // = 8, spec §5.1.1
+  localparam int unsigned ID_W_MST       = ID_W_SLV + $clog2(NO_SLV_PORTS); // spec §5.1.1
+  // ID-prefix width = $clog2(NoSlvPorts) (spec §5.1); 0 for cfgA's NoSlvPorts=1
+  // (tb_top.md C5.6) — consumers must not width-0 part-select it.
+  localparam int unsigned PREFIX_W       = ID_W_MST - ID_W_SLV;
   localparam int unsigned ADDR_W         = 32;
   localparam int unsigned DATA_W         = 64;
   localparam int unsigned STRB_W         = DATA_W / 8;
@@ -62,7 +86,7 @@ package xbar_types_pkg;
     MaxMstTrans:        10,
     MaxSlvTrans:        6,
     FallThrough:        1'b0,
-    LatencyMode:        axi_pkg::CUT_ALL_AX,
+    LatencyMode:        CFG_LATENCY, // config-point dimension (spec §0 row 3/§7.2)
     PipelineStages:     1,
     AxiIdWidthSlvPorts: ID_W_SLV,
     AxiIdUsedSlvPorts:  3,

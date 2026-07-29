@@ -115,7 +115,11 @@ module axi_xbar_txlimit_sva
   // the bits observable in the master-side id (spec §5.1.1: id = {prefix,
   // slv_id}; bucket = low AxiIdUsedSlvPorts bits of slv_id).
   function automatic logic [MSTKEY_W-1:0] mstkey(input id_mst_t id);
-    return {id[ID_W_MST-1:ID_W_SLV], id[BUCKET_W-1:0]};
+    // prefix = high $clog2(NoSlvPorts) id bits, 0-width when NoSlvPorts=1
+    // (cfgA). Use a shift, not a 0-width part-select (illegal in SV): the
+    // prefix occupies the high PREFIX_W key bits above the BUCKET_W bucket
+    // bits (spec §5.1.1, tb_top C5.6). PREFIX_W=0 ⇒ key == bucket.
+    return ((id >> ID_W_SLV) << BUCKET_W) | id[BUCKET_W-1:0];
   endfunction
 
   // outstanding counts AT THIS master port

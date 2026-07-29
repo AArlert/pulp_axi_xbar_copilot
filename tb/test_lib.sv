@@ -330,3 +330,22 @@ class m3_or05_range_test extends base_test;
     phase.drop_objection(this, "m3_or05_range_vseq done");
   endtask
 endclass
+
+// M3-CF01 config point A regression (testplan.md M3-CF01, spec §0 row 3/§7.2).
+// TEST name prefix m3_cf01_ selects the XBAR_CFG_A build in sim/Makefile
+// (cfgA: 1×8, NO_LATENCY) — see design-prompt tb_top.md C5.1.
+class m3_cf01_cfga_test extends base_test;
+  `uvm_component_utils(m3_cf01_cfga_test)
+
+  function new(string name = "m3_cf01_cfga_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_cf01_cfga_vseq vseq;
+    phase.raise_objection(this, "m3_cf01_cfga_vseq running");
+    vseq = m3_cf01_cfga_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_cf01_cfga_vseq done");
+  endtask
+endclass

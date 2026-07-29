@@ -335,7 +335,13 @@ class xbar_scoreboard extends uvm_scoreboard;
 
   local function bit [xbar_types_pkg::ID_W_MST-1:0] build_exp_id(
       input int unsigned slv_port, input xbar_types_pkg::id_slv_t slv_id);
-    return {slv_port[$clog2(xbar_types_pkg::NO_SLV_PORTS)-1:0], slv_id};
+    // master-side id = {source-port prefix, slv-side id} (spec §5.1.1). Prefix
+    // width = $clog2(NoSlvPorts); NoSlvPorts=1 (cfgA) ⇒ 0-bit prefix ⇒ id ==
+    // slv_id (tb_top.md C5.6 / scoreboard_refmodel.md C5.7 — express as "no
+    // prefix field", NOT a width-0 part-select which is illegal in SV). The
+    // shift form is legal for both cases (0-bit prefix ⇒ shift by 0 ⇒ slv_id).
+    return (xbar_types_pkg::id_mst_t'(slv_port) << xbar_types_pkg::ID_W_SLV)
+           | slv_id;
   endfunction
 
   // ---- request-side, slv-port stream: build the expectation (§3.1/§3.2,
@@ -592,7 +598,10 @@ class xbar_scoreboard extends uvm_scoreboard;
       begin
         int unsigned src_port;
         int unsigned wk;
-        src_port = ro.id[xbar_types_pkg::ID_W_MST-1:xbar_types_pkg::ID_W_SLV];
+        // source slave port = ID-prefix high bits (spec §5.1.1); shift not a
+        // part-select so NoSlvPorts=1's 0-bit prefix stays legal (⇒ src=0,
+        // the sole slave port — scoreboard_refmodel.md C5.7).
+        src_port = ro.id >> xbar_types_pkg::ID_W_SLV;
         wk = worder_key(src_port, ro.port_idx);
         if (worder_pend.exists(wk)) begin
           int unsigned this_idx;
@@ -660,7 +669,9 @@ class xbar_scoreboard extends uvm_scoreboard;
     // Source slave port = the master-side ID prefix (spec §5.1.1).
     begin
       int unsigned src_port;
-      src_port = ro.id[xbar_types_pkg::ID_W_MST-1:xbar_types_pkg::ID_W_SLV];
+      // source slave port = ID-prefix high bits (spec §5.1.1); shift keeps
+      // NoSlvPorts=1's 0-bit prefix legal (scoreboard_refmodel.md C5.7).
+      src_port = ro.id >> xbar_types_pkg::ID_W_SLV;
       fcov.sample_addr_reconfig(rec.post_change, src_port); // spec §3.4
       if (ro.is_write && ro.atop != '0)                     // spec §6.3/§6.1
         fcov.sample_atop(src_port, ro.atop[axi_pkg::ATOP_R_RESP]);

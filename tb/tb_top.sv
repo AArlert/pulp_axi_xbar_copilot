@@ -61,6 +61,31 @@ module tb_top;
     cfg_if.default_mst_port    = '0;
   end
 
+  // ---- config-point self-report (design-prompt tb_top.md C5.3) ----------
+  // Prints the full elaborated config (all 13 Cfg fields + ATOPs + Connectivity
+  // + the address table) at time 0 so every evidence log self-identifies which
+  // config point it exercised — signoff need not reverse-engineer it (spec
+  // §2.1/§2.2/§0 row 3). Tag [CFG_REPORT] is grep-able by scripts/humans.
+  initial begin
+    $display("[CFG_REPORT] config_point=%s", xbar_types_pkg::CFG_NAME);
+    $display("[CFG_REPORT] Cfg NoSlvPorts=%0d NoMstPorts=%0d MaxMstTrans=%0d MaxSlvTrans=%0d FallThrough=%0b",
+             Cfg.NoSlvPorts, Cfg.NoMstPorts, Cfg.MaxMstTrans, Cfg.MaxSlvTrans, Cfg.FallThrough);
+    $display("[CFG_REPORT] Cfg LatencyMode=10'b%010b PipelineStages=%0d AxiIdWidthSlvPorts=%0d AxiIdUsedSlvPorts=%0d UniqueIds=%0b",
+             Cfg.LatencyMode, Cfg.PipelineStages, Cfg.AxiIdWidthSlvPorts,
+             Cfg.AxiIdUsedSlvPorts, Cfg.UniqueIds);
+    $display("[CFG_REPORT] Cfg AxiAddrWidth=%0d AxiDataWidth=%0d NoAddrRules=%0d ATOPs=%0b Connectivity=0x%0h",
+             Cfg.AxiAddrWidth, Cfg.AxiDataWidth, Cfg.NoAddrRules,
+             xbar_types_pkg::ATOPS, xbar_types_pkg::CONNECTIVITY);
+    $display("[CFG_REPORT] derived ID_W_SLV=%0d ID_W_MST=%0d PREFIX_W=%0d",
+             xbar_types_pkg::ID_W_SLV, xbar_types_pkg::ID_W_MST,
+             xbar_types_pkg::PREFIX_W);
+    for (int unsigned r = 0; r < xbar_types_pkg::NO_ADDR_RULES; r++)
+      $display("[CFG_REPORT] rule[%0d] idx=%0d start=0x%08h end=0x%08h",
+               r, xbar_types_pkg::ADDR_MAP[r].idx,
+               xbar_types_pkg::ADDR_MAP[r].start_addr,
+               xbar_types_pkg::ADDR_MAP[r].end_addr);
+  end
+
   xbar_types_pkg::slv_req_t  [xbar_types_pkg::NO_SLV_PORTS-1:0] slv_req;
   xbar_types_pkg::slv_resp_t [xbar_types_pkg::NO_SLV_PORTS-1:0] slv_resp;
   xbar_types_pkg::mst_req_t  [xbar_types_pkg::NO_MST_PORTS-1:0] mst_req;

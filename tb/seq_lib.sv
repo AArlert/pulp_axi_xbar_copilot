@@ -1480,3 +1480,32 @@ class m3_or05_range_vseq extends uvm_sequence #(uvm_sequence_item);
     wait fork;
   endtask
 endclass
+
+// ---- M3-CF01: config point A regression (cfgA 1×8, NO_LATENCY) (testplan
+// M3-CF01, spec §0 row 3 / §7.2). The single slave port (port 0 — NoSlvPorts=1)
+// sends hit read/write bursts covering all NoMstPorts master ports, then a
+// batch of unmapped-address read/writes (en_default='0 ⇒ err_slv DECERR). No
+// new stimulus primitives: hits reuse slvport_basic_seq (num_iter=NoMstPorts
+// walks tgt across every master port), misses reuse slvport_de01_seq (§4.7
+// no-ATOP). The whole point of cfgA is that expectations are bit-for-bit the
+// baseline's — LatencyMode only changes path latency, not the functional
+// response (spec §7.4) — so the scoreboard/SVA judge these with no cfgA-specific
+// expected values. ID-prefix degenerates to 0-bit (spec §5.1, tb_top C5.6),
+// handled in build_exp_id / prefix extraction.
+class m3_cf01_cfga_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_cf01_cfga_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m3_cf01_cfga_vseq"); super.new(name); endfunction
+  task body();
+    slvport_basic_seq hs;
+    slvport_de01_seq  ms;
+    // NoSlvPorts=1: the sole slave port is index 0.
+    hs = slvport_basic_seq::type_id::create("cf01_hit");
+    hs.slv_port_idx = 0;
+    hs.num_iter     = xbar_types_pkg::NO_MST_PORTS; // walk every master port
+    hs.start(p_sequencer.slv_sqr[0]);
+    ms = slvport_de01_seq::type_id::create("cf01_miss");
+    ms.slv_port_idx = 0;
+    ms.start(p_sequencer.slv_sqr[0]);
+  endtask
+endclass

@@ -22,6 +22,28 @@ TOP    := tb_top
 IS_UVM := 1
 endif
 
+# M3 config-point selection (design-prompt tb_top.md §5 C5.1/C5.2): the config
+# point is chosen by TEST name and gets its OWN `+define` + build directory, so
+# a config never reuses another config's elaborated simv — the silent-pass
+# hazard behind BUG-0022 (lint 假绿) / BUG-0028 (分母缩水). C5.2 isolation is on
+# the BUILD PRODUCT (simv/daidir in $(OUT)/cfgA), NOT the run log: the run log
+# stays at the base out/ standard path ($(BASE_OUT)) so evidence.py/regress.py
+# default lookups (sim/out/{test}_{seed}.log) find it with no LOG= override and
+# no scripts change — the log self-identifies its config via [CFG_REPORT] (C5.3)
+# regardless of where the simv lives. Only the matched branch touches OUT;
+# baseline TESTs fall through unchanged (no define, default OUT ⇒ build product,
+# lint.log & FSDB paths bit-for-bit identical, C5.4 + guards BUG-0014/0020/0022
+# untouched). Add a config point = one branch here + one `ifdef in
+# tb/xbar_types_pkg.sv (C5.5). `override` so the config dir also holds under any
+# outer OUT= (regress.py passes none today, but this keeps it robust).
+BASE_OUT   := $(OUT)
+CFG_DEFINE :=
+ifneq ($(filter m3_cf01_%,$(TEST)),)
+CFG_DEFINE := +define+XBAR_CFG_A
+override OUT := $(OUT)/cfgA
+endif
+RUN_LOG := $(BASE_OUT)/$(TEST)_$(SEED).log
+
 # lint 门禁的判定范围与执行证明范围（BUG-0022）：本仓库交付的全部 tb 源文件。
 # `include`-d class 文件也在内——它们同样承载 Lint 告警（见 doc/lint-baseline.md
 # 按文件表），VCS 日志里以 "Parsing included file" 出现。
@@ -31,7 +53,7 @@ LINT_SRCS := $(shell find ../tb -name '*.sv' | sed 's|^\.\./tb/||' | sort)
 
 compile:
 	@mkdir -p $(OUT)
-	$(VCS) $(VCS_FLAGS_2018) $(if $(filter 1,$(COV)),$(CM)) $(FLISTS) \
+	$(VCS) $(VCS_FLAGS_2018) $(if $(filter 1,$(COV)),$(CM)) $(CFG_DEFINE) $(FLISTS) \
 	  -top $(TOP) -o $(OUT)/simv -l $(OUT)/comp.log
 
 # 上游 tb 以 $stop 结束 → ucli 脚本驱动批处理；UVM tb_top 以 run_test()
@@ -63,7 +85,7 @@ endif
 	$(OUT)/simv $(SIM_OPTS_2018) $(if $(filter 1,$(IS_UVM)),+UVM_TESTNAME=$(TEST)) \
 	  +ntb_random_seed=$(SEED) \
 	  $(if $(filter 1,$(COV)),$(CM) -cm_name $(TEST)_$(SEED)) \
-	  $(UCLI) -l $(OUT)/$(TEST)_$(SEED).log
+	  $(UCLI) -l $(RUN_LOG)
 
 sanity: run
 smoke: run
@@ -91,7 +113,7 @@ cov:
 lint-run:
 	@mkdir -p $(OUT)
 	@rm -f $(OUT)/simv_lint.daidir/.vcs.timestamp
-	$(VCS) $(VCS_FLAGS_2018) +lint=all,noVCDE $(FLISTS) -top $(TOP) \
+	$(VCS) $(VCS_FLAGS_2018) +lint=all,noVCDE $(CFG_DEFINE) $(FLISTS) -top $(TOP) \
 	  -o $(OUT)/simv_lint -l $(OUT)/lint.log
 	@fail=0; for f in $(LINT_SRCS); do \
 	  grep -q "Parsing .* file '\.\./tb/$$f'" $(OUT)/lint.log || \

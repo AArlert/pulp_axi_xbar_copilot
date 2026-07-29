@@ -48,12 +48,17 @@ module axi_xbar_worder_sva
   assign w_last   = axi.w_last;
 
   localparam int unsigned PREFIX_W = ID_W_MST - ID_W_SLV; // = $clog2(NoSlvPorts)
+  // NoSlvPorts=1 (cfgA) ⇒ PREFIX_W=0: a single source, so cross-source W
+  // convergence (≥2 distinct sources) is structurally impossible and compete
+  // never fires. SV forbids 0-width vectors/part-selects, so store the prefix
+  // in a min-1-bit field and extract it via a shift (spec §5.1, tb_top C5.6).
+  localparam int unsigned PREFIX_SW = (PREFIX_W == 0) ? 1 : PREFIX_W;
 
   // Source-prefix of each AW accepted here but whose W burst has not yet
   // completed, in AW-acceptance order (mirrors mstport_monitor.aw_q). The
   // front is the burst currently draining; later entries are AWs waiting
   // behind it. A W burst completing (w_last) pops the front.
-  logic [PREFIX_W-1:0] pend_pref[$];
+  logic [PREFIX_SW-1:0] pend_pref[$];
   bit                  w_busy;
   // One-cycle pulse: a W burst started this cycle with ≥2 distinct sources
   // pending. Registered (not combinational over a queue — VCS drops queues
@@ -65,7 +70,7 @@ module axi_xbar_worder_sva
   // the queue front). ≥2 => this master port has genuine cross-source W
   // convergence at this instant.
   function automatic int unsigned distinct_pending();
-    bit [(1<<PREFIX_W)-1:0] seen;
+    bit [(1<<PREFIX_SW)-1:0] seen;
     seen = '0;
     distinct_pending = 0;
     foreach (pend_pref[i]) begin
@@ -92,7 +97,7 @@ module axi_xbar_worder_sva
       end
       // AW accept — record its source prefix.
       if (aw_valid && aw_ready)
-        pend_pref.push_back(aw_id[ID_W_MST-1:ID_W_SLV]);
+        pend_pref.push_back(PREFIX_SW'(aw_id >> ID_W_SLV)); // spec §5.1.1 prefix (shift: 0-bit-safe)
       // W burst end — the front AW's burst just completed.
       if (w_valid && w_ready && w_last) begin
         if (pend_pref.size() > 0) pend_pref.pop_front();
