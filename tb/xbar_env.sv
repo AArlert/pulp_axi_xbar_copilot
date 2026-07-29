@@ -39,6 +39,10 @@ class xbar_env extends uvm_env;
     super.connect_phase(phase);
     for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
       slv_agent[i].monitor.req_ap.connect(sb.slv_req_imp);
+      // BUG-0018: accept-instant request stream → the scoreboard handler that
+      // owns the accept-anchored coverage-input registrations (or_open_q /
+      // cg_stall / cg_tx_limit / worder_pend). Coexists with req_ap above.
+      slv_agent[i].monitor.req_accept_ap.connect(sb.slv_req_accept_imp);
       slv_agent[i].monitor.resp_ap.connect(sb.resp_imp);
       vseqr.slv_sqr[i] = slv_agent[i].sequencer;
     end

@@ -2,6 +2,51 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.13] 2026-07-29 卡③：BUG-0018 修复落地——scoreboard 增 AW/AR 接受事件流，M2-OR01/WO01 覆盖率转绿
+
+**Done**
+- **卡③（DV fixer，L2）**：落地 BUG-0018——`tb/slvport_agent.sv` 新增一路
+  payload-free 的 `req_accept_ap`，在 AW 接受（写）/ AR 接受（读）当拍即
+  发布，与现有携带完整 wdata/wstrb、在 `w_last` 才发布的 `req_ap` **并存**
+  （不删除、不改语义）；`tb/scoreboard_refmodel.sv` 新增
+  `write_slv_req_accept` handler，把 `or_open_q`/`worder_pend` 注册与
+  `stall_cls`/`sample_tx_limit` 采样从"迟到的 w_last"搬到"真实的 AW/AR
+  接受时刻"，§5.2.3 完成序判决本体、`accept_time`/`or_key` 语义均未改动；
+  `tb/xbar_env.sv` 接线新 analysis port。刷新 M2-OR01/M2-WO01 证据
+  （`make evidence` 对已 ✅ 场景的重新注册验证生效）
+- **实测结果**：`x_state_dir`（M2-OR01）由 16.67%→**33.33%**，
+  `[stalled][write]` 格由空转非空；`cp_w_contention`（M2-WO01）由
+  50.00%→**100.00%**（`multi_source_contended` 精确填满）；两次运行
+  `SB_SUMMARY` 均 `mismatch=0`、`UVM_ERROR:0`；全回归 15/15 + 交叉核对
+  `m3_cfg02_reconfig_test` PASS；`m2_or03_guard_test` 历史见证（collide
+  192/192、264/264，stack_diff 24/24，w/r_lost 456/162）字节级不变；
+  `cg_tx_limit`（TL01 80.00%/TL02 53.33%）无回归
+- **fixer 如实上报一处判据文字问题（未自行处置）**：REV-011 §3.3 原文
+  "`cp_stall_state` 由 33.33% 上升"对 M2-OR01 **几何上不可达**——该场景的
+  构造只触达 `SC_STALLED` 一个 stall class（无 `SC_SAME_TGT`/`SC_DIFF_DIR`），
+  `cp_stall_state` 在此场景的结构性天花板本就是 33.33%（读腿在修复前就已
+  达到），写腿补齐只会体现在更细的 `x_state_dir` 交叉 bin（已验证达标），
+  不可能让粗粒度的 `cp_stall_state` 再往上"升"。fixer 未擅自改判据、未
+  隐瞒，留给 closer 复核
+
+**Not done**
+- BUG-0018 状态未变（仍 `ACCEPTED@M3`，closer≠fixer，fixer 未动状态字段）
+- REV-011 §3.3 的 `cp_stall_state` 子句需要 closer 复核确认后，在关闭记录
+  里写明"几何不可达、以 x_state_dir/[stalled][write] 为实质判据"的订正
+- 五张 M3 执行卡序列中，④⑤仍未派（多配置基建 + M3-CF01；M3-CF02/03/04 +
+  M3-AT02）
+
+**Next**
+- 提交本次改动后派 closer 卡：独立复验（含亲自重新推导 cp_stall_state 的
+  几何论证）、通过后走 `make evidence BUG=BUG-0018 ...` 转 CLOSED
+- 卡④：多配置基建 + M3-CF01（L2，须先于⑤）→ ⑤ M3-CF02/03/04 + M3-AT02（L1）
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
+- `make selftest`（60 tests）通过
+- 判决输入管线改动的回归面广：15/15 canonical regress + 4 条交叉核对场景
+  全 PASS，历史 covergroup/SVA 见证（BUG-0023/0024/0027 相关）数值不变
+
 ## [0.3.12] 2026-07-29 卡②：BUG-0024 (b) 收窄 + M3-OR05 落地，closer 转 WONTFIX
 
 **Done**
@@ -76,139 +121,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - `make selftest`（60 tests）通过
 - closer≠fixer 落地形态：关闭实例（本卡）与修复实例（0.3.10 各卡）分离，
   `fix_commit` 精确指向修复真正落盘的 commit
-
-## [0.3.10] 2026-07-29 BUG-0025+0031 修复落地、BUG-0033 新发→REV-014 仲裁→应用，closer 卡查明关闭被 fix_commit 空挡住
-
-**Done**
-- **卡①（DV，L2）**：BUG-0025+BUG-0031 同卡修复落地——`tb/sva/axi_xbar_stall_sva.sv`
-  三层译码未命中保序改造（default port 半边入表 / 完整 ID 半边纳入判决 /
-  桶级半边显式排除引 §5.2.6）+ `tb/sva_bind.sv` 给该模块接入 `cfg_if` 活值
-  地址表（参照 `axi_xbar_route_sva` 现成接法）；M3-CFG02 转绿。M3-DE01/DE02/
-  OR04 首次仿真时浮出**新 SPEC_ISSUE：BUG-0033**（err_slv 译码错误读响应
-  数据值与 spec §4.4 矛盾，doc-vs-RTL，同 BUG-0016 家族）——按纪律无条件
-  登记、未抄 RTL 值入 checker、未派修复，交 rev 仲裁
-- **rev 仲裁卡（fresh 独立实例，L3）→ REV-014**：BUG-0033 taxonomy 终判
-  SPEC_ISSUE（**不改判 DUT_BUG**——错误响应 `RDATA` 协议上 don't-care，
-  DUT 未违反任何显式条款，`RespData` 魔数为刻意设计常量），处置
-  SPEC_CHANGED，提案 P-REV014-1：校正 spec §4 clause 4 为 err_slv 默认
-  `RespData=64'hCA11AB1EBADCAB1E` 按 `AxiDataWidth` 零扩展/截断（**保持
-  宽度参数化**——rev 追加核验发现原文档 L33 只在 32 位宽下恰好正确，不可
-  硬编码成 64 位常量）。orch 应用：spec §4 clause 4 外科手术式改写 + change
-  record #8 + 重 pin（新 sha `ad5bf8b7…6b3a2c`）；`doc/bugs.md`/
-  `doc/bugs/BUG-0033.md` 回填裁决、状态转 `SPEC_CHANGED`；补齐详情页此前
-  缺失的 `## regression_guard` 段（docs-check 一度因此报红，已修）
-- **卡①.6（DV fixer，L2）**：`tb/scoreboard_refmodel.sv` 的 `ERR_RDATA`
-  常量从 pinned spec §4.4 推导校正（不引 RTL 行号），转绿 M3-DE01/DE02/
-  OR04；按 CLAUDE.md 不变量 5（本仓库 M3 起生效）做**注伤自证**——
-  `KILL-0001`：植入缺陷（高 32 位改回 0）→红（12/3/18 处，落 BUG-0033.md
-  §scope 基线区间）→恢复→绿；`sim/regress/regress.list` 补录三行
-- **closer 卡（fresh 独立实例）**：独立复验 BUG-0025（三层判据）+ BUG-0031
-  （六条判据），逐条核对 cover/assert 命中数（不采信任何转述），**技术判据
-  全部通过**；执行 `make evidence BUG=BUG-0025 ...` 时被 `docs.py --check`
-  的 `fix_commit` 空值硬门拦下（此前全部修复尚未提交，无 sha 可填）——
-  closer 正确回退了这次误关闭尝试、清理孤儿 evidence 文件，**未强行绕过**，
-  如实退回 orch
-- 顺带：应用 REV-014 时同步 `doc/testplan.md` M3-DE01 crit(2) 措辞；根
-  `Makefile` 新增 `help` 目标（列全部 16 个目标+用法，含 `evidence` 三种
-  调用形式）+ `.DEFAULT_GOAL := help`（用户直接请求的构建层改动，未走
-  dispatch，orch 自行完成并用 `make help`/裸 `make` 验证）；`git fetch
-  upstream` 跟进框架仓库（新增 1 个纯文档提交，删除框架自己的
-  `doc/VENDOR.md` 模板，与本仓库无关，仅推进移植基线指针至 `e23d938`，
-  CLAUDE.md 已记）；`git pull` origin 三个已推送的文档提交（README 数据流图
-  微调 + 新增 `doc/axi.md` 面向人的 AXI 入门读物 + `doc/attach/` 配图）
-
-**Not done**
-- **BUG-0025/BUG-0031 仍 `ACCEPTED@M3`**（未转 `CLOSED`）——技术判据已满足，
-  纯粹卡在 `fix_commit` 空。本次 closeout 提交落定后需**另派一张新 closer
-  卡**（非本次任何 fixer/前一 closer 实例）用本 commit 的 sha 填 `fix_commit`
-  列、重跑 `make evidence BUG=... TEST=... SEED=...` 完成关闭；预期触发
-  终态行数 5>4 归档阈值，须随附 `make archive`
-- 五张 M3 执行卡序列中，②③④⑤仍未派（BUG-0024 (b) 收窄 + M3-OR05；BUG-0018
-  修 + 重跑 M2-OR01/WO01；多配置基建 + M3-CF01；M3-CF02/03/04 + M3-AT02）
-- `doc/testplan.md` M3-DE02/OR04 判据措辞未同步校正后 SPEC-4.4——REV-014
-  §4.1 判定不需要（两行不逐字引旧值 `32'hBADCAB1E`，随 refmodel 常量自动
-  生效），非遗漏
-
-**Next**
-- 派新 closer 卡：commit 落定后为 BUG-0025/BUG-0031 走独立复验→关闭闭环
-  （fix_commit 已有 sha 可填），随附 `make archive`
-- 卡②起严格顺序：② BUG-0024 (b) + M3-OR05（L2）→ ③ BUG-0018 修 + 重跑
-  M2-OR01/WO01（L2）→ ④ 多配置基建 + M3-CF01（L2，须先于⑤）→ ⑤
-  M3-CF02/03/04 + M3-AT02（L1）
-
-**How verified**
-- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap；
-  `KILL-0001` 使 `make check MILESTONE=3` 条件 4 由红转绿）
-- closer 卡独立复验（不采信任何转述数字）：BUG-0025 三层判据（`c_bug25_
-  default_aw/ar`、完整 ID 完成序 `order_violations=0`、`c_bug25_errbucket_
-  aw/ar`）+ BUG-0031 六条判据（`c_sib_diff_*`、`c_bug31_livev1_*`、双向
-  无假红）逐条核对通过；全回归 10 个历史场景 + 4 个新场景全 PASS、
-  UVM_ERROR=0、0 assertion failures
-- `python3 scripts/docs.py --pin-spec` 的 anti-sneak-edit 检查在 REV-014
-  应用时再次验证生效（先加 change-record 行才允许重 pin）
-- 注伤自证 `KILL-0001` 数字（12/3/18）精确落在 `doc/bugs/BUG-0033.md`
-  §scope 基线区间（12/3-4/18-19）内
-
-## [0.3.9] 2026-07-29 应用 P-REV012-1：spec §4 新增 clause 7 + §6 交叉引用，BUG-0032 落地闭环
-
-**Done**
-- **派 arch 卡（L2）起草 P-REV012-1 的 spec 变更提案**：按 REV-012 §Item 1 批准
-  的四段模板（照搬 §8.2-8.4/§6 clause 2），起草 §4 新 clause 7（ATOP × 译码
-  未命中应答形态许可来源未定义 + env 构造性约束）+ §6 clause 3 交叉引用，
-  original/new text、rationale、对 testplan/design-prompt 的 impact 齐全，
-  未越 REV-012 已批处置半步
-- **派 rev 卡（新实例，L2，spec review 任务型）对该提案文本做 pin 前门禁**：
-  产出 `doc/review/REV-013.md`，**CONDITIONAL PASS**——内容/四段结构/上游
-  静默（rev 自跑 grep 复验，非采信 arch 复述）/编号惯例四项核查通过，**唯一
-  必改**：提案原文两处 `M3/M4` 收窄为 `M3`。理由：REV-012 处置确认句与
-  BUG-0032 fix 段均锚 M3；BUG-0032 更明写 M4 覆盖率收敛是最可能触发该组合、
-  须重开仲裁的场景；"照搬 §8.4 模板"是形态指令非范围授权，写 M4 会让 spec
-  断言一个当前无 M4 config-matrix testplan 行承载的约束（Retention 不一致）。
-  reopening 路径由 part④ + guard 承接，收窄不损失
-- **orch 按 REV-013 订正后的逐字文本应用**：`doc/spec.md` §4 追加 clause 7、
-  §6 clause 3 追加交叉引用（均为外科手术式追加，§4.1-6/§6.1-2/4-5 正文未改
-  一字）；change record 新增 #7（引 REV-012+REV-013 为依据）；
-  `python3 scripts/docs.py --pin-spec` 重 pin，新 sha256
-  `9347b4ac71f824a05581468502109d78160781fd1712710d0d783a2f03b3b806`
-- `doc/bugs.md` BUG-0032 行与 `doc/bugs/BUG-0032.md` `## arbitration` 段回填
-  REV-013 门禁记录 + 应用记录（spec 锚点、change record 序号、新 sha256）——
-  BUG-0032 的约束持久归宿自此是 spec 正文本身，不再只活在 testplan/
-  design-prompt/guard 三处
-- **卡分级 vs 实际**：arch 卡定级 L2、rev 门禁卡定级 L2，两者实际交付均与
-  定级相符，无失配。本次采用"三步子闭环"（arch 起草→rev 门禁→orch 应用）
-  而非单卡直接应用，符合高后果动作（spec pin 变更）应有独立把关的谨慎度
-
-**Not done**
-- `doc/testplan.md` M3-DE01 行与 `doc/design-prompt/uvm_env.md` §6 C6.2**未
-  补充引用新 spec 锚点** SPEC-4.7——arch 交付已指出这是可选的 impact 项（约束
-  内容不变，只是引用权威从"review 记录"升级为"spec 正文"），非本次必需，留
-  作后续小改
-- 本 chunk 不含任何仿真，testplan 计数不变（M3 仍 ✅0/11）
-- FB-24 仍 `open`；五张 M3 执行卡仍全部待派
-- **REV-012/REV-013 的门禁副作用**：chain-audit 的 parent-anchored 由 15 降至
-  8（clause 7 正文内联提及 §4.2/§4.3/§6.3，§6 clause 3 交叉引用内联提及 §6.3）
-  ——这是 FB-24 已诊断的解析器口径本身的自然结果（内联提及即计入"被引用"），
-  不是本卡刻意追求的指标，未做任何"为降数字而写"的编辑（REV-012 §Item 2 明确
-  否决了那类动机）；如实记录以免误读为本卡目标
-
-**Next**
-- 五张 M3 执行卡（严格顺序，④ 先于 ⑤）：① BUG-0025+0031 同卡修 +
-  M3-DE01/DE02/OR04/CFG02（L2）② BUG-0024 (b) + M3-OR05（L2）③ BUG-0018 修 +
-  重跑 M2-OR01/WO01（L2）④ 多配置基建 + M3-CF01（L2）⑤ M3-CF02/03/04 +
-  M3-AT02（L1）
-- FB-23~27 按 0.3.7 新性质重新分类（local/noted/upstreamed）——仍是欠框架的
-  观察项
-
-**How verified**
-- `make check` 绿（docs-check passed；chain-audit dangling 仍 0，本 chunk
-  无新增悬空引用）
-- `python3 scripts/docs.py --pin-spec` 的 anti-sneak-edit 检查实测生效：先加
-  change-record 行后才允许重 pin（脚本对比 change-record 行数 vs git HEAD，
-  行数未增会直接 `sys.exit`）
-- `grep -n "REV-013\|clause 7" doc/spec.md` 确认新 clause 7 与 §6 交叉引用均
-  已落盘；`grep -n "9347b4ac" doc/spec.sha256` 确认新 sha 已写入 pin 文件
-- `doc/bugs.md`/`doc/bugs/BUG-0032.md` 均已回填应用记录，`grep -n "已应用"
-  doc/bugs/BUG-0032.md` 实读确认
-- 三步子闭环的隔离自检：arch 卡与 rev 门禁卡为独立新实例（非同一 session），
-  rev 门禁卡自行复验上游 grep 而非采信 arch 复述的静默断言
 

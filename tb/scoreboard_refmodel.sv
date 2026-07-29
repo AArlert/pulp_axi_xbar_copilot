@@ -24,6 +24,7 @@
 // (per the design prompt's own note in scoreboard_refmodel.md §7).
 
 `uvm_analysis_imp_decl(_slv_req)
+`uvm_analysis_imp_decl(_slv_req_accept)
 `uvm_analysis_imp_decl(_mst_req)
 `uvm_analysis_imp_decl(_resp)
 
@@ -31,6 +32,10 @@ class xbar_scoreboard extends uvm_scoreboard;
   `uvm_component_utils(xbar_scoreboard)
 
   uvm_analysis_imp_slv_req #(axi_req_obs, xbar_scoreboard)  slv_req_imp;
+  // BUG-0018: accept-instant request stream (payload-free, fired at the real
+  // AW/AR handshake) — owns only the accept-anchored coverage-input
+  // registrations, see write_slv_req_accept below.
+  uvm_analysis_imp_slv_req_accept #(axi_req_obs, xbar_scoreboard) slv_req_accept_imp;
   uvm_analysis_imp_mst_req #(axi_req_obs, xbar_scoreboard)  mst_req_imp;
   uvm_analysis_imp_resp    #(axi_resp_obs, xbar_scoreboard) resp_imp;
 
@@ -286,9 +291,10 @@ class xbar_scoreboard extends uvm_scoreboard;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
-    slv_req_imp = new("slv_req_imp", this);
-    mst_req_imp = new("mst_req_imp", this);
-    resp_imp    = new("resp_imp", this);
+    slv_req_imp        = new("slv_req_imp", this);
+    slv_req_accept_imp = new("slv_req_accept_imp", this);
+    mst_req_imp        = new("mst_req_imp", this);
+    resp_imp           = new("resp_imp", this);
   endfunction
 
   virtual function void build_phase(uvm_phase phase);
@@ -436,10 +442,50 @@ class xbar_scoreboard extends uvm_scoreboard;
       err_order_q[resp_key(ro.port_idx, 1'b0,
                            ro.id[xbar_types_pkg::ID_W_SLV-1:0])].push_back(1'b0);
     end
+    // BUG-0018: the accept-instant registrations that used to live here — the
+    // C5.1/C5.2 or_open_q open-record + cg_stall classification, the
+    // cg_tx_limit in-flight sample, and the C5.4 worder_pend push — now run in
+    // write_slv_req_accept below, off the payload-free AW/AR-accept stream, so
+    // for writes they anchor to the true AW handshake instant instead of this
+    // w_last-time observation (req_ap fires this handler at w_last for writes).
+    // Nothing accept-anchored remains in this handler.
+  endfunction
+
+  // ---- request-side, slv-port ACCEPT stream (BUG-0018) -------------------
+  // Fired at the true AW/AR handshake instant on the monitor's payload-free
+  // req_accept_ap (for writes that is several cycles ahead of req_ap's w_last-
+  // time observation that drives write_slv_req above; for reads AR-accept ==
+  // accept, so this coincides with write_slv_req and read behaviour is
+  // unchanged). This handler owns EXACTLY the coverage-input registrations that
+  // must be anchored to the accept instant rather than to w_last:
+  //   - the C5.1/C5.2 or_open_q open-record and its cg_stall classification
+  //     (spec §5.2.1/§5.2.2/§5.2.4),
+  //   - the cg_tx_limit in-flight sample (spec §2.1 MaxMstTrans / §5.4.1),
+  //   - the C5.4/C5.5(b) worder_pend registration for writes (spec §5.5.1),
+  //     feeding cg_w_order's cross-source contention count at completion time.
+  // It introduces NO new verdict and touches NO judgement anchor: the §5.2.3
+  // completion-order check (BUG-0013), accept_time, or_key, err_order_q and the
+  // routing/payload judgement all stay in write_slv_req/write_resp untouched.
+  // The accept_time carried here is the same real AW/AR handshake instant the
+  // monitor stamped (slvport_agent.sv), so the ordering key is identical to
+  // what write_slv_req recorded before. A decode-miss transaction is excluded
+  // here exactly as write_slv_req excludes it (spec §5.2.6 clause 2.b — a
+  // decode-miss low-bucket record must never enter or_open_q/worder).
+  virtual function void write_slv_req_accept(axi_req_obs ro);
+    bit hit;
+    int unsigned exp_port;
+    cfg_snap_t snap;
+    // C1.5 (spec §3.4): decode against the table version live at this
+    // transaction's own accept instant — same lookup write_slv_req performs,
+    // so both handlers agree on the target master port for the same txn.
+    snap = version_at(ro.accept_time);
+    hit  = xbar_types_pkg::decode_mst_port(ro.addr, snap.addr_map,
+             snap.en_def[ro.port_idx], snap.def_port[ro.port_idx], exp_port);
+    if (!hit) return; // §5.2.6 clause 2.b: decode-miss never enters or_open_q/worder
 
     // ---- C5.1/C5.2/C5.5: register this AW/AR's accept as a new open
     // record (BUG-0013: the violation check itself runs at *completion*
-    // time in write_resp below, not here — see that block's comment).
+    // time in write_resp, not here — see that block's comment).
     begin
       int unsigned bucket;
       int unsigned k;
@@ -466,10 +512,12 @@ class xbar_scoreboard extends uvm_scoreboard;
                                 ro.accept_time, cls});
       // cg_tx_limit (spec §2.1 MaxMstTrans row / §5.4.1): the in-flight count
       // of this (slave port, bucket, direction) group right after this
-      // observed accept. Sampled here — not at completion — because an
-      // in-flight count only exists at the accept instant; the event is the
-      // monitor's observed AW/AR handshake (what actually happened, C1.2's
-      // intent), never a driver-side intent.
+      // observed accept. Sampled here — at the accept instant — because an
+      // in-flight count only exists then; the event is the monitor's observed
+      // AW/AR handshake (what actually happened, C1.2's intent), never a
+      // driver-side intent. (BUG-0018: for writes this is the AW handshake,
+      // no longer the late w_last, so the write-direction count is no longer
+      // undercounted.)
       fcov.sample_tx_limit(or_open_q[k].size());
     end
 
@@ -479,6 +527,8 @@ class xbar_scoreboard extends uvm_scoreboard;
     // channel (the atop shadow-R is registered read-side but never a W burst).
     if (ro.is_write) begin
       int unsigned wk;
+      bit [xbar_types_pkg::ID_W_MST-1:0] exp_id;
+      exp_id = build_exp_id(ro.port_idx, ro.id[xbar_types_pkg::ID_W_SLV-1:0]);
       wk = worder_key(ro.port_idx, exp_port);
       worder_pend[wk].push_back('{exp_id, ro.accept_time});
     end

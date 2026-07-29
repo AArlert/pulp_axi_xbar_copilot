@@ -303,6 +303,16 @@ class slvport_monitor extends uvm_monitor;
   virtual slvport_if vif;
   int unsigned        port_idx;
   uvm_analysis_port #(axi_req_obs)  req_ap;
+  // BUG-0018: a second, payload-free request-observation port fired at the TRUE
+  // AW/AR handshake instant (not at w_last like req_ap does for writes). It
+  // carries no wdata/wstrb — its sole purpose is to let the scoreboard anchor
+  // its accept-instant coverage-input registrations (or_open_q + cg_stall
+  // classification, cg_tx_limit in-flight, cg_w_order worder_pend) to the
+  // moment the AW/AR is accepted, instead of several cycles late at w_last. It
+  // is NOT a second judgement path: the full payload-carrying observation is
+  // still published on req_ap at w_last unchanged, and every verdict continues
+  // to feed off req_ap/resp_ap. See scoreboard write_slv_req_accept.
+  uvm_analysis_port #(axi_req_obs)  req_accept_ap;
   uvm_analysis_port #(axi_resp_obs) resp_ap;
 
   // write-collection state. AW-accepted records queue up in aw_pending_q
@@ -346,8 +356,9 @@ class slvport_monitor extends uvm_monitor;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
-    req_ap  = new("req_ap", this);
-    resp_ap = new("resp_ap", this);
+    req_ap        = new("req_ap", this);
+    req_accept_ap = new("req_accept_ap", this);
+    resp_ap       = new("resp_ap", this);
   endfunction
 
   virtual function void build_phase(uvm_phase phase);
@@ -375,6 +386,25 @@ class slvport_monitor extends uvm_monitor;
         a.atop        = vif.aw_atop;
         a.accept_time = $time;
         aw_pending_q.push_back(a);
+        // BUG-0018: publish the payload-free AW-accept event NOW so the
+        // scoreboard registers this write's open record / classifies its
+        // §5.2 stall situation / counts it in-flight at the real AW handshake
+        // instant. The full wdata/wstrb-carrying observation still goes out on
+        // req_ap at w_last below (unchanged) — this event never carries a
+        // judgement, only the accept-instant coverage inputs.
+        begin
+          axi_req_obs ae = axi_req_obs::type_id::create("slv_wreq_accept");
+          ae.port_idx    = port_idx;
+          ae.is_write    = 1'b1;
+          ae.id          = {{(xbar_types_pkg::ID_W_MST-xbar_types_pkg::ID_W_SLV){1'b0}}, vif.aw_id};
+          ae.addr        = vif.aw_addr;
+          ae.len         = vif.aw_len;
+          ae.size        = vif.aw_size;
+          ae.burst       = vif.aw_burst;
+          ae.atop        = vif.aw_atop;
+          ae.accept_time = $time;
+          req_accept_ap.write(ae);
+        end
         // Atomic load (spec §6.3): this AW also owes the port an R burst
         // (never preceded by any AR of its own — demux.md-derived spec §6.5
         // background). Queue a read-side pending record built from the AW's
@@ -433,6 +463,24 @@ class slvport_monitor extends uvm_monitor;
         ro.burst       = vif.ar_burst;
         ro.accept_time = $time;
         req_ap.write(ro);
+        // BUG-0018: read direction — AR handshake IS the accept instant, so
+        // this coincides with req_ap above. Published on the accept port too so
+        // the scoreboard's or_open_q/cg_stall/cg_tx_limit registration for BOTH
+        // directions runs from the one place (write_slv_req_accept); read timing
+        // is byte-for-byte what it was when that registration lived in
+        // write_slv_req (which also ran at this AR-accept for reads).
+        begin
+          axi_req_obs ae = axi_req_obs::type_id::create("slv_rreq_accept");
+          ae.port_idx    = port_idx;
+          ae.is_write    = 1'b0;
+          ae.id          = {{(xbar_types_pkg::ID_W_MST-xbar_types_pkg::ID_W_SLV){1'b0}}, vif.ar_id};
+          ae.addr        = vif.ar_addr;
+          ae.len         = vif.ar_len;
+          ae.size        = vif.ar_size;
+          ae.burst       = vif.ar_burst;
+          ae.accept_time = $time;
+          req_accept_ap.write(ae);
+        end
 
         a.id    = vif.ar_id;
         a.addr  = vif.ar_addr;
