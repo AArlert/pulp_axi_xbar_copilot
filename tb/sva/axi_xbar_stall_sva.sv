@@ -48,6 +48,26 @@
 // within one same-bucket/direction group). The stricter boundary-level reading
 // (§5.2.1 literal accept-time) is kept only as a non-decisional cover.
 //
+// Judgement RANGE (BUG-0024, arbitrated by REV-011 §2.3 route (b); design-prompt
+// sva_bind.md C3.2/C4.1): this module's bucket-level reorder assertion judges
+// ONLY the "at most ONE transaction per full ID in flight" case — the single-slot
+// per-full-ID model C3.2 defines ("若该 key 同方向已有记录则不重复登记"). When spec
+// §5.2.4-legal same-ID / same-direction / same-target stacking puts N>=2
+// transactions on ONE full ID in flight, the per-full-ID accept-order
+// (w_id_seq/r_id_seq) is OVERWRITTEN by the most-recent accept and no longer
+// identifies the OLDEST (actually-completing) transaction; judging here would
+// FALSE-RED (REV-011 §2.2 four-step construction: AW X→A / AW Y→B / AW X→A stack /
+// B for oldest X). That N>=2 completion ordering is judged instead by
+// tb/scoreboard_refmodel.sv C5.1/C5.2's per-transaction (per accept_time)
+// completion FIFO — a genuinely per-transaction queue, not a single slot. The
+// out-of-range case is REALLY DISARMED inside w_reorder/r_reorder (an early return
+// gated on the module's own in-flight count w_n[]/r_n[] >= 2, spec §5.2.4), not
+// merely declared in this note. w_lost_now/r_lost_now (below) are the permanent
+// RANGE-BOUNDARY witnesses (REV-011 §2.3 b-3): any "stall SVA also passed" claim
+// must report their hit count for that run — non-zero means this run's SVA
+// ordering verdict was range-limited and the conclusion rests on the scoreboard.
+// See doc/bugs.md BUG-0024.
+//
 // Companion-property (spec §5.2.4) realization note: a matching-target
 // pending request never contributes a "different-target" term to either
 // the cover or the reorder check below, so §5.2.4's "not delayed by the
@@ -307,6 +327,21 @@ module axi_xbar_stall_sva
   function automatic bit w_reorder(input int unsigned completing_id);
     w_reorder = 1'b0;
     if (w_id_is_err[completing_id]) return w_reorder; // §5.2.6 2.b: completing side excluded
+    // BUG-0024 / REV-011 §2.3 b-2 EXCLUSION (judgement range: at most one
+    // transaction per full ID in flight): when this completing full ID has N>=2
+    // transactions in flight (spec §5.2.4-legal same-ID/same-dir/same-target
+    // stacking), w_id_seq[completing_id] was OVERWRITTEN by the most-recent accept
+    // and no longer identifies the OLDEST transaction actually completing. Judging
+    // with that untrustworthy seq produces a FALSE RED (REV-011 §2.2 construction:
+    // seq[X] is raised to the newest X so an older-accepted sibling Y wrongly looks
+    // "older than" the completing X). This N>=2 case is OUT OF this module's declared
+    // range and is genuinely DISARMED here (early return), not merely documented; its
+    // completion order is judged by scoreboard_refmodel C5.1/C5.2's per-transaction
+    // FIFO. The disarm is driven by the module's own in-flight count w_n[] (kept
+    // independently of the judgement table), NOT by a stale/default seg happening to
+    // compare false (same red line as BUG-0025 §5.2.6 clause 3). Coexists with — does
+    // not subsume — the is_err exclusion above; both are separate early returns.
+    if (w_n[completing_id] >= 2) return w_reorder; // BUG-0024 / REV-011 §2.3 b-2
     for (int unsigned hi = 0; hi < NUM_SIBLINGS; hi++) begin
       int unsigned cand;
       cand = sibling_id(completing_id, hi);
@@ -320,6 +355,13 @@ module axi_xbar_stall_sva
   function automatic bit r_reorder(input int unsigned completing_id);
     r_reorder = 1'b0;
     if (r_id_is_err[completing_id]) return r_reorder; // §5.2.6 2.b: completing side excluded
+    // BUG-0024 / REV-011 §2.3 b-2 EXCLUSION (read-side mirror of w_reorder's):
+    // N>=2 in flight on this full ID ⇒ r_id_seq[completing_id] was overwritten and no
+    // longer identifies the oldest completing AR; out of this module's declared range,
+    // genuinely DISARMED here (early return on the module's own in-flight count r_n[],
+    // spec §5.2.4), judged instead by scoreboard_refmodel C5.1/C5.2. Coexists with —
+    // does not subsume — the is_err exclusion above.
+    if (r_n[completing_id] >= 2) return r_reorder; // BUG-0024 / REV-011 §2.3 b-2
     for (int unsigned hi = 0; hi < NUM_SIBLINGS; hi++) begin
       int unsigned cand;
       cand = sibling_id(completing_id, hi);

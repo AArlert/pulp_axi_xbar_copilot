@@ -1360,3 +1360,123 @@ class m3_cfg02_reconfig_vseq extends uvm_sequence #(uvm_sequence_item);
     run_batch_v1();
   endtask
 endclass
+
+// ----------------------------------------------------------------------------
+// M3-OR05 — stall-SVA judgement-range disarm, directed falsification (testplan.md
+// M3-OR05, BUG-0024, REV-011 §2.3 route (b), spec §5.2.1/§5.2.3/§5.2.4). One
+// slave port, one low-ID bucket, two DISTINCT full IDs X and Y (differing in the
+// high ID bits, same low AxiIdUsedSlvPorts bucket). The REV-011 §2.2 four-step
+// construction, presented back-to-back on one axi_burst_item (drive_burst never
+// waits for a completion between items, so all AWs/ARs are accepted into the
+// crossbar's CUT_ALL_AX elastic buffers while responses are still in flight —
+// the same stacking mechanism M2-OR03 uses):
+//   step 1: AW/AR X -> target A                       (seq0, oldest X)
+//   step 2: AW/AR Y -> target B  (B != A)             (seq1, sibling, same bucket)
+//   step 3: AW/AR X -> target A  (spec §5.2.4 legal same-ID/same-dir/SAME-target
+//           stacking, so a SECOND X is in flight — this OVERWRITES the SVA's
+//           per-full-ID w_id_seq[X] to seq2)          (seq2..)
+//   step 4: the crossbar completes the OLDEST X (seq0) first — same-ID same-target
+//           returns in acceptance order (AXI4, spec §1/§5.2.3), and Y is stalled by
+//           the demux (§5.2.1, same bucket, different target) so it drains after the
+//           X stack. FIFO order at the demux input keeps external accept order ==
+//           completion order (X, Y, X...), so the SCOREBOARD sees zero reordering.
+// The un-fixed stall_sva would FALSE-RED at step 4 (it compares the completing X's
+// overwritten seq2 against the older sibling Y's seq1 and wrongly reports Y was
+// overtaken — REV-011 §2.2); the range-disarm (w_n[X]/r_n[X] >= 2 early return in
+// w_reorder/r_reorder) must suppress that. n_post is deepened past the "≥2" floor
+// (same robustness rationale as M2-OR03's n_a) so ≥2 X are reliably co-resident with
+// an open Y when the oldest X completes. Iterates every low bucket for many chances.
+// ----------------------------------------------------------------------------
+function automatic axi_burst_item build_or05_burst(
+    input string        name,
+    input bit           is_write,
+    input xbar_types_pkg::id_slv_t id_x, input xbar_types_pkg::id_slv_t id_y,
+    input int unsigned  tgt_a, input int unsigned tgt_b,
+    input int unsigned  n_post, // number of X->A stacked AFTER the Y->B sibling
+    input xbar_types_pkg::addr_t addr_base);
+  axi_burst_item burst;
+  int unsigned   k;
+  burst = axi_burst_item::type_id::create(name);
+  k = 0;
+  // Emit one full item into the burst, at the given full id / target.
+  for (int unsigned step = 0; step < 2 + n_post; step++) begin
+    axi_seq_item it;
+    xbar_types_pkg::id_slv_t id;
+    int unsigned tgt;
+    // step 0 = X->A (oldest), step 1 = Y->B (sibling), step >=2 = X->A (stack)
+    id  = (step == 1) ? id_y   : id_x;
+    tgt = (step == 1) ? tgt_b  : tgt_a;
+    it  = axi_seq_item::type_id::create($sformatf("%s_%0d", name, step));
+    it.is_write = is_write;
+    it.id       = id;
+    it.addr     = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
+                  + addr_base + xbar_types_pkg::addr_t'(k) * 32'h40;
+    // Reads single beat; writes alternate AxLEN 0/1 to sweep the AW/B phase
+    // relationship (same anti-phase-lock reasoning as build_or03_burst).
+    it.len      = axi_pkg::len_t'(is_write ? (step % 2) : 0);
+    if (is_write) begin
+      for (int unsigned b = 0; b <= it.len; b++) begin
+        it.wdata.push_back({$urandom(), $urandom()});
+        it.wstrb.push_back('1);
+      end
+    end
+    burst.items.push_back(it);
+    k++;
+  end
+  return burst;
+endfunction
+
+class slvport_or05_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_or05_seq)
+
+  int unsigned slv_port_idx;
+  int unsigned n_post = 2; // X->A stacked after Y (>= 1; total X in flight = 1+n_post)
+
+  function new(string name = "slvport_or05_seq"); super.new(name); endfunction
+
+  task body();
+    // Walk every low-ID bucket (2**AxiIdUsedSlvPorts of them) so the timing
+    // coincidence gets many independent chances across buckets and targets.
+    int unsigned n_bkt;
+    n_bkt = (1 << xbar_types_pkg::Cfg.AxiIdUsedSlvPorts);
+    for (int unsigned bkt = 0; bkt < n_bkt; bkt++) begin
+      axi_burst_item wb, rb;
+      xbar_types_pkg::id_slv_t id_x, id_y;
+      int unsigned tgt_a, tgt_b;
+      // X and Y share the low bucket, differ in the high ID bits -> DISTINCT full
+      // IDs, same §5.2.2 bucket (siblings).
+      id_x  = xbar_types_pkg::id_slv_t'({2'd0, bkt[2:0]});
+      id_y  = xbar_types_pkg::id_slv_t'({2'd1, bkt[2:0]});
+      tgt_a = (slv_port_idx + bkt) % xbar_types_pkg::NO_MST_PORTS;
+      tgt_b = (tgt_a + 1)          % xbar_types_pkg::NO_MST_PORTS;
+
+      wb = build_or05_burst($sformatf("or05_w_%0d_%0d", slv_port_idx, bkt),
+                            1'b1, id_x, id_y, tgt_a, tgt_b, n_post,
+                            32'h0008_0000 + xbar_types_pkg::addr_t'(bkt) * 32'h1000);
+      start_item(wb); finish_item(wb);
+
+      rb = build_or05_burst($sformatf("or05_r_%0d_%0d", slv_port_idx, bkt),
+                            1'b0, id_x, id_y, tgt_a, tgt_b, n_post,
+                            32'h000c_0000 + xbar_types_pkg::addr_t'(bkt) * 32'h1000);
+      start_item(rb); finish_item(rb);
+    end
+  endtask
+endclass
+
+class m3_or05_range_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m3_or05_range_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m3_or05_range_vseq"); super.new(name); endfunction
+  task body();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork begin
+        slvport_or05_seq s;
+        s = slvport_or05_seq::type_id::create($sformatf("or05_seq_%0d", ii));
+        s.slv_port_idx = ii;
+        s.start(p_sequencer.slv_sqr[ii]);
+      end join_none
+    end
+    wait fork;
+  endtask
+endclass

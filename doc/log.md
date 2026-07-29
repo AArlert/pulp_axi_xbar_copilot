@@ -2,6 +2,43 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.12] 2026-07-29 卡②：BUG-0024 (b) 收窄 + M3-OR05 落地，closer 转 WONTFIX
+
+**Done**
+- **卡②（DV fixer，L2）**：落地 REV-011 §2.3 对 BUG-0024 的裁决——择路 (b)，
+  收窄 `tb/sva/axi_xbar_stall_sva.sv` 的判决范围至"每完整 ID 至多一笔在飞"，
+  N≥2 明文交给 `tb/scoreboard_refmodel.sv` C5.1/C5.2 每事务队列判据承担。
+  `w_reorder()`/`r_reorder()` 新增独立于既有 §5.2.6 `is_err` 排除的 N≥2
+  早退分支（复用既有 `w_n[]`/`r_n[]` 在飞计数，不新造机制），文件头注 +
+  `doc/design-prompt/sva_bind.md` C3.2 补齐范围声明。落地 testplan
+  **M3-OR05**（REV-011 §2.2 四步构造的定向证伪场景，读/写镜像跨多桶迭代）
+- **closer 卡（fresh 独立实例）**：亲读代码独立复验 b-1~b-4——b-1 两处范围
+  声明齐备；b-2 亲读 `w_reorder`/`r_reorder` 确认新排除分支真实存在且与
+  `is_err` 排除并存不覆盖，独立重跑 `m3_or05_range_test`
+  `SVA_OR_W_REORDER`/`R_REORDER` 命中 0；b-3 据实报出 `w_lost_now`=144、
+  `r_lost_now`=138（范围边界被真实触达，非要求归零）；b-4 全回归 11/11
+  PASS；另交叉核对 BUG-0023/0025/0031 共享同一函数的既有 cover 命中数未受
+  扰动。四项齐备后**亲自**把 `doc/bugs.md`/`doc/bugs/BUG-0024.md` 转
+  `WONTFIX`（范围声明为 rationale，引 REV-011 §2.3）——WONTFIX 不经
+  `make evidence` 机制、不需要 `fix_commit`
+- `make archive` 消化转态触发的终态行 5>4 溢出（bugs.md 归档 3 行、
+  log.md/status.jsonl 各归档 1 块/1 行）
+
+**Not done**
+- 五张 M3 执行卡序列中，③④⑤仍未派（BUG-0018 修 + 重跑 M2-OR01/WO01；多
+  配置基建 + M3-CF01；M3-CF02/03/04 + M3-AT02）
+
+**Next**
+- 卡③起严格顺序：③ BUG-0018 修 + 重跑 M2-OR01/WO01（L2）→ ④ 多配置基建 +
+  M3-CF01（L2，须先于⑤）→ ⑤ M3-CF02/03/04 + M3-AT02（L1）
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap；
+  终态行数由 5 降至 archive 后的合规值）
+- `make selftest`（60 tests）通过
+- closer≠fixer 落地形态：转态实例（本卡 closer）与落地 (b) 修复的实例
+  （卡②）分离，转态前逐条亲读代码 + 独立重跑，未采信 fixer 交付报告数字
+
 ## [0.3.11] 2026-07-29 closer-v2：填 fix_commit + 独立复验，BUG-0025/BUG-0031 转 CLOSED
 
 **Done**
@@ -174,81 +211,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
   doc/bugs/BUG-0032.md` 实读确认
 - 三步子闭环的隔离自检：arch 卡与 rev 门禁卡为独立新实例（非同一 session），
   rev 门禁卡自行复验上游 grep 而非采信 arch 复述的静默断言
-
-## [0.3.8] 2026-07-29 派 rev 仲裁卡 REV-012：BUG-0032→SPEC_CHANGED、否决 §4/§5.3 自引用提案、3 处 orch 自标越界均未越界
-
-**Done**
-- **派发首张按 0.8.0 新版 `/dispatch` + 静态角色卡实测的 rev 仲裁卡（L3）**，
-  一卡三事，`doc/review/REV-012.md` 落盘：
-  - **① BUG-0032 终判**：rev 亲跑 grep 复验五份许可来源（xbar.md/demux.md/
-    mux.md/axi_pkg.sv/xbar.sv 头注释）确认 err_slv 对要求读响应的 ATOP 应答
-    形态确系空白、非蒸馏遗漏；SPEC_ISSUE 分类与 env 构造性约束处置（同
-    BUG-0002/0003 先例）均确认成立。但**升级为 `SPEC_CHANGED`**（非
-    `ACCEPTED@M4`）——约束目前只活在 testplan/design-prompt/guard，spec §4
-    正文只字未提该缺口，与两条被引先例（约束均已写入 spec 正文）不同形。
-    **approve P-REV012-1**：补 §4 平行条款（四段模板同 §8.4）+ §6 clause 3
-    交叉引用；rev 明确"exact wording 由 orch/arch 拟，rev 不代写"——按
-    `CLAUDE.md` §0 与 `.claude/agents/arch.md`（"Proposals are arbitrated by
-    rev, then applied... by orch — you never edit the spec body yourself"），
-    实际起草者只能是 arch，orch 仅机械应用+重 pin。故 P-REV012-1 的文本草拟
-    是**下一张卡**（arch），本 chunk 不产出 spec 正文
-  - **② §4/§5.3 自引用提案：REJECTED**。rev 独立复核 FB-24 举证（spec 只有
-    两级标题、§4.2/§5.3.1 全程是 inline clause reference 而非标题）与
-    parent-anchored=15 的构成（现场重跑 chain-audit，15 条中确认多条正是
-    `SPEC-4.2/4.3/4.4→§4`、`SPEC-6.3→§6`、`SPEC-5.3.1/5.3.3→§5.3` 这类幻影
-    模式）——裁定这是内容迁就工具口径、零验证收益，持久归宿仍是 FB-24（上游
-    修解析器）
-  - **③ 复核 3 处 orch 自标越界**（0.3.4 design-prompt 3 行 token 迁移 /
-    0.3.6 `.claude/agents/*` 底盘移植+新增 orch.md / 0.3.7 删 orch.md 并入
-    `/dispatch`）：**三处均未越 dispatcher-only 实质边界**——§0 的禁令精确
-    列举四类技术制品（RTL/TB/design-prompt 内容/spec 内容），三处编辑全部是
-    机械可证、零语义的底盘/路径维护，本属 orch 职责。B、C 予以底盘豁免存档；
-    A 予以豁免，**并现场查出一条新 corrective**：0.8.0 重排已把
-    `workflow/fail/` 整个折进 `workflow/bugs.md`，A 当时改的三处
-    design-prompt 引用已再次变成死指针
-  - **rev 强制字段**：taxonomy-class anomaly = 否（BUG-0032 已是行；design-
-    prompt 死指针与 FB-24 均属框架/文档摩擦，非五分类项目失效）
-- **orch 落实 REV-012 查出的 corrective**：`doc/design-prompt/
-  {functional_coverage,sva_bind,uvm_env}.md` 三处 `workflow/fail/
-  coverage_hole.md` 死指针迁移至 0.8.0 现址 `workflow/bugs.md`「Dispatch:
-  coverage hole」节——纯 token 替换，referent 存在，word-diff 自证零语义，
-  与 rev 裁定的"orch 可对活文档做机械可证、零语义迁移"的豁免线相符，无需
-  另派卡
-- **卡分级 vs 实际**：本卡定级 L3，实际交付（spec 仲裁 + 3 处流程自审）与
-  定级相符，无失配
-
-**Not done**
-- **P-REV012-1 尚未应用**——spec §4 平行条款 + §6 交叉引用的具体文本待 arch
-  起草（rev 明确拒绝代写正文），本 chunk 只留下已批准的方向与模板；BUG-0032
-  行状态已改 `SPEC_CHANGED` 但 spec.md 正文与 sha256 pin 均未动，约束的活
-  载体暂仍是 testplan M3-DE01 + uvm_env C6.2 + guard
-- 本 chunk 不含任何仿真，testplan 计数不变（M3 仍 ✅0/11）
-- FB-24 仍 `open`（upstream 解析器修复，未回流）；FB-23/25/26/27 状态未动
-- 五张 M3 执行卡仍全部待派
-
-**Next**
-- 派 arch 卡（L2，草拟 spec 变更提案）：按 REV-012 approve 的模板（同 §4.2
-  BUG-0003 四段式、§8.4 BUG-0002 四段式）为 §4 起草平行条款 + 为 §6 clause 3
-  加交叉引用，原文/新文/rationale/impact 齐全，引用 REV-012 §Item 1 为基准；
-  orch 应用该提案时机械核对措辞落在批准模板内，写 change record + 重 pin
-- 五张 M3 执行卡（严格顺序，④ 先于 ⑤）：① BUG-0025+0031 同卡修 +
-  M3-DE01/DE02/OR04/CFG02（L2）② BUG-0024 (b) + M3-OR05（L2）③ BUG-0018 修 +
-  重跑 M2-OR01/WO01（L2）④ 多配置基建 + M3-CF01（L2）⑤ M3-CF02/03/04 +
-  M3-AT02（L1）
-- FB-23~27 按 0.3.7 的新性质裁决重新分类（local/noted/upstreamed）——本
-  chunk 未做，仍是欠框架的观察项
-
-**How verified**
-- `make check` 绿（docs-check passed；chain-audit 与升级前一致：dangling
-  仍 0、parent-anchored 仍 15——REV-012 否决 §4/§5.3 提案后本就不该变、rev
-  在裁决中现场重跑验证过这一点）
-- `doc/bugs.md` BUG-0032 行与 `doc/bugs/BUG-0032.md` `## arbitration` 段均
-  已写入 REV-012 引用与终判，`grep -n "BUG-0032" doc/bugs.md` 实读确认
-  ruling 列含 "REV-012 §Item 1 终判"字样
-- 三处 design-prompt 死指针迁移后 `grep -rn "workflow/fail/coverage_hole"
-  doc/design-prompt/` 零命中，`grep -n "Dispatch: coverage hole"
-  workflow/bugs.md` 确认目标锚点存在
-- 派卡自检：card 只含 scope list（文件路径/行号/commit sha）与判据源，未
-  夹带任何一方结论——rev 交付里三项 verdict 均为其独立复验产物（如 Item 1
-  的五源 grep、Item 2 的 chain-audit 现场重跑），非对 orch 卡面结论的背书
 

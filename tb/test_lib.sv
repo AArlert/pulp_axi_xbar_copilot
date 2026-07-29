@@ -312,3 +312,21 @@ class m3_cfg02_reconfig_test extends base_test;
     phase.drop_objection(this, "m3_cfg02_reconfig_vseq done");
   endtask
 endclass
+
+// M3-OR05 stall-SVA judgement-range disarm directed falsification (testplan.md
+// M3-OR05, BUG-0024, REV-011 §2.3 route (b)). Baseline config (same as M1-01).
+class m3_or05_range_test extends base_test;
+  `uvm_component_utils(m3_or05_range_test)
+
+  function new(string name = "m3_or05_range_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m3_or05_range_vseq vseq;
+    phase.raise_objection(this, "m3_or05_range_vseq running");
+    vseq = m3_or05_range_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m3_or05_range_vseq done");
+  endtask
+endclass

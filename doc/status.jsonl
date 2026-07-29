@@ -1,3 +1,4 @@
+{"date": "2026-07-29", "version": "0.3.12", "summary": "卡②落地 BUG-0024 (b) 收窄 + M3-OR05；closer 独立复验 b-1~b-4 后转 BUG-0024 WONTFIX；archive 消化 5>4 终态行溢出"}
 {"date": "2026-07-29", "version": "0.3.11", "summary": "closer 卡（新独立实例）填 fix_commit=482a47e，独立复验通过后关闭 BUG-0025/BUG-0031"}
 {"date": "2026-07-29", "version": "0.3.10", "summary": "BUG-0025+0031 修复落地+新发 BUG-0033→REV-014 仲裁 SPEC_CHANGED→应用；ERR_RDATA 校正转绿 M3-DE01/DE02/OR04+KILL-0001；closer 复验全过但 fix_commit 空挡住关闭，已如实回退"}
 {"date": "2026-07-29", "version": "0.3.9", "summary": "应用 P-REV012-1：arch 起草→REV-013 门禁 conditional pass（M3/M4 收窄为 M3）→orch 应用。spec §4 新增 clause 7 + §6 交叉引用，重 pin，BUG-0032 约束归宿落地 spec 正文"}
@@ -6,4 +7,3 @@
 {"date": "2026-07-29", "version": "0.3.6", "summary": "框架 0.8.0 换底盘（fwsync 已删、无 pull 对端，手工移植）：workflow 27→4 份、agents 转静态含新 orch、四动词收成 make check、handover→handoff。数据层 100% 兼容，doc/ 未改一字。裁决不变量 5 自 M3 起生效、M0-M2 不回填 KILL。登记 FB-27（上游角色卡仍指令已退休动词）+ 订正 FB-25"}
 {"date": "2026-07-29", "version": "0.3.5", "summary": "pull 框架 0.7.1（spec-gap 探索器 + L0-L3 分级，交采纳者压测）；压测 explore 当场命中 FB-24——§id 解析器把章节内列表项与跨文档引用当成 spec 章节，前沿幻影率 4/9；同根因解释 parent-anchored=15，建议否决 arch 的 §4/§5.3 自引用提案；arch spec-gap 卡暂不派"}
 {"date": "2026-07-29", "version": "0.3.4", "summary": "pull 框架 0.7.0（worktree 预演后执行；实测认定为纯结构重排、零行为规则变更，M2 证据与 M3 设计输入不受影响）；活文件路径迁移（CLAUDE.md + testplan/bugs 表头 + fw-feedback + 三份 design-prompt 死指针）；裁决冻结记录 16 份 39 处旧路径一律不动并登记 FB-23"}
-{"date": "2026-07-29", "version": "0.3.3", "summary": "arch 交付 M3 场景清单（11 行）+ 反驳 orch 的配置维 constrained-random 决定（三条机制事实已核实，改为声明式配置点）；四条 ACCEPTED@M3 债务逐条归属；新登 BUG-0032（err_slv×ATOP 应答未定义，待 rev 终判）"}
