@@ -103,7 +103,7 @@ make check               # 关闭任何卡前必做
 ## §5 Git 与上游
 
 - Conventional commits。Evidence 与它所证明的代码落同一 commit。closeout 后
-  `git push`（`make commit` 只到本地，推送是人的动作）。
+  `git push`（`make commit` 只到本地，本仓库原则是“小步快跑”，即长任务切片为可闭环的小任务，每次任务都推送到 github）。
 - 每次 clone 后执行两条一次性设置（`.git/config` 不随仓库走）：
   `git config core.hooksPath .githooks` ·
   `git remote add upstream https://github.com/AArlert/iverif-workflow.git`
