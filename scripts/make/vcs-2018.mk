@@ -22,6 +22,14 @@
 #               only structured proof of assertion cleanliness, and
 #               evidence.py / svacheck.py --judge fail-closed without it
 #               (ppa BUG-014). Never drop it from the run rule.
+#   cov-dir-lazy - CM's `-cm_dir` used to be bound with `:=` (immediate
+#               expansion) at include time, freezing whatever OUT held
+#               *then* (the default) before the including Makefile's
+#               per-config `override OUT` blocks ever ran, so every COV=1
+#               `make run` wrote into the same shared cov.vdb regardless of
+#               which design/topology it was (pulp BUG-0037) => CM/COV_DIR
+#               are now recursive (`=`), resolved at recipe-execution time
+#               instead. 见 doc/fw-feedback.md FB-30.
 
 # ---- EDA environment fallback (non-interactive shells skip ~/.bashrc) ----
 export VCS_HOME        ?= /home/synopsys/vcs-mx/O-2018.09-SP2
@@ -50,6 +58,14 @@ export XVERIF_ROOT ?= /home/open_tools/xverif
 OUT  ?= out
 COV  ?= 0
 FSDB ?= 0
+# Coverage DB location, kept as its own indirection (not inlined into CM)
+# so the including Makefile can redirect a single TEST's database (e.g.
+# M0's upstream_sanity, a structurally different top-level design from
+# every M1+ UVM test — see BUG-0037) without touching OUT itself, which
+# would also move that TEST's build product and narrow `make clean`'s
+# scope. Recursive (`=`, not `:=`): must resolve OUT/its own override at
+# CM's point of use, not at this include. 见 doc/fw-feedback.md FB-30.
+COV_DIR = $(OUT)/cov.vdb
 
 VCS    := vcs
 LD_FIX := -LDFLAGS "-Wl,--no-as-needed"
@@ -68,7 +84,11 @@ SIM_OPTS_2018 := -assert verbose
 
 # ---- coverage: the six-type yardstick ----
 ifeq ($(COV),1)
-CM := -cm line+cond+fsm+tgl+branch+assert -cm_dir $(OUT)/cov.vdb
+# `=` (recursive), not `:=`: must re-resolve COV_DIR at the point compile:/
+# run: actually reference $(CM) (recipe-execution time), by which point the
+# including Makefile's per-config `override OUT` / per-TEST `COV_DIR`
+# overrides have already run (BUG-0037). 见 doc/fw-feedback.md FB-30.
+CM = -cm line+cond+fsm+tgl+branch+assert -cm_dir $(COV_DIR)
 # Optional measurement-domain filter: CMHIER=<cfg> passes -cm_hier to both
 # compile and sim (restrict to the tb subtree / exclude UVM library
 # scaffolding). Default: full-domain collection.
@@ -86,7 +106,7 @@ endif
 #                 $(if $(filter 1,$(COV)),$(CM) -cm_name $(TEST)_$(SEED)) \
 #                 -l $(OUT)/$(TEST)_$(SEED).log
 #   covreset: $(MAKE) run TEST=<reset_test> SEED=1 COV=1 OUT=cov_reset
-#   cov:      urg -full64 -dir $(OUT)/cov.vdb \
+#   cov:      urg -full64 -dir $(COV_DIR) \
 #                 $(wildcard cov_reset*/cov.vdb:%=-dir %) -report $(OUT)/urgReport
 #
 # Upstream TBs ending in $stop hang batch runs at the interactive prompt —

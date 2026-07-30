@@ -16,6 +16,15 @@ ifeq ($(TEST),upstream_sanity)
 FLISTS := -f flist/vendor.f -f flist/dut.f -f flist/tb_upstream.f
 TOP    := tb_axi_xbar
 IS_UVM := 0
+# BUG-0037 fix: M0 (TOP=tb_axi_xbar) is a structurally different design
+# from every M1+ UVM test (TOP=tb_top) and must not share the default
+# out/cov.vdb coverage database with them (VCS's urg merge emits
+# CMR-VCINF/UCAPI-INSTANCEMISMATCH when asked to merge incompatible
+# top-level designs). Redirect only the coverage DB, not OUT itself, so
+# the build product (out/simv) and `make clean`'s scope (bare `make
+# clean` still wipes the whole $(OUT) tree, unaffected by TEST's default
+# value of upstream_sanity) are unchanged. 见 doc/fw-feedback.md FB-30.
+COV_DIR := $(OUT)/m0/cov.vdb
 else
 FLISTS := -f flist/vendor.f -f flist/dut.f -f flist/tb.f
 TOP    := tb_top
@@ -63,8 +72,12 @@ LINT_SRCS := $(shell find ../tb -name '*.sv' | sed 's|^\.\./tb/||' | sort)
 
 .PHONY: compile run sanity smoke regress cov lint lint-run lint-diff verdi clean
 
+# BUG-0037: mkdir also COV_DIR's parent -- for the baseline/cfg cases it
+# equals $(OUT) already (no-op), but M0's COV_DIR lives one level under
+# $(OUT) (out/m0/) without $(OUT) itself moving there, so it needs its own
+# mkdir. 见 doc/fw-feedback.md FB-30.
 compile:
-	@mkdir -p $(OUT)
+	@mkdir -p $(OUT) $(if $(filter 1,$(COV)),$(dir $(COV_DIR)))
 	$(VCS) $(VCS_FLAGS_2018) $(if $(filter 1,$(COV)),$(CM)) $(CFG_DEFINE) $(FLISTS) \
 	  -top $(TOP) -o $(OUT)/simv -l $(OUT)/comp.log
 
@@ -105,8 +118,12 @@ smoke: run
 regress:
 	@python3 ../scripts/regress.py $(if $(filter 1,$(COV)),COV=1)
 
+# BUG-0037: -dir now $(COV_DIR), not a hardcoded $(OUT)/cov.vdb, so a query
+# for a given TEST/OUT resolves to the SAME db that `make run` for that
+# TEST actually wrote into (see the TEST=upstream_sanity/cfgA-D overrides
+# above). 见 doc/fw-feedback.md FB-30.
 cov:
-	urg -full64 -dir $(OUT)/cov.vdb -report $(OUT)/urgReport
+	urg -full64 -dir $(COV_DIR) -report $(OUT)/urgReport
 
 # lint 判定范围 = ../tb/（本仓库交付物；vendor 与 UVM 库告警不计入）。
 # 复用 VCS_FLAGS_2018（含 -assert svaext，vendor 侧 elaboration system task
