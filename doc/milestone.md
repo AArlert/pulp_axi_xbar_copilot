@@ -2,10 +2,9 @@
 
 版本号 0.M.P，M 即里程碑号。出口条件由 `make check MILESTONE=<n>` 机器核验（全场景 ✅ · regress 摘要入证据 · bugs 终态或未到期 ACCEPTED · **KILL 覆盖**）加 rev 签核记录 `doc/evidence/v0.M.*/signoff-M<n>.md`，二者缺一不可。
 
-> **KILL 覆盖（不变量 5）自 M3 起生效。** M0/M1/M2 在旧 rubric 下已合法签核，
-> 按「冻结记录不回改」裁决**不回填** KILL 行，故其条件 4 恒红——已知记账缺口，
-> 非实质缺口。M2 的击杀自证取证位置：`doc/evidence/v0.2.5/signoff-M2.md`
-> rubric #5（BUG-0027 缺陷放回，见 336 条红后复原）。裁决记于 log [0.3.6]。
+> **KILL 覆盖（不变量 5）自 M3 起生效。** 
+> - M0/M1/M2 在旧 rubric 下已合法签核，按「冻结记录不回改」裁决**不回填** KILL 行，故其条件 4 恒红——已知记账缺口，非实质缺口。
+> - M2 的击杀自证取证位置：`doc/evidence/v0.2.5/signoff-M2.md` rubric #5（BUG-0027 缺陷放回，见 336 条红后复原）。裁决记于 log [0.3.6]。
 
 ## M0 — 基建 + sanity + spec v0 ✅
 
