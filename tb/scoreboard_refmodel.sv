@@ -23,6 +23,44 @@
 // invariant), so those branches are simply never hit; M2/M3 activate them
 // (per the design prompt's own note in scoreboard_refmodel.md §7).
 
+// ---------------------------------------------------------------------------
+// Transaction flow — one write burst, driver → scoreboard verdict.
+// (Reads are the same shape; for reads AR-accept == accept, so req_accept_ap
+// and req_ap coincide and the two request-side handlers below fire together.)
+//
+//   seq_lib.sv seq  ── axi_seq_item(is_write=1) ──▶ slvport_sequencer
+//                                                        │
+//                                     slvport_driver.drive_write (slvport_agent.sv)
+//                                       drives AW / W-burst onto the DUT slave port
+//                                                        │
+//                    ┌───────────── slvport_monitor observes the slave port ──────────┐
+//                    │                                                                 │
+//        at AW handshake accept                                        at W-last (whole W burst seen)
+//        req_accept_ap ─▶ write_slv_req_accept                         req_ap ─▶ write_slv_req
+//          · or_open_q open-record + cg_stall class (§5.2.1/.2/.4)       · decode target master port at the
+//          · cg_tx_limit in-flight sample (§2.1/§5.4.1)                    live table version (§3.1/§3.2/§3.4)
+//          · worder_pend registration for writes (§5.5.1)                · push pending_by_id keyed by the
+//        [BUG-0018: this stream exists so §5.2 / worder /                  EXPECTED mst-side prefixed id (§5.1.1)
+//         tx_limit anchor at the real AW-accept instant, not             · decode-miss → resp_expect + err_order_q
+//         the late w_last that req_ap carries for writes]                  only (err_slv DECERR path, §4)
+//                    │                                                                 │
+//                    │                          crossbar routes the request           │
+//                    ▼                                                                 │
+//        mstport_monitor observes the DESTINATION master port                          │
+//        req_ap ─▶ write_mst_req                                                        │
+//          · pop pending_by_id (FIFO) → SB_ROUTE: right master port, right              │
+//            prefixed id? a lookup miss = misroute / prefix-formula break (§5.1.1)      │
+//          · SB_WORDER: each source's W bursts complete in that source's AW order (§5.5.1)
+//                                                                                       │
+//        mstport_responder answers B ──▶ slvport_monitor observes B on the source port  │
+//        resp_ap ─▶ write_resp  (the five-in-one response verdict) ◀────────────────────┘
+//          · SB_RESP_ROUTE: B/R came back to the true source slave port (§5.1.2/§5.1.3)
+//          · SB_OR_REORDER: same-bucket completion order not reordered (§5.2.3, BUG-0013/0027)
+//          · SB_DECERR_ORDER: same-full-id OKAY/DECERR complete in accept order (§5.2.6-2.a)
+//          · decerr resp-code / beat-count / ERR_RDATA (§4.3/§4.4/§4.5, ERR_RDATA from pinned spec §4.4)
+//          · atop B+R pairing (§6.3) — one owed pair retired per atomic load
+// ---------------------------------------------------------------------------
+
 `uvm_analysis_imp_decl(_slv_req)
 `uvm_analysis_imp_decl(_slv_req_accept)
 `uvm_analysis_imp_decl(_mst_req)

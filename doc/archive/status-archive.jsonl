@@ -1,3 +1,4 @@
+{"date": "2026-07-30", "version": "0.3.16", "summary": "五张 M3 执行卡收官：M3-CF02/03/04+AT02 转绿，cg_cfg_point 落地，KILL-0002 注伤自证；新发 BUG-0034（AT02 多拍 R 交织，DUT/TB 未决，已合法绕过不阻塞）"}
 {"date": "2026-07-30", "version": "0.3.15", "summary": "落地 M3 多配置构建机制（TEST 名选点+独立构建产物+自报配置+基线不变，tb_top.md C5.1-C5.6）+ 首个消费场景 M3-CF01（cfgA 1x8 NO_LATENCY）转绿"}
 {"date": "2026-07-29", "version": "0.3.14", "summary": "closer 独立复推 cp_stall_state 几何论证（与 fixer 结论一致）、填 fix_commit=7a1c912，BUG-0018 转 CLOSED"}
 {"date": "2026-07-29", "version": "0.3.13", "summary": "卡③落地 BUG-0018 修复：给 scoreboard 增 AW/AR 接受时刻事件流，M2-OR01/WO01 转态覆盖率转绿；发现 REV-011 §3.3 cp_stall_state 判据几何上不可达，留待 closer 复核"}

@@ -2,6 +2,60 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.2] 2026-07-30 落地 code-suggestion.md 三条零风险重构 + doc/uvm.md 验证环境入门读物
+
+**Done**
+- **DV 卡（L1/opus，fresh 实例，分 Part A/B 两段）**：
+  - **Part A 重构**（`doc/code-suggestion.md` 里明确标注"纯激励/纯编排/
+    纯注释、不碰判决"的三条）：`tb/seq_lib.sv` 新增 `fill_wr_payload()`
+    helper（消 17 处重复的 payload 填充惯用法）+ `fanout_per_slv#(SEQ_T)`
+    静态类（消 13 个 vseq 的"每 slave 端口扇出"骨架重复，另有 9 处因带
+    额外参数/两条 seq 而按红线原样保留、未强行归并）；
+    `tb/scoreboard_refmodel.sv` 顶部新增事务流转 ASCII 注释（纯注释，
+    diff 逐行核对确认零逻辑改动）
+  - **Part A 验证**：全回归 `make regress` 22/22 PASS；点名的全部 bug
+    守卫数字（BUG-0023 的 w_collide_q/kept_now=192/192、
+    r_collide_q/kept_now=264/264，BUG-0024 的 aw/ar_stack_diff_now=24/24，
+    BUG-0027 的 stall violations=0，BUG-0031 的 c_sib_diff/
+    c_bug31_livev1 各 1match/端口，BUG-0034 的 at02 四路 checker 归零）
+    重构前后逐位比对一致，无一处需回退
+  - **Part B 文档**：新增 `doc/uvm.md`（仿 `doc/axi.md` 逐层递进风格，
+    §0 UVM 分层速览 → §1 组件地图 → §2 跟着代码走一遍（一笔写事务 5 站
+    到具体文件行号）→ §3 SVA+scoreboard 并存动机 → §4 常见误解 → §5
+    术语表 → §6 延伸阅读）；新增 `doc/attach/gen_uvm_env_svg.py`（纯
+    Python 标准库，仿 `gen_dataflow_svg.py` 约定）生成
+    `doc/attach/uvm_env_overview.svg`；`README.md` 新增"验证环境概览"节
+    + 一条入口项目符号，不改动任何既有内容
+  - **orch 独立复核**（不采信卡内自报数字）：diff 逐行确认
+    scoreboard 改动 100% 为注释/空行；确认 `build_or03_burst` 的 k%2
+    AxLEN 交替逻辑原样保留；亲跑 `make regress` 复现 22/22 PASS；SVG 用
+    `xml.etree.ElementTree` 解析确认合法；抽查 `doc/uvm.md` 里 11 处
+    文件:行引用（`seq_lib.sv:31/40`、`slvport_agent.sv:70/300/315`、
+    `scoreboard_refmodel.sv:27/421/587/702/841`、
+    `mstport_agent.sv:176`）逐条与当前代码内容核对，全部准确；
+    `make check`/`make selftest`（61 tests）通过
+
+**Not done**
+- BUG-0037（COV=1 覆盖率数据库多设计合并异常）/BUG-0038（addr_decode/
+  axi_demux wrapper 与 spec §0#4 命名范围疑点）均未处置，留待下一步分诊
+- `axi_atop_filter` FSM 缺口（ATOP 编码多样性不足，M4 当前最大单一缺口）
+  是否派场景卡补——未决策
+- `doc/code-suggestion.md` 里标记"需 rev"或"仅登记"的条目（SVA 字段
+  拷贝块收敛、scoreboard 物理拆分、key 打包函数注释、`m_probe` 耦合）
+  均未触碰，按原计划留给后续
+
+**Next**
+- 分诊 BUG-0037/BUG-0038 处置顺序
+- 决定是否派 ATOP 编码多样性场景卡填 FSM 缺口
+- 待用户下一步指示
+
+**How verified**
+- `make check` 绿；`make selftest`（61 tests）通过
+- `make regress` 22/22 PASS（orch 亲跑复现，非采信卡内自报）
+- scoreboard 改动经 `git diff | grep` 逐行确认零逻辑行变化
+- `doc/uvm.md` 文件:行引用抽查 11 处，与当前代码逐条核对一致
+- SVG 用 Python 标准库 XML parser 解析确认合法
+
 ## [0.4.1] 2026-07-30 M4 六类覆盖率基线测出，登记 BUG-0037/BUG-0038；并行完成 UVM 框架人工评审
 
 **Done**
@@ -101,52 +155,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 **How verified**
 - `make check`（非里程碑）docs-check passed，chain audit 既有缺口数字不变
 - `make selftest`（61 tests）通过
-
-## [0.3.21] 2026-07-30 closer 独立复验+收口 BUG-0036，M3 里程碑完整签核成立
-
-**Done**
-- **closer 卡（fresh 独立实例，非修复卡，DV/sonnet/L1）**：独立复验 0.3.20
-  BUG-0036 修复（`4d712f9`：`sim/regress/regress.list` 补入
-  `m3_cfg02_reconfig_test 1`）——亲跑 `make run TEST=m3_cfg02_reconfig_test
-  SEED=1`（UVM_ERROR=0、SB 全 mismatch=0、2143 assertions 0 failures、
-  `c_bug31_livev1_aw/ar` 六实例各 1 match）+ `make regress`（22/22 PASS）+
-  证据链核对（`doc/evidence/v0.3.20/M3-CFG02.log` 首行即重放命令），未采信
-  修复卡 `## rerun` 段的转述数字
-- **BUG-0036 收口**：`make evidence BUG=BUG-0036 CMD='make regress'
-  EXPECT='22/22'` 机械生成 `doc/evidence/v0.3.20/BUG-0036.log`，
-  `doc/bugs.md` 行 status 转 `CLOSED`、`fix_commit=4d712f9`；
-  `doc/bugs/BUG-0036.md` 追加「closer 收口」子节记录独立复验过程
-- **KILL-0003 转录准确性核对**（C2）：对照 `doc/bugs/BUG-0034.md`
-  `## rerun` 段两次独立红→绿注伤自证，逐字核对 `doc/bugs.md` KILL-0003
-  行的四路数字/样本报文/证据路径，确认转录无误；未重新做 KILL 实验
-- **`doc/evidence/v0.3.20/signoff-M3.md` 追加 §八「C1/C2 兑现记录」**
-  （一至七节 rev 原文未改动，本卡只追加）：按 rev 终裁段预授权的机械路径
-  确认 C1（BUG-0036 CLOSED）与 C2（KILL-0003 入台账）均已兑现，未重开任何
-  功能验证、未新增 spot-check 判定
-- **orch 独立复核**（本次收尾，不同于 closer）：亲跑 `make check
-  MILESTONE=3`（4 条机器条件全 `[PASS]`：全 M3 场景 ✅、regress 摘要登记、
-  bug 终态/证据、KILL 覆盖率 ≥1 条 M3 标签）+ `make selftest`（61 tests
-  OK）+ diff 核对 closer 改动范围（`doc/bugs.md`/`doc/bugs/BUG-0036.md`/
-  `doc/evidence/v0.3.20/signoff-M3.md` 仅追加、`doc/evidence/v0.3.20/
-  BUG-0036.log` 新增），未采信 closer 的自我报告
-- **M3 里程碑完整签核成立**：五张 M3 执行卡（CF01-04+AT02）+ 4 个配置点 +
-  DE01/DE02/OR04/OR05/TL01/CFG02 共 11 条场景全绿 + BUG-0010/0011/0012/
-  0013/0016/0018/0021/0023/0024/0025/0028/0031/0032/0033/0034/0036 全部
-  终态或已接受 + KILL-0001/0002/0003 三条注伤自证 + rev 签核记录齐备
-
-**Not done**
-- M4（六类功能覆盖率收敛 ≥90%）尚未启动，待用户确认后再排期；BUG-0018
-  cross bin 待 M4 重采；lint baseline 285+ 条装饰性告警持续差分中
-- chain audit 既有记账缺口（M0-01 缺 spec_ref、8 处父节点锚定、10 个未
-  引用 spec 子节、22/22 evidence 缺 spec_ref header）本卡未触碰、未变化
-
-**Next**
-- 若用户确认推进：scope M4（六类覆盖率收敛）为下一里程碑；否则等待用户
-  下一步指示
-
-**How verified**
-- `make check MILESTONE=3` 全绿（4 条机器条件 PASS，signoff 文件存在）
-- `make selftest`（61 tests）通过
-- closer 与 orch 两次独立复跑 `make run TEST=m3_cfg02_reconfig_test
-  SEED=1` / `make regress`，数字逐位吻合，非采信
 

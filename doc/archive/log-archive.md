@@ -1,4 +1,52 @@
 # Work log archive
+## [0.3.21] 2026-07-30 closer 独立复验+收口 BUG-0036，M3 里程碑完整签核成立
+
+**Done**
+- **closer 卡（fresh 独立实例，非修复卡，DV/sonnet/L1）**：独立复验 0.3.20
+  BUG-0036 修复（`4d712f9`：`sim/regress/regress.list` 补入
+  `m3_cfg02_reconfig_test 1`）——亲跑 `make run TEST=m3_cfg02_reconfig_test
+  SEED=1`（UVM_ERROR=0、SB 全 mismatch=0、2143 assertions 0 failures、
+  `c_bug31_livev1_aw/ar` 六实例各 1 match）+ `make regress`（22/22 PASS）+
+  证据链核对（`doc/evidence/v0.3.20/M3-CFG02.log` 首行即重放命令），未采信
+  修复卡 `## rerun` 段的转述数字
+- **BUG-0036 收口**：`make evidence BUG=BUG-0036 CMD='make regress'
+  EXPECT='22/22'` 机械生成 `doc/evidence/v0.3.20/BUG-0036.log`，
+  `doc/bugs.md` 行 status 转 `CLOSED`、`fix_commit=4d712f9`；
+  `doc/bugs/BUG-0036.md` 追加「closer 收口」子节记录独立复验过程
+- **KILL-0003 转录准确性核对**（C2）：对照 `doc/bugs/BUG-0034.md`
+  `## rerun` 段两次独立红→绿注伤自证，逐字核对 `doc/bugs.md` KILL-0003
+  行的四路数字/样本报文/证据路径，确认转录无误；未重新做 KILL 实验
+- **`doc/evidence/v0.3.20/signoff-M3.md` 追加 §八「C1/C2 兑现记录」**
+  （一至七节 rev 原文未改动，本卡只追加）：按 rev 终裁段预授权的机械路径
+  确认 C1（BUG-0036 CLOSED）与 C2（KILL-0003 入台账）均已兑现，未重开任何
+  功能验证、未新增 spot-check 判定
+- **orch 独立复核**（本次收尾，不同于 closer）：亲跑 `make check
+  MILESTONE=3`（4 条机器条件全 `[PASS]`：全 M3 场景 ✅、regress 摘要登记、
+  bug 终态/证据、KILL 覆盖率 ≥1 条 M3 标签）+ `make selftest`（61 tests
+  OK）+ diff 核对 closer 改动范围（`doc/bugs.md`/`doc/bugs/BUG-0036.md`/
+  `doc/evidence/v0.3.20/signoff-M3.md` 仅追加、`doc/evidence/v0.3.20/
+  BUG-0036.log` 新增），未采信 closer 的自我报告
+- **M3 里程碑完整签核成立**：五张 M3 执行卡（CF01-04+AT02）+ 4 个配置点 +
+  DE01/DE02/OR04/OR05/TL01/CFG02 共 11 条场景全绿 + BUG-0010/0011/0012/
+  0013/0016/0018/0021/0023/0024/0025/0028/0031/0032/0033/0034/0036 全部
+  终态或已接受 + KILL-0001/0002/0003 三条注伤自证 + rev 签核记录齐备
+
+**Not done**
+- M4（六类功能覆盖率收敛 ≥90%）尚未启动，待用户确认后再排期；BUG-0018
+  cross bin 待 M4 重采；lint baseline 285+ 条装饰性告警持续差分中
+- chain audit 既有记账缺口（M0-01 缺 spec_ref、8 处父节点锚定、10 个未
+  引用 spec 子节、22/22 evidence 缺 spec_ref header）本卡未触碰、未变化
+
+**Next**
+- 若用户确认推进：scope M4（六类覆盖率收敛）为下一里程碑；否则等待用户
+  下一步指示
+
+**How verified**
+- `make check MILESTONE=3` 全绿（4 条机器条件 PASS，signoff 文件存在）
+- `make selftest`（61 tests）通过
+- closer 与 orch 两次独立复跑 `make run TEST=m3_cfg02_reconfig_test
+  SEED=1` / `make regress`，数字逐位吻合，非采信
+
 ## [0.3.20] 2026-07-30 落地 M3-TL01：BUG-0010 跨桶定向回归守卫，M3 testplan 全绿
 
 **Done**

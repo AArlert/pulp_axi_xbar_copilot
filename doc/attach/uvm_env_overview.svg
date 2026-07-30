@@ -1,0 +1,111 @@
+<svg viewBox="0 0 1020 700" xmlns="http://www.w3.org/2000/svg" font-family="'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrowReq" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="10" refX="10" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowResp" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="10" refX="10" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#c2410c"/>
+    </marker>
+    <marker id="arrowAna" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="10" refX="10" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#0d9488"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="1020" height="700" rx="14" fill="#f5f6fa"/>
+  <text x="510" y="34" text-anchor="middle" font-size="19" font-weight="700" fill="#1e293b">验证环境（UVM TB）组件图 —— 一笔写事务的判决数据流</text>
+  <text x="510" y="56" text-anchor="middle" font-size="12" fill="#475569">外部 AXI 由 TB 扮演：slave 侧是主动 driver，master 侧是反应式 responder（TB 在此当被动 slave）。monitor 只观测、不驱动。</text>
+  <rect x="338" y="105" width="251" height="201" rx="10" fill="#f7f6ff" stroke="#6d28d9" stroke-width="1.2"/>
+  <text x="344" y="99" font-size="10.5" font-weight="700" fill="#4338ca">slvport_agent ×NoSlvPorts</text>
+  <rect x="664" y="105" width="344" height="201" rx="10" fill="#f7fbff" stroke="#6d28d9" stroke-width="1.2"/>
+  <text x="670" y="99" font-size="10.5" font-weight="700" fill="#4338ca">mstport_agent ×NoMstPorts</text>
+  <rect x="24" y="117" width="156" height="66" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.4"/>
+  <text x="102" y="142" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1e293b">seq_lib.sv</text>
+  <text x="102" y="159" text-anchor="middle" font-size="8.6" fill="#64748b">seq / vseq</text>
+  <text x="102" y="172" text-anchor="middle" font-size="8.6" fill="#64748b">fanout_per_slv#(T)</text>
+  <rect x="202" y="117" width="126" height="66" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.4"/>
+  <text x="265" y="142" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1e293b">slvport_sequencer</text>
+  <text x="265" y="159" text-anchor="middle" font-size="8.6" fill="#64748b">由 xbar_vseqr 聚合</text>
+  <text x="265" y="172" text-anchor="middle" font-size="8.6" fill="#64748b">slv_sqr[i]</text>
+  <rect x="350" y="117" width="132" height="66" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.4"/>
+  <text x="416" y="142" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1e293b">slvport_driver</text>
+  <text x="416" y="159" text-anchor="middle" font-size="8.6" fill="#64748b">drive_write / _read</text>
+  <text x="416" y="172" text-anchor="middle" font-size="8.6" fill="#64748b">drive_pair / _burst</text>
+  <rect x="520" y="117" width="152" height="66" rx="8" fill="#eef2ff" stroke="#4338ca" stroke-width="2.0"/>
+  <text x="596" y="142" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1e293b">DUT: axi_xbar</text>
+  <text x="596" y="159" text-anchor="middle" font-size="8.6" fill="#64748b">被测黑盒</text>
+  <text x="596" y="172" text-anchor="middle" font-size="8.6" fill="#64748b">slave 端口 ↔ master 端口</text>
+  <rect x="828" y="117" width="168" height="66" rx="8" fill="#ffffff" stroke="#334155" stroke-width="1.4"/>
+  <text x="912" y="142" text-anchor="middle" font-size="11.5" font-weight="700" fill="#1e293b">mstport_responder</text>
+  <text x="912" y="159" text-anchor="middle" font-size="8.6" fill="#64748b">反应式 AXI slave</text>
+  <text x="912" y="172" text-anchor="middle" font-size="8.6" fill="#64748b">b/r_respond_loop</text>
+  <line x1="183" y1="150" x2="199" y2="150" stroke="#2563eb" stroke-width="1.9" marker-end="url(#arrowReq)"/>
+  <line x1="331" y1="150" x2="347" y2="150" stroke="#2563eb" stroke-width="1.9" marker-end="url(#arrowReq)"/>
+  <line x1="485" y1="142" x2="517" y2="142" stroke="#2563eb" stroke-width="1.9" marker-end="url(#arrowReq)"/>
+  <text x="501" y="136" text-anchor="middle" font-size="8.5" fill="#2563eb">AW/W</text>
+  <line x1="675" y1="142" x2="825" y2="142" stroke="#2563eb" stroke-width="1.9" marker-end="url(#arrowReq)"/>
+  <line x1="825" y1="162" x2="675" y2="162" stroke="#c2410c" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#arrowResp)"/>
+  <line x1="517" y1="162" x2="485" y2="162" stroke="#c2410c" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#arrowResp)"/>
+  <text x="750" y="174" text-anchor="middle" font-size="8.5" fill="#c2410c">B</text>
+  <rect x="425" y="244" width="152" height="52" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.6"/>
+  <text x="501" y="264" text-anchor="middle" font-size="11" font-weight="700" fill="#0f766e">slvport_monitor</text>
+  <text x="501" y="279" text-anchor="middle" font-size="8.2" fill="#64748b">req_accept_ap · req_ap · resp_ap</text>
+  <rect x="676" y="244" width="148" height="52" rx="8" fill="#ffffff" stroke="#0f766e" stroke-width="1.6"/>
+  <text x="750" y="264" text-anchor="middle" font-size="11" font-weight="700" fill="#0f766e">mstport_monitor</text>
+  <text x="750" y="279" text-anchor="middle" font-size="8.2" fill="#64748b">req_ap（请求侧观测）</text>
+  <line x1="501" y1="183" x2="501" y2="241" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="3,3" marker-end="url(#arrowAna)"/>
+  <text x="506" y="213" font-size="8" fill="#0d9488">观测 slave 端口</text>
+  <line x1="750" y1="183" x2="750" y2="241" stroke="#0d9488" stroke-width="1.6" stroke-dasharray="3,3" marker-end="url(#arrowAna)"/>
+  <text x="755" y="213" font-size="8" fill="#0d9488">观测 master 端口</text>
+  <rect x="24" y="396" width="700" height="176" rx="10" fill="#fffbeb" stroke="#b45309" stroke-width="1.8"/>
+  <text x="34" y="414" font-size="12.5" font-weight="700" fill="#92400e">scoreboard_refmodel.sv —— spec 推导的参考模型 + 五合一判决</text>
+  <rect x="38" y="430" width="158" height="96" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+  <text x="117" y="448" text-anchor="middle" font-size="10" font-weight="700" fill="#0f766e">write_slv_req_accept</text>
+  <text x="117" y="464" text-anchor="middle" font-size="8.4" fill="#64748b">AW/AR-accept 流</text>
+  <text x="117" y="482" text-anchor="middle" font-size="8.2" fill="#475569">or_open_q 开单 · cg_stall</text>
+  <text x="117" y="498" text-anchor="middle" font-size="8.2" fill="#475569">cg_tx_limit · worder_pend</text>
+  <text x="117" y="516" text-anchor="middle" font-size="7.6" fill="#94a3b8">判据锚回 doc/spec.md</text>
+  <rect x="208" y="430" width="158" height="96" rx="7" fill="#ffffff" stroke="#0f766e" stroke-width="1.5"/>
+  <text x="287" y="448" text-anchor="middle" font-size="10" font-weight="700" fill="#0f766e">write_slv_req</text>
+  <text x="287" y="464" text-anchor="middle" font-size="8.4" fill="#64748b">w_last 流（写）</text>
+  <text x="287" y="482" text-anchor="middle" font-size="8.2" fill="#475569">查活表定目标 master 端口</text>
+  <text x="287" y="498" text-anchor="middle" font-size="8.2" fill="#475569">登记 pending_by_id 路由期望</text>
+  <text x="287" y="516" text-anchor="middle" font-size="7.6" fill="#94a3b8">判据锚回 doc/spec.md</text>
+  <rect x="378" y="430" width="158" height="96" rx="7" fill="#ffffff" stroke="#b45309" stroke-width="1.5"/>
+  <text x="457" y="448" text-anchor="middle" font-size="10" font-weight="700" fill="#b45309">write_mst_req</text>
+  <text x="457" y="464" text-anchor="middle" font-size="8.4" fill="#64748b">master 端口请求侧</text>
+  <text x="457" y="482" text-anchor="middle" font-size="8.2" fill="#475569">SB_ROUTE：端口/前缀 ID 对不对</text>
+  <text x="457" y="498" text-anchor="middle" font-size="8.2" fill="#475569">SB_WORDER：同源 W 保序</text>
+  <text x="457" y="516" text-anchor="middle" font-size="7.6" fill="#94a3b8">判据锚回 doc/spec.md</text>
+  <rect x="548" y="430" width="158" height="96" rx="7" fill="#ffffff" stroke="#c2410c" stroke-width="1.5"/>
+  <text x="627" y="448" text-anchor="middle" font-size="10" font-weight="700" fill="#c2410c">write_resp</text>
+  <text x="627" y="464" text-anchor="middle" font-size="8.4" fill="#64748b">B/R 响应流</text>
+  <text x="627" y="482" text-anchor="middle" font-size="8.2" fill="#475569">SB_RESP_ROUTE · SB_OR_REORDER</text>
+  <text x="627" y="498" text-anchor="middle" font-size="8.2" fill="#475569">SB_DECERR_ORDER · atop 配对</text>
+  <text x="627" y="516" text-anchor="middle" font-size="7.6" fill="#94a3b8">判据锚回 doc/spec.md</text>
+  <polyline points="449,296 449,310 117,310 117,427" fill="none" stroke="#0d9488" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowAna)"/>
+  <polyline points="493,296 493,310 287,310 287,427" fill="none" stroke="#0d9488" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowAna)"/>
+  <polyline points="537,296 537,310 627,310 627,427" fill="none" stroke="#0d9488" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowAna)"/>
+  <text x="427" y="322" font-size="8" fill="#0d9488">req_accept_ap / req_ap / resp_ap</text>
+  <polyline points="750,296 750,320 457,320 457,427" fill="none" stroke="#0d9488" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowAna)"/>
+  <text x="756" y="316" font-size="8" fill="#0d9488">req_ap</text>
+  <rect x="748" y="396" width="118" height="176" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="1.6"/>
+  <text x="807" y="416" text-anchor="middle" font-size="10.5" font-weight="700" fill="#065f46">functional_</text>
+  <text x="807" y="430" text-anchor="middle" font-size="10.5" font-weight="700" fill="#065f46">coverage.sv</text>
+  <text x="807" y="454" text-anchor="middle" font-size="8.4" fill="#047857">独立 covergroup 集</text>
+  <text x="807" y="470" text-anchor="middle" font-size="8.0" fill="#047857">由 scoreboard 采样喂入</text>
+  <text x="807" y="492" text-anchor="middle" font-size="7.8" fill="#059669">cg_stall / cg_tx_limit</text>
+  <text x="807" y="506" text-anchor="middle" font-size="7.8" fill="#059669">cg_w_order …</text>
+  <line x1="726" y1="484" x2="745" y2="484" stroke="#0d9488" stroke-width="1.6" marker-end="url(#arrowAna)"/>
+  <rect x="878" y="396" width="118" height="176" rx="10" fill="#f5f3ff" stroke="#6d28d9" stroke-width="1.6"/>
+  <text x="937" y="416" text-anchor="middle" font-size="10.5" font-weight="700" fill="#5b21b6">tb/sva/*</text>
+  <text x="937" y="438" text-anchor="middle" font-size="8.4" fill="#6d28d9">协议 / 时序 SVA</text>
+  <text x="937" y="454" text-anchor="middle" font-size="8.0" fill="#6d28d9">generate 直接例化</text>
+  <text x="937" y="468" text-anchor="middle" font-size="7.6" fill="#7c3aed">（非 bind，见头注）</text>
+  <text x="937" y="490" text-anchor="middle" font-size="7.8" fill="#7c3aed">axi_chan / route /</text>
+  <text x="937" y="504" text-anchor="middle" font-size="7.8" fill="#7c3aed">stall / worder …</text>
+  <line x1="30" y1="602" x2="78" y2="602" stroke="#2563eb" stroke-width="2" marker-end="url(#arrowReq)"/>
+  <text x="88" y="606" font-size="11" fill="#334155">请求正向：seq → sequencer → driver → DUT slave 端口 → DUT master 端口 → responder</text>
+  <line x1="30" y1="624" x2="78" y2="624" stroke="#c2410c" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrowResp)"/>
+  <text x="88" y="628" font-size="11" fill="#334155">响应回程：responder 回 B/R → 沿原路经 DUT → 被 slvport_monitor 在源 slave 端口观测</text>
+  <line x1="30" y1="646" x2="78" y2="646" stroke="#0d9488" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrowAna)"/>
+  <text x="88" y="650" font-size="11" fill="#334155">analysis port（TB 观测流）：monitor 把观测到的事务经 analysis port 送进 scoreboard 对应 handler 判决</text>
+</svg>

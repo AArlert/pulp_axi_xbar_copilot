@@ -1,3 +1,4 @@
+{"date": "2026-07-30", "version": "0.4.2", "summary": "落地 code-suggestion.md 三条零风险重构（payload helper/vseq 扇出 helper/scoreboard 流转注释），全回归 22/22+全部 bug 守卫数字逐位复现；新增 doc/uvm.md（仿 axi.md 风格的验证环境入门读物）+ SVG 图 + README 验证环境概览节"}
 {"date": "2026-07-30", "version": "0.4.1", "summary": "M4 六类覆盖率基线测出（详见 log.md），登记 BUG-0037（COV 合并异常）+ BUG-0038（wrapper 模块 spec 范围疑点）；并行完成 UVM 框架人工评审，产出 doc/code-suggestion.md"}
 {"date": "2026-07-30", "version": "0.4.0", "summary": "M3→M4 里程碑转段：milestone.md M3 标记转 ✅、M4 出口条件措辞按 REV-011 §3.3 订正为与 spec §0 #4 一致的 line+cond+fsm+tgl+branch+assert（不含 covergroup）；发现本地 git tag 命名与 upstream 框架发布 tag 撞名（v0.4.0 起），暂缓打 tag，待用户裁决"}
 {"date": "2026-07-30", "version": "0.3.21", "summary": "closer 独立复验+收口 BUG-0036（regress.list 缺 M3-CFG02，转 22/22，fix_commit=4d712f9），KILL-0003 转录准确性核对通过；M3 签核 C1/C2 均按 rev 预授权机械路径兑现，signoff-M3.md 追加 §八，make check MILESTONE=3 四条机器条件全 PASS——M3 里程碑完整签核成立"}
@@ -5,4 +6,3 @@
 {"date": "2026-07-30", "version": "0.3.19", "summary": "closer 独立复验 BUG-0034 修复+KILL自证，转 CLOSED（fix_commit=d7f5011）；BUG-0034 全链路（诊断→REV-015仲裁→修复→收口）终结"}
 {"date": "2026-07-30", "version": "0.3.18", "summary": "BUG-0034 TB 修复落地：R burst 重建改按 r_id 逐拍分流，恢复 M3-AT02 多拍构造复跑转绿，KILL 自证红→绿完整；等待独立 closer 复验+收 evidence"}
 {"date": "2026-07-30", "version": "0.3.17", "summary": "落地 5 个 M3 covergroup（真接现有 SVA 事实源，不重复判断）；BUG-0034 三工具诊断→rev(REV-015)否决 DUT_BUG candidate、改判 TB_BUG；BUG-0035 TOOL_ENV WONTFIX"}
-{"date": "2026-07-30", "version": "0.3.16", "summary": "五张 M3 执行卡收官：M3-CF02/03/04+AT02 转绿，cg_cfg_point 落地，KILL-0002 注伤自证；新发 BUG-0034（AT02 多拍 R 交织，DUT/TB 未决，已合法绕过不阻塞）"}

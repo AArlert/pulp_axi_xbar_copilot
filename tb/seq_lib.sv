@@ -15,6 +15,28 @@
 // crossbar's cross-port arbitration, not just serial single-port
 // transactions).
 
+// ----------------------------------------------------------------------------
+// Shared stimulus helpers (doc/code-suggestion.md 2.1 / 2.2). Both are pure
+// stimulus/encapsulation — no judgement path is touched.
+//
+// fill_wr_payload: writes a write item's payload for a `len`+1-beat INCR burst,
+// reproducing verbatim the per-beat {$urandom(),$urandom()} data / all-ones
+// strobe pattern that was hand-inlined at ~17 call sites. Extracted with the
+// SAME two $urandom() calls per beat in the SAME order/count, so the random-
+// sequence consumption at every call site is byte-identical — burst scenarios
+// (e.g. BUG-0023's AxLEN phase sweep) rely on that order being unchanged. The
+// len ← item.len (or the site's own loop bound) stays in the caller, so any
+// per-item length logic (e.g. build_or03_burst's k%2 AxLEN alternation) is
+// untouched.
+function automatic void fill_wr_payload(axi_seq_item item, input int unsigned len);
+  item.wdata.delete();
+  item.wstrb.delete();
+  for (int unsigned b = 0; b <= len; b++) begin
+    item.wdata.push_back({$urandom(), $urandom()});
+    item.wstrb.push_back('1);
+  end
+endfunction
+
 class slvport_basic_seq extends uvm_sequence #(axi_seq_item);
   `uvm_object_utils(slvport_basic_seq)
 
@@ -44,14 +66,7 @@ class slvport_basic_seq extends uvm_sequence #(axi_seq_item);
       witem.addr     = waddr;
       witem.len      = axi_pkg::len_t'($urandom_range(0, 7));
       witem.id       = xbar_types_pkg::id_slv_t'($urandom_range(0, 31));
-      witem.wdata.delete();
-      witem.wstrb.delete();
-      for (int unsigned b = 0; b <= witem.len; b++) begin
-        xbar_types_pkg::data_t d;
-        d = {$urandom(), $urandom()};
-        witem.wdata.push_back(d);
-        witem.wstrb.push_back('1);
-      end
+      fill_wr_payload(witem, witem.len);
       finish_item(witem);
 
       ritem = axi_seq_item::type_id::create(
@@ -66,6 +81,35 @@ class slvport_basic_seq extends uvm_sequence #(axi_seq_item);
   endtask
 endclass
 
+// fanout_per_slv: the "fork one per-slave-port child sequence, wait for all"
+// skeleton that was hand-copied across ~20 vseqs (doc/code-suggestion.md 2.2).
+// Parameterized on the child sequence type; sets only the one field every such
+// child shares (slv_port_idx). The fork/join_none/wait-fork order is
+// byte-identical to the inlined form (same i=0..NO_SLV_PORTS-1 spawn order ⇒
+// identical per-thread RNG seeding). vseqs that pass additional per-child
+// config (e.g. tgt_mst, phase_v1, num_iter) or start two sequences per port
+// keep their explicit loop — the helper deliberately does not try to
+// parameterize those, so no child's construction is altered (see delivery
+// report for the skip list). `static task automatic` gives the loop/fork
+// locals per-invocation (and per-forked-process) lifetime, matching the
+// original class-method bodies.
+class fanout_per_slv #(type SEQ_T = slvport_basic_seq);
+  static task automatic run(xbar_vseqr vseqr, string prefix);
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork
+        begin
+          SEQ_T s;
+          s = SEQ_T::type_id::create($sformatf("%s_%0d", prefix, ii));
+          s.slv_port_idx = ii;
+          s.start(vseqr.slv_sqr[ii]);
+        end
+      join_none
+    end
+    wait fork;
+  endtask
+endclass
+
 class m1_01_smoke_vseq extends uvm_sequence #(uvm_sequence_item);
   `uvm_object_utils(m1_01_smoke_vseq)
   `uvm_declare_p_sequencer(xbar_vseqr)
@@ -75,18 +119,7 @@ class m1_01_smoke_vseq extends uvm_sequence #(uvm_sequence_item);
   endfunction
 
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork
-        begin
-          slvport_basic_seq s;
-          s = slvport_basic_seq::type_id::create($sformatf("slv_seq_%0d", ii));
-          s.slv_port_idx = ii;
-          s.start(p_sequencer.slv_sqr[ii]);
-        end
-      join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_basic_seq)::run(p_sequencer, "slv_seq");
   endtask
 endclass
 
@@ -141,14 +174,7 @@ class m1_02_id_prefix_seq extends uvm_sequence #(axi_seq_item);
       witem.addr     = waddr;
       witem.len      = axi_pkg::len_t'($urandom_range(0, 7));
       witem.id       = shared_id;
-      witem.wdata.delete();
-      witem.wstrb.delete();
-      for (int unsigned b = 0; b <= witem.len; b++) begin
-        xbar_types_pkg::data_t d;
-        d = {$urandom(), $urandom()};
-        witem.wdata.push_back(d);
-        witem.wstrb.push_back('1);
-      end
+      fill_wr_payload(witem, witem.len);
       finish_item(witem);
 
       ritem = axi_seq_item::type_id::create(
@@ -172,19 +198,7 @@ class m1_02_id_prefix_vseq extends uvm_sequence #(uvm_sequence_item);
   endfunction
 
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork
-        begin
-          m1_02_id_prefix_seq s;
-          s = m1_02_id_prefix_seq::type_id::create(
-              $sformatf("m1_02_seq_%0d", ii));
-          s.slv_port_idx = ii;
-          s.start(p_sequencer.slv_sqr[ii]);
-        end
-      join_none
-    end
-    wait fork;
+    fanout_per_slv#(m1_02_id_prefix_seq)::run(p_sequencer, "m1_02_seq");
   endtask
 endclass
 
@@ -219,14 +233,7 @@ function automatic axi_pair_item build_or_pair(
   item.addr     = xbar_types_pkg::addr_t'(tgt_a) * xbar_types_pkg::REGION_SIZE
                   + addr_ofs;
   item.len      = axi_pkg::len_t'(3);
-  if (dir_a) begin
-    item.wdata.delete();
-    item.wstrb.delete();
-    for (int unsigned b = 0; b <= item.len; b++) begin
-      item.wdata.push_back({$urandom(), $urandom()});
-      item.wstrb.push_back('1);
-    end
-  end
+  if (dir_a) fill_wr_payload(item, item.len);
 
   item.second_item = axi_seq_item::type_id::create({name, "_b"});
   item.second_item.is_write = dir_b;
@@ -234,14 +241,7 @@ function automatic axi_pair_item build_or_pair(
   item.second_item.addr     = xbar_types_pkg::addr_t'(tgt_b) * xbar_types_pkg::REGION_SIZE
                                + addr_ofs + 32'h0000_4000;
   item.second_item.len      = axi_pkg::len_t'(3);
-  if (dir_b) begin
-    item.second_item.wdata.delete();
-    item.second_item.wstrb.delete();
-    for (int unsigned b = 0; b <= item.second_item.len; b++) begin
-      item.second_item.wdata.push_back({$urandom(), $urandom()});
-      item.second_item.wstrb.push_back('1);
-    end
-  end
+  if (dir_b) fill_wr_payload(item.second_item, item.second_item.len);
   item.gap_cycles = gap_cycles;
   return item;
 endfunction
@@ -286,19 +286,7 @@ class m2_or01_stall_vseq extends uvm_sequence #(uvm_sequence_item);
   endfunction
 
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork
-        begin
-          slvport_or01_stall_seq s;
-          s = slvport_or01_stall_seq::type_id::create(
-              $sformatf("or01_seq_%0d", ii));
-          s.slv_port_idx = ii;
-          s.start(p_sequencer.slv_sqr[ii]);
-        end
-      join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_or01_stall_seq)::run(p_sequencer, "or01_seq");
   endtask
 endclass
 
@@ -352,19 +340,7 @@ class m2_or02_nonstall_vseq extends uvm_sequence #(uvm_sequence_item);
   endfunction
 
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork
-        begin
-          slvport_or02_nonstall_seq s;
-          s = slvport_or02_nonstall_seq::type_id::create(
-              $sformatf("or02_seq_%0d", ii));
-          s.slv_port_idx = ii;
-          s.start(p_sequencer.slv_sqr[ii]);
-        end
-      join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_or02_nonstall_seq)::run(p_sequencer, "or02_seq");
   endtask
 endclass
 
@@ -422,10 +398,7 @@ class slvport_at01_atop_seq extends uvm_sequence #(axi_seq_item);
                       + xbar_types_pkg::addr_t'(k) * 32'h10;
       item.len      = axi_pkg::len_t'(0); // single full-width beat
       item.id       = xbar_types_pkg::id_slv_t'(slv_port_idx * 2 + k);
-      item.wdata.delete();
-      item.wstrb.delete();
-      item.wdata.push_back({$urandom(), $urandom()});
-      item.wstrb.push_back('1);
+      fill_wr_payload(item, item.len);
       finish_item(item);
     end
 
@@ -458,10 +431,7 @@ class slvport_at01_atop_seq extends uvm_sequence #(axi_seq_item);
                                + 32'h0000_0800
                                + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
       p.second_item.len      = axi_pkg::len_t'(0);
-      p.second_item.wdata.delete();
-      p.second_item.wstrb.delete();
-      p.second_item.wdata.push_back({$urandom(), $urandom()});
-      p.second_item.wstrb.push_back('1);
+      fill_wr_payload(p.second_item, p.second_item.len);
       p.gap_cycles = 1;
       start_item(p);
       finish_item(p);
@@ -478,19 +448,7 @@ class m2_at01_atop_vseq extends uvm_sequence #(uvm_sequence_item);
   endfunction
 
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork
-        begin
-          slvport_at01_atop_seq s;
-          s = slvport_at01_atop_seq::type_id::create(
-              $sformatf("at01_seq_%0d", ii));
-          s.slv_port_idx = ii;
-          s.start(p_sequencer.slv_sqr[ii]);
-        end
-      join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_at01_atop_seq)::run(p_sequencer, "at01_seq");
   endtask
 endclass
 
@@ -526,12 +484,7 @@ function automatic axi_pair_item build_wo01_pair(
   item.addr     = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
                   + 32'h0000_0800 + xbar_types_pkg::addr_t'(pair_idx) * 32'h80;
   item.len      = axi_pkg::len_t'(3);
-  item.wdata.delete();
-  item.wstrb.delete();
-  for (int unsigned b = 0; b <= item.len; b++) begin
-    item.wdata.push_back({$urandom(), $urandom()});
-    item.wstrb.push_back('1);
-  end
+  fill_wr_payload(item, item.len);
 
   item.second_item = axi_seq_item::type_id::create({name, "_b"});
   item.second_item.is_write = 1'b1;
@@ -539,12 +492,7 @@ function automatic axi_pair_item build_wo01_pair(
   item.second_item.addr     = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
                               + 32'h0000_0c00 + xbar_types_pkg::addr_t'(pair_idx) * 32'h80;
   item.second_item.len      = axi_pkg::len_t'(3);
-  item.second_item.wdata.delete();
-  item.second_item.wstrb.delete();
-  for (int unsigned b = 0; b <= item.second_item.len; b++) begin
-    item.second_item.wdata.push_back({$urandom(), $urandom()});
-    item.second_item.wstrb.push_back('1);
-  end
+  fill_wr_payload(item.second_item, item.second_item.len);
   item.gap_cycles = gap_cycles;
   return item;
 endfunction
@@ -638,10 +586,7 @@ function automatic axi_burst_item build_txlimit_burst(
     it.addr = xbar_types_pkg::addr_t'(tgt_mst) * xbar_types_pkg::REGION_SIZE
               + addr_base + xbar_types_pkg::addr_t'(k) * 32'h40;
     it.len  = axi_pkg::len_t'(0); // single full-width beat — fast to fill
-    if (is_write) begin
-      it.wdata.push_back({$urandom(), $urandom()});
-      it.wstrb.push_back('1);
-    end
+    if (is_write) fill_wr_payload(it, it.len);
     burst.items.push_back(it);
   end
   return burst;
@@ -683,18 +628,7 @@ class m2_tl01_txlimit_vseq extends uvm_sequence #(uvm_sequence_item);
   endfunction
 
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork
-        begin
-          slvport_tl01_seq s;
-          s = slvport_tl01_seq::type_id::create($sformatf("tl01_seq_%0d", ii));
-          s.slv_port_idx = ii;
-          s.start(p_sequencer.slv_sqr[ii]);
-        end
-      join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_tl01_seq)::run(p_sequencer, "tl01_seq");
   endtask
 endclass
 
@@ -746,18 +680,7 @@ class m2_tl02_slvtrans_vseq extends uvm_sequence #(uvm_sequence_item);
   endfunction
 
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork
-        begin
-          slvport_tl02_seq s;
-          s = slvport_tl02_seq::type_id::create($sformatf("tl02_seq_%0d", ii));
-          s.slv_port_idx = ii;
-          s.start(p_sequencer.slv_sqr[ii]);
-        end
-      join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_tl02_seq)::run(p_sequencer, "tl02_seq");
   endtask
 endclass
 
@@ -814,12 +737,7 @@ function automatic axi_burst_item build_or03_burst(
     // which this scenario is not allowed to add. Measured: uniform AxLEN=0
     // gives 0 write-side collisions, alternating gives 192.
     it.len      = axi_pkg::len_t'(is_write ? (k % 2) : 0);
-    if (is_write) begin
-      for (int unsigned b = 0; b <= it.len; b++) begin
-        it.wdata.push_back({$urandom(), $urandom()});
-        it.wstrb.push_back('1);
-      end
-    end
+    if (is_write) fill_wr_payload(it, it.len);
     burst.items.push_back(it);
   end
   return burst;
@@ -874,18 +792,7 @@ class m2_or03_guard_vseq extends uvm_sequence #(uvm_sequence_item);
   endfunction
 
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork
-        begin
-          slvport_or03_seq s;
-          s = slvport_or03_seq::type_id::create($sformatf("or03_seq_%0d", ii));
-          s.slv_port_idx = ii;
-          s.start(p_sequencer.slv_sqr[ii]);
-        end
-      join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_or03_seq)::run(p_sequencer, "or03_seq");
   endtask
 endclass
 
@@ -926,14 +833,7 @@ class slvport_cfg01_seq extends uvm_sequence #(axi_seq_item);
     it.addr     = addr;
     it.len      = len;
     it.id       = id;
-    if (is_write) begin
-      it.wdata.delete();
-      it.wstrb.delete();
-      for (int unsigned b = 0; b <= len; b++) begin
-        it.wdata.push_back({$urandom(), $urandom()});
-        it.wstrb.push_back('1);
-      end
-    end
+    if (is_write) fill_wr_payload(it, len);
     finish_item(it);
   endtask
 
@@ -1031,27 +931,13 @@ function automatic axi_pair_item build_m3_pair(
   item.id       = id_a;
   item.addr     = addr_a;
   item.len      = len;
-  if (is_write) begin
-    item.wdata.delete();
-    item.wstrb.delete();
-    for (int unsigned b = 0; b <= len; b++) begin
-      item.wdata.push_back({$urandom(), $urandom()});
-      item.wstrb.push_back('1);
-    end
-  end
+  if (is_write) fill_wr_payload(item, len);
   item.second_item = axi_seq_item::type_id::create({name, "_b"});
   item.second_item.is_write = is_write;
   item.second_item.id       = id_b;
   item.second_item.addr     = addr_b;
   item.second_item.len      = len;
-  if (is_write) begin
-    item.second_item.wdata.delete();
-    item.second_item.wstrb.delete();
-    for (int unsigned b = 0; b <= len; b++) begin
-      item.second_item.wdata.push_back({$urandom(), $urandom()});
-      item.second_item.wstrb.push_back('1);
-    end
-  end
+  if (is_write) fill_wr_payload(item.second_item, len);
   item.gap_cycles = gap_cycles;
   return item;
 endfunction
@@ -1074,13 +960,7 @@ class slvport_de01_seq extends uvm_sequence #(axi_seq_item);
     start_item(it);
     it.is_write = is_write; it.addr = addr; it.len = len; it.id = id;
     it.atop = '0; // spec §4.7: never ATOP to an unmapped address
-    if (is_write) begin
-      it.wdata.delete(); it.wstrb.delete();
-      for (int unsigned b = 0; b <= len; b++) begin
-        it.wdata.push_back({$urandom(), $urandom()});
-        it.wstrb.push_back('1);
-      end
-    end
+    if (is_write) fill_wr_payload(it, len);
     finish_item(it);
   endtask
 
@@ -1100,16 +980,7 @@ class m3_de01_decerr_vseq extends uvm_sequence #(uvm_sequence_item);
   `uvm_declare_p_sequencer(xbar_vseqr)
   function new(string name = "m3_de01_decerr_vseq"); super.new(name); endfunction
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork begin
-        slvport_de01_seq s;
-        s = slvport_de01_seq::type_id::create($sformatf("de01_seq_%0d", ii));
-        s.slv_port_idx = ii;
-        s.start(p_sequencer.slv_sqr[ii]);
-      end join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_de01_seq)::run(p_sequencer, "de01_seq");
   endtask
 endclass
 
@@ -1132,13 +1003,7 @@ class slvport_de02_seq extends uvm_sequence #(axi_seq_item);
     start_item(it);
     it.is_write = is_write; it.addr = addr; it.len = len; it.id = id;
     it.atop = '0;
-    if (is_write) begin
-      it.wdata.delete(); it.wstrb.delete();
-      for (int unsigned b = 0; b <= len; b++) begin
-        it.wdata.push_back({$urandom(), $urandom()});
-        it.wstrb.push_back('1);
-      end
-    end
+    if (is_write) fill_wr_payload(it, len);
     finish_item(it);
   endtask
 
@@ -1181,16 +1046,7 @@ class m3_de02_default_vseq extends uvm_sequence #(uvm_sequence_item);
     if (cfg_vif == null)
       `uvm_fatal("NOCFGVIF", "m3_de02_default_vseq: cfg_vif not set")
     set_mixed_default();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork begin
-        slvport_de02_seq s;
-        s = slvport_de02_seq::type_id::create($sformatf("de02_seq_%0d", ii));
-        s.slv_port_idx = ii;
-        s.start(p_sequencer.slv_sqr[ii]);
-      end join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_de02_seq)::run(p_sequencer, "de02_seq");
   endtask
 endclass
 
@@ -1254,16 +1110,7 @@ class m3_or04_order_vseq extends uvm_sequence #(uvm_sequence_item);
   `uvm_declare_p_sequencer(xbar_vseqr)
   function new(string name = "m3_or04_order_vseq"); super.new(name); endfunction
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork begin
-        slvport_or04_seq s;
-        s = slvport_or04_seq::type_id::create($sformatf("or04_seq_%0d", ii));
-        s.slv_port_idx = ii;
-        s.start(p_sequencer.slv_sqr[ii]);
-      end join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_or04_seq)::run(p_sequencer, "or04_seq");
   endtask
 endclass
 
@@ -1340,16 +1187,7 @@ class m3_cfg02_reconfig_vseq extends uvm_sequence #(uvm_sequence_item);
   endtask
 
   task automatic run_batch_v1();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork begin
-        slvport_cfg02_seq s;
-        s = slvport_cfg02_seq::type_id::create($sformatf("cfg02_v1_%0d", ii));
-        s.slv_port_idx = ii;
-        s.start(p_sequencer.slv_sqr[ii]);
-      end join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_cfg02_seq)::run(p_sequencer, "cfg02_v1");
   endtask
 
   task body();
@@ -1414,12 +1252,7 @@ function automatic axi_burst_item build_or05_burst(
     // Reads single beat; writes alternate AxLEN 0/1 to sweep the AW/B phase
     // relationship (same anti-phase-lock reasoning as build_or03_burst).
     it.len      = axi_pkg::len_t'(is_write ? (step % 2) : 0);
-    if (is_write) begin
-      for (int unsigned b = 0; b <= it.len; b++) begin
-        it.wdata.push_back({$urandom(), $urandom()});
-        it.wstrb.push_back('1);
-      end
-    end
+    if (is_write) fill_wr_payload(it, it.len);
     burst.items.push_back(it);
     k++;
   end
@@ -1468,16 +1301,7 @@ class m3_or05_range_vseq extends uvm_sequence #(uvm_sequence_item);
   `uvm_declare_p_sequencer(xbar_vseqr)
   function new(string name = "m3_or05_range_vseq"); super.new(name); endfunction
   task body();
-    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
-      automatic int unsigned ii = i;
-      fork begin
-        slvport_or05_seq s;
-        s = slvport_or05_seq::type_id::create($sformatf("or05_seq_%0d", ii));
-        s.slv_port_idx = ii;
-        s.start(p_sequencer.slv_sqr[ii]);
-      end join_none
-    end
-    wait fork;
+    fanout_per_slv#(slvport_or05_seq)::run(p_sequencer, "or05_seq");
   endtask
 endclass
 
@@ -1688,10 +1512,7 @@ class slvport_at02_seq extends uvm_sequence #(axi_seq_item);
                              * xbar_types_pkg::REGION_SIZE
                              + 32'h0000_0a00 + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
     p.second_item.len      = axi_pkg::len_t'(0);
-    p.second_item.wdata.delete();
-    p.second_item.wstrb.delete();
-    p.second_item.wdata.push_back({$urandom(), $urandom()});
-    p.second_item.wstrb.push_back('1);
+    fill_wr_payload(p.second_item, p.second_item.len);
     p.gap_cycles = 1; // leg A's AR accepted first, so it is open at leg B's accept
     start_item(p); finish_item(p);
   endtask

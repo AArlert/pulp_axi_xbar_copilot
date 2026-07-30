@@ -14,6 +14,7 @@ SHA 锁定见 `vendor/VENDOR.md`）。
 隔壁人工学习仓库 `pulp_axi_xbar` 参考。
 
 - 不熟 AXI：先读 [`doc/axi.md`](doc/axi.md)（从零讲到本 DUT 的入门读物）
+- 不熟本仓库的验证环境搭法：先读 [`doc/uvm.md`](doc/uvm.md)（讲 UVM TB 怎么搭、一笔事务怎么被验证）
 - 上手：`make handover && make next`
 - 仿真（VM 内）：`make smoke` / `make run TEST=<t> SEED=<n>` / `make regress`
 - 文档约定：表头/机制英文（columns_preset=en），正文中文
@@ -143,3 +144,29 @@ B/R 吐给外部 master——全程原路返回，不重新查地址表。走 de
 - **错误也要有个终点**：AXI 不允许请求悬空不应答，所以"地址查不到"和"这条路没
   修"两种情况都得有一个部件把事务吞掉并回一个合法的错误响应，这就是
   `axi_err_slv` 存在的理由。
+
+## 验证环境概览
+
+上面讲的是 DUT；这一节讲**验证它的 UVM 环境**长什么样。TB 是一个 `axi_xbar`
+单 DUT 环境：外部 AXI master 由 TB 在 slave 端口侧**主动驱动**（`slvport_agent`
+的 driver），外部 AXI slave 由 TB 在 master 端口侧**被动响应**（`mstport_agent`
+的 responder）。两侧各有一个 monitor 只观测不驱动，把观测到的事务经 analysis
+port 送进 `scoreboard_refmodel` 判决，期望值全部锚回 `doc/spec.md`。
+
+下图画出组件连接关系与**一笔写事务在 TB 侧的数据流**（不是 DUT 内部路径——那是
+上面那张 `axi_xbar_dataflow.svg`）：
+
+![验证环境 UVM TB 组件与数据流](doc/attach/uvm_env_overview.svg)
+
+- **请求正向（蓝实线）**：seq 造 `axi_seq_item` → sequencer → `slvport_driver`
+  打到 DUT slave 端口 → DUT 路由到 master 端口 → `mstport_responder`。
+- **响应回程（橙虚线）**：responder 回 B/R，沿原路经 DUT 回到源 slave 端口，被
+  `slvport_monitor` 观测。
+- **判决流（青虚线）**：两个 monitor 把观测到的事务经 analysis port 送进
+  scoreboard 的四个 handler——`write_slv_req_accept`（AW/AR-accept 记账）、
+  `write_slv_req`（路由期望登记）、`write_mst_req`（SB_ROUTE / SB_WORDER）、
+  `write_resp`（响应/路由/保序/decerr/atop 五合一）。另有 `tb/sva/*` 协议/时序
+  SVA 逐拍守协议契约（走 generate 直接例化，非 `bind`）。
+
+一笔事务怎么一路走到判决、每步在哪个文件哪一行、判据来自 spec 哪一条，展开在
+[`doc/uvm.md`](doc/uvm.md)（README 是入口，正文在那）。
