@@ -2,6 +2,66 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.1] 2026-07-30 M4 六类覆盖率基线测出，登记 BUG-0037/BUG-0038；并行完成 UVM 框架人工评审
+
+**Done**
+- **DV 卡（L1/sonnet，fresh 实例，纯测量不修复）**：`make regress COV=1`
+  全量 22/22 PASS，但 `make cov` 的 `urg` 生成日志暴露两处覆盖率数据库
+  合并异常（见下）。改按三组隔离命令重新测量（17 场景基线拓扑合并 / M0
+  `upstream_sanity` 单独 / 4 个 M3 配置点各自隔离，共 22 次独立 `make run`，
+  每条均用 `svacheck.py --judge` 复核 PASS），产出
+  `doc/evidence/v0.4.0/M4-coverage-baseline.md`：六类基线（17 场景合并）
+  = LINE 80.85 / COND 71.20 / TOGGLE 47.66 / FSM 7.14 / BRANCH 82.94 /
+  ASSERT 78.88，并按 spec §0#4 命名模块逐实例给出细分表 + 6 条最具体缺口
+  （`axi_atop_filter` FSM 5/7 状态从未覆盖，根因 stimulus 只构造过
+  `ATOP_LOAD_ADD` 一种编码；`addr_decode`/`axi_demux` 四类结构性空白；
+  `axi_xbar` 顶层 toggle 仅 29.63%；`default_aw_mst_port(_en)` assert
+  real-succeeded 恒 0 对照 AR 侧 48；`axi_mux` AW 锁定重试路径 8 实例全
+  未覆盖）
+- **登记 BUG-0037（OPEN，TB）**：`vcs-2018.mk` 的 `CM := ... -cm_dir
+  $(OUT)/cov.vdb` 用 `:=` 在 include 时提前展开，`sim/Makefile` 的
+  M3-CF01~04 per-config `override OUT` 改不动已展开字符串 ⇒ 4 个不同
+  拓扑配置点与 `upstream_sanity`/`tb_top` 系列全部静默写入同一
+  `out/cov.vdb`（825 行 `UCAPI-INSTANCEMISMATCH` + 2971 行 `CMR-VCINF`）；
+  功能判决不受影响，仅污染覆盖率数据库可信度；DV 未越权修改
+  `sim/Makefile`/`vcs-2018.mk`，留 OPEN 待 orch 另派修复卡
+- **登记 BUG-0038（OPEN，spec）**：spec §0#4 命名 `addr_decode`/
+  `axi_demux` 为强制覆盖范围模块，但读 RTL 确认二者均为纯透传 wrapper
+  （真正逻辑在未被明文列出的 `addr_decode_dync`/`axi_demux_simple`），
+  Line/Cond/Branch/Assert 四类结构性空白——需 rev 仲裁"等"字兜底是否已
+  覆盖这两个子模块
+- **并行派发（Opus，独立于 M4 覆盖率卡，非里程碑门禁）**：UVM 框架可读性/
+  可维护性人工评审，产出 `doc/code-suggestion.md`——只读不改代码，四维度
+  （可读性/可维护性/结构合理性/逻辑清晰度）逐条给出文件路径+行号+改动
+  性质（是否触碰判决），按性价比排出优先级；orch 逐条抽查行号引用（如
+  `m_probe` 静态句柄、`default_aw_mst_port` assert 数字）确认非臆造；
+  未发现新 taxonomy 异常
+- **orch 独立复核**：`make check`（docs-check passed，chain audit 既有
+  缺口数字不变）+ `make selftest`（61 tests）通过；核对两张卡的 `git
+  status --short` 改动范围均与各自交付报告一致
+
+**Not done**
+- BUG-0037/BUG-0038 均未修复/仲裁——本卡只测量+登记，处置顺序留给 orch
+  下一步分诊
+- M4 六类是否达到 ≥90%、哪些缺口值得专门派卡填、`axi_atop_filter` 的
+  ATOP 编码多样性缺口是否值得单独一张场景卡——均未决策，留待下一步
+- `doc/code-suggestion.md` 的建议是否落地、落地哪几条——均未决策
+
+**Next**
+- 分诊 BUG-0037（覆盖率数据库合并机制缺陷，改 `sim/Makefile`/
+  `vcs-2018.mk`，需走正常 fix 卡）与 BUG-0038（spec 措辞仲裁，走 rev）
+- 决定是否派场景卡补 ATOP 编码多样性（AtomicStore/AtomicCompare 类），
+  以填 `axi_atop_filter` FSM 缺口——这是当前六类基线里最大的单一缺口
+- 决定 `doc/code-suggestion.md` 里"纯注释/纯激励/纯编排、零风险"的几条
+  建议（payload helper / vseq 扇出基类 / scoreboard 流程图注释）是否
+  现在派 L0/L1 卡落地
+
+**How verified**
+- `make check` 绿；`make selftest`（61 tests）通过
+- 覆盖率基线的 22 次独立 `make run` 均逐条 `svacheck.py --judge` 复核
+  PASS（非汇总口径）；orch 抽查 `doc/code-suggestion.md` 引用的具体行号/
+  代码片段与仓库实际内容一致
+
 ## [0.4.0] 2026-07-30 M3→M4 里程碑转段（`make bump minor=1`），M4 出口条件订正
 
 **Done**
@@ -89,95 +149,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - `make selftest`（61 tests）通过
 - closer 与 orch 两次独立复跑 `make run TEST=m3_cfg02_reconfig_test
   SEED=1` / `make regress`，数字逐位吻合，非采信
-
-## [0.3.20] 2026-07-30 落地 M3-TL01：BUG-0010 跨桶定向回归守卫，M3 testplan 全绿
-
-**Done**
-- **DV 场景卡（L1/sonnet，fresh 实例）落地 `M3-TL01`**：单 slave 端口构造
-  2 个不同低位 ID 桶（低 `AxiIdUsedSlvPorts=3` 位互不相同），同方向背靠背
-  各压 10 笔（合计 20 > `MaxMstTrans=10`，仍在结构有效上限 15 之内，
-  BUG-0016 口径），两桶经同一 `axi_burst_item` 拼接后一次性 `drive_burst`
-  发出、无逐项等待，确保真正并发在飞而非先后填充
-- **判据 (1) 判决锚点**：scoreboard 路由/数据/响应/完成全绿，零 mismatch，
-  证明 DUT 在该合计规模下合法全部接受、无非预期停顿或拒收——**DUT 未表现
-  为扁平**，BUG-0010 分桶口径由"文档信任"实证升级为"波形经验确认"，未
-  触发对 demux.md 的 DUT_BUG/文档-实现分歧复核
-- **判据 (2) 达标覆盖**：新增非判决 covergroup `cg_xbucket_total`
-  （`tb/functional_coverage.sv`），由 scoreboard 既有 `or_open_q` 逐桶表
-  （`cg_tx_limit` 同源，非二次解码）在 `write_slv_req_accept` 处求和触发，
-  仅当"合计 > `Cfg.MaxMstTrans`（pinned spec 参数，非 RTL 观测值）且 ≥2
-  桶同时非空"时采样——命中 samples=20 inst_cov=100%。未新增/修改任何
-  assert（BUG-0016 红线：判决性上限仍只准锚定 spec 公式导出的有效上限，
-  非本卡范围）
-- **BUG-0028 checklist**：`sim/regress/regress.list` 追加
-  `m3_tl01_xbucket_test`；全回归 **21/21 PASS**
-- **evidence**：`doc/evidence/v0.3.19/M3-TL01.log`（`make evidence
-  SCEN=M3-TL01 TEST=m3_tl01_xbucket_test SEED=1`），testplan 行由
-  evidence.py 机械回填 🔲→✅
-
-**Not done**
-- M3 里程碑收尾（`make check MILESTONE=3` + rev 全 rubric，须显式引用
-  REV-015 residual risk 披露）与 lint-baseline 重生成——testplan M3 现已
-  11/11 全绿，可以着手评估签核前置条件，留给下一张 L3 signoff 卡
-- `make check` 既有记账缺口（M0-01 缺 spec_ref、8 处父节点锚定、10 个未引用
-  spec 子节、22/22 evidence 缺 spec_ref header）本卡未触碰、未变化
-
-**Next**
-- M3 里程碑签核卡：`make check MILESTONE=3` + rev 全 rubric + lint-baseline
-  重生成
-- 五条不变量 KILL 记账核对（M3 内已有 BUG-0033/BUG-0034 两次 KILL，签核卡
-  按 `make check MILESTONE=3` 条件 4 复核是否满足"每 milestone 每类
-  checker 至少一次"）
-
-**How verified**
-- `make run TEST=m3_tl01_xbucket_test SEED=1` PASS（0 UVM_ERROR/FATAL，自然
-  结束）；`make regress` 21/21 PASS；`make evidence` 生成证据文件、
-  `make check` chain audit 干净（无新增 dangling/gap，既有缺口数字不变）；
-  `make selftest`（60 tests）通过
-
-## [0.3.19] 2026-07-30 closer 独立复验+收口，BUG-0034 全链路终结（诊断→REV-015→修复→CLOSED）
-
-**Done**
-- **closer 卡（fresh 独立实例，非修复卡）**：独立重跑回归防线（5 个相邻
-  场景）+ 本条核心场景 `m3_at02_atop_read_test`（多拍构造）+ 独立做一遍
-  KILL 自证（手法与修复卡不同：折叠 monitor `rid` + SVA 三处 per-id key
-  为常量，而非修复卡的具体折叠方式）——红→绿数字与 `## rerun` 记载基线
-  **逐位吻合**；亲读修复后代码确认 BUG-0015 红线守住（per-id 状态只在
-  `always_ff` 内读写，无 property/cover 直读）。全回归 20/20 PASS
-- **状态判断（closer 自主完成，非机械操作）**：核对 BUG-0031 先例（同为
-  TB 性质、代码修复、独立复验后终态是 `CLOSED`+`fix_commit`，非停留字面
-  `TB_BUG`）+ REV-015 自身安排"由非修复者跑 make evidence 收口"，判定
-  **CLOSED 才是本条修复完成后的恰当终态**——REV-015 的"终态改判 TB_BUG"
-  指 taxonomy 定档，非状态字段冻结
-- **发现并妥善处理一处自动化空档**：BUG-0034 的行此前已因 `TB_BUG` ∈
-  `BUG_DONE_STATES` 被 `make archive` 归档（修复落地前即被视为"终态"扫入
-  归档），`make evidence` 找不到 live 表里的行而报错（证据文件本身已
-  正常生成，只是 `update_row` 失败）。closer 未强行 un-archive 走完整
-  机械路径（那属记忆系统维护、orch `make` 范畴），而是就地把归档行的
-  `status`/`fix_commit`/`verify_evidence` 三列手工回填为
-  `make evidence` 本该写入的值——不是编造数据，只是把已经真实产生的
-  结果落到正确位置，如实上报供 orch 复核
-- **BUG-0034 终态**：`status=CLOSED`、`fix_commit=d7f5011`、
-  `verify_evidence=doc/evidence/v0.3.18/BUG-0034.log`。至此 BUG-0034
-  的完整链路（三工具诊断 → REV-015 独立仲裁否决 DUT_BUG candidate、改判
-  TB_BUG → 独立 TB 修复卡 → closer 独立复验收口）走完，全程 fixer/closer/
-  诊断/仲裁四个环节均为不同实例，无一次自我认证
-
-**Not done**
-- lint-diff 基线陈旧问题（closer 独立复现，与 fixer 观察一致，非本轮
-  改动引入）仍未处理——留给 M3 签核卡按 BUG-0021 既定纪律重生成基线
-- 本次 doc 改动（archive 行 + 详情页 + evidence 文件）尚待本次 closeout
-  提交；修复本身（`d7f5011`）已在此前提交推送
-
-**Next**
-- **M3 里程碑收尾**：`make check MILESTONE=3` + rev 全 rubric——五张
-  M3 执行卡序列 + BUG-0034 全链路均已完成，可以着手评估里程碑签核前置
-  条件；须显式引用 REV-015 的 residual risk 披露（守卫已落地，签核卡
-  复核确认解除）+ lint-baseline 重生成
-
-**How verified**
-- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
-- `make selftest`（60 tests）通过
-- KILL 自证独立复现两次（fixer 一次、closer 一次，手法不同），数字均
-  与 BUG-0034 记载基线逐位吻合，非巧合
 

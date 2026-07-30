@@ -1,3 +1,5 @@
+{"date": "2026-07-30", "version": "0.3.15", "summary": "落地 M3 多配置构建机制（TEST 名选点+独立构建产物+自报配置+基线不变，tb_top.md C5.1-C5.6）+ 首个消费场景 M3-CF01（cfgA 1x8 NO_LATENCY）转绿"}
+{"date": "2026-07-29", "version": "0.3.14", "summary": "closer 独立复推 cp_stall_state 几何论证（与 fixer 结论一致）、填 fix_commit=7a1c912，BUG-0018 转 CLOSED"}
 {"date": "2026-07-29", "version": "0.3.13", "summary": "卡③落地 BUG-0018 修复：给 scoreboard 增 AW/AR 接受时刻事件流，M2-OR01/WO01 转态覆盖率转绿；发现 REV-011 §3.3 cp_stall_state 判据几何上不可达，留待 closer 复核"}
 {"date": "2026-07-29", "version": "0.3.12", "summary": "卡②落地 BUG-0024 (b) 收窄 + M3-OR05；closer 独立复验 b-1~b-4 后转 BUG-0024 WONTFIX；archive 消化 5>4 终态行溢出"}
 {"date": "2026-07-29", "version": "0.3.11", "summary": "closer 卡（新独立实例）填 fix_commit=482a47e，独立复验通过后关闭 BUG-0025/BUG-0031"}
