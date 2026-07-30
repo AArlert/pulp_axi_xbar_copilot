@@ -1,4 +1,4 @@
-pulp_axi_xbar_copilot regression  date=2026-07-30  passed=21/21
+pulp_axi_xbar_copilot regression  date=2026-07-30  passed=22/22
 PASS   upstream_sanity SEED=1
 PASS   m1_01_smoke_test SEED=1
 PASS   m1_02_id_prefix_test SEED=1
@@ -20,3 +20,4 @@ PASS   m3_cf03_cfgc_test SEED=1
 PASS   m3_cf04_cfgd_test SEED=1
 PASS   m3_at02_atop_read_test SEED=1
 PASS   m3_tl01_xbucket_test SEED=1
+PASS   m3_cfg02_reconfig_test SEED=1
