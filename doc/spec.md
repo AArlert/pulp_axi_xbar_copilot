@@ -168,12 +168,24 @@
    Default Slave Port 全段无 atop/atomic；demux.md/mux.md 对 err_slv 无记载；
    §4.3 只按读/写二分对写事务给**单拍 B**、§6.3 又要求原子读 **B 与 R 两通道
    都应答**，两读互斥；禁读实现体定义之）。**环境约束（BUG-0032 裁决，
-   REV-012 §Item 1）**：M3 全部场景**不向译码未命中地址发起任何 ATOP**
+   REV-012 §Item 1；M4 重开并延展至 M4，BUG-0039 裁决，REV-017 §Item 3）**：
+   M3 与 M4 全部场景**不向译码未命中地址发起任何 ATOP**
    （送往未命中地址的 AW 恒 `aw.atop ≡ '0`），使上述未定义情形**构造性
    不可触发**。据此，decode-error 维度**不整体降级**，在"未命中地址上
    `aw.atop ≡ '0`"的合法子集上正常写 checker。"若强行违反本约束触发该组合时
    err_slv 如何应答"仍为许可来源未定义，作为**上游确认项**另行追踪，
-   **不阻塞** M3；未取 DUT_BUG（无任何波形/证据显示行为违规）。
+   **不阻塞** M3 与 M4；未取 DUT_BUG（无任何波形/证据显示行为违规）。**M4
+   覆盖率后果（BUG-0039 裁决，REV-017）**：本 DUT 层次内全部 `axi_atop_filter`
+   实例均在 `axi_err_slv` 内（`axi_err_slv.sv:45-58`，`ATOPs=1` 时例化），其
+   W/R FSM 离开 `W_FEEDTHROUGH`/`R_FEEDTHROUGH` 的唯一触发是收到
+   `aw.atop[5:4] != ATOP_NONE` 的 AW（`axi_atop_filter.sv:138`），而该 AW
+   仅能经译码未命中路径抵达 err_slv——恰为本约束所禁。故该 FSM 中仅经此被禁
+   激励可达的状态与迁移弧，在 M4 六类收敛中记为**环境约束致不可达**，按 §0
+   item 4"有 bin 但 <90%"分支出具 **rev 签核的书面豁免**（成因＝本约束，
+   逐弧记录见 M4 签核文档，**不计入** ≥90% 的分子与分母；此为"有 bin"情形，
+   **不适用** §0 item 4 的"无 bin ⇒ N/A"三态规则）。解除本约束以激励该
+   FSM，须先补 err_slv×ATOP 应答的许可来源并重开 BUG-0032（REV-012 可证伪
+   rationale：当前五份许可来源皆空）。
 
 ## 5. ID 与保序
 
@@ -463,3 +475,4 @@
 | 7 | 2026-07-29 | 0.3.9 | §4、§6 | BUG-0032 SPEC_ISSUE 终判应用（依据 REV-012 §Item 1 approve P-REV012-1，经 REV-013 spec-review 门禁 conditional pass 后按其订正文本逐字应用，不外溢）：§4 新增第 7 条——err_slv 对**要求读响应的 ATOP（atomic load）**落在译码未命中地址时的应答形态**许可来源未定义**（§4.3 写事务单拍 B 与 §6.3 原子读 B+R 两读互斥）；**环境约束（BUG-0032 裁决，REV-012 §Item 1）**：M3 全部场景不向译码未命中地址发起任何 ATOP，使该未定义情形构造性不可触发，decode-error 维度不整体降级、在合法子集上正常写 checker；违反约束时的应答仍列上游确认项、不阻塞 M3、未取 DUT_BUG。§6 clause 3 尾部加一行交叉引用指回 §4 clause 7。**REV-013 门禁订正**：提案原文两处 `M3/M4` 收窄为 `M3`——M4 覆盖率收敛若需触发该组合须重开仲裁，spec 现无 M4 config-matrix 承载该约束，写 M4 会构成 spec-vs-artifact 的 Retention 不一致；reopening 路径由本条第四部分 + BUG-0032 guard 承接，不因收窄受损。§4.1-6、§6.1-2/4-5 正文未改动（surgical） | REV-012（doc/review/REV-012.md §Item 1）+ REV-013（doc/review/REV-013.md，spec-review 门禁 + 逐字订正文本）；来源：vendor/axi/doc/axi_xbar.md §Decode Errors and Default Slave Port（全段无 atop/atomic，REV-012/REV-013 各自复核 grep 空集）、vendor/axi/doc/axi_demux.md §Atomic Transactions（L79-87，只涉路由/ID 计数器注入，不涉 err_slv）、vendor/axi/doc/axi_mux.md（对 err_slv 零命中）@ v0.39.9（SHA a256a3b8）。**无 RTL 实现体来源**——REV-012/REV-013 均未读 axi_xbar.sv/axi_demux.sv 实现体，spec-from-RTL 红线未破 |
 | 8 | 2026-07-29 | 0.3.9 | §4 | BUG-0033 SPEC_ISSUE 终判应用（依据 REV-014，仅落地提案 P-REV014-1，不外溢）：§4 clause 4 读响应数据值由 `32'hBADCAB1E` 零扩展校正为 err_slv 默认 `RespData=64'hCA11AB1EBADCAB1E`（`RespWidth=64`，两处例化均未覆写）按 `AxiDataWidth` 零扩展/截断，基线 `AxiDataWidth=64` ⇒ `r.data=64'hCA11AB1EBADCAB1E`；宽度参数化保留文档原有"零扩展或截断"适配机制，仅校正基数值（文档误将 64 位标记常量记作 32 位，该记法仅在 `AxiDataWidth=32` 截断情形下恰好正确）。taxonomy 终判 SPEC_ISSUE，**不改判 DUT_BUG**——错误响应 `RDATA` 值协议上 don't-care，无显式条款被违反，`RespData` 魔数为刻意设计常量，零功能/协议损害；不走 P-xxx 行为补丁。§4 clause 1/2/3/5/6/7 正文未改动（surgical） | REV-014（doc/review/REV-014.md）；来源：**RTL**——`vendor/axi/src/axi_err_slv.sv:24-25`（`RespWidth`/`RespData` 参数默认值）、`:196`（`err_resp.r.data = RespData` 赋值）、`vendor/axi/src/axi_xbar_unmuxed.sv:195-211/238-251`（两处 `axi_err_slv` 例化均未覆写 `RespData`/`RespWidth`）；上游文档 `vendor/axi/doc/axi_xbar.md:33`（"zero-extended or truncated"措辞与实现矛盾之处）@ v0.39.9（SHA a256a3b8）。**本条含 RTL 实现体来源**——doc-vs-RTL 矛盾裁决的性质决定，标注见 §4 clause 4 正文"（来源：RTL——…）" |
 | 9 | 2026-07-30 | 0.4.3 | §0(item 4/5) | BUG-0038 SPEC_ISSUE 终判应用（依据 REV-016，仅落地 P-REV016-1/P-REV016-2 两行原文，不外溢）：item 4 覆盖率范围由"命名枚举 + 等"澄清为**例化闭包**口径（判据 = 是否出现在 `axi_xbar` 实例子树内，与上游库目录无关），并新增**（模块,类型）三态判定规则**（无 bin ⇒ N/A、不入分子分母、须逐条写明已核实成因；空白不得记作 0%/100%/省略）；item 5 删去会被反向读成目录白名单的 `vendor/axi/src/` 限定词、末句改为指回 #4 闭包。**本次为澄清而非范围扩张**（依据 REV-001 §3.3 C2 的例化关系判据 + item 5 原文已有的"间接例化即计入 #4"）。§0 item 1/2/3/6 与 §1–§8 全部行为章节未改动（surgical），尤其 §4 clause 7 的 BUG-0032 环境约束一字未动 | REV-016（doc/review/REV-016.md）；来源：doc/spec.md L25/L26 自身文本、REV-001 §3.3（L101-113）、doc/milestone.md L57-62；例化层次事实（仅用于测量范围认定、未推导任何行为期望值）：axi_xbar.sv:99/124-148、axi_xbar_unmuxed.sv:95/101/116/164/195/215-236、addr_decode.sv:91-107、axi_demux.sv:89-209、axi_err_slv.sv:45-58、axi_multicut.sv:57-58、axi_cut.sv:49-105 @ v0.39.9（SHA a256a3b8） |
+| 10 | 2026-07-30 | 0.4.4 | §4(clause 7) | BUG-0039 SPEC_ISSUE 终判应用（依据 REV-017，仅落地其"orch 应逐字应用的 spec 订正文本"段，不外溢）：这是 REV-013 为 BUG-0032 预留、Change record #7 明写的**M4 重开**——§4 clause 7 的环境约束（不向译码未命中地址发起任何 ATOP）由 **M3 收窄延展为 M3 与 M4**：目的不变（令 err_slv×ATOP 应答这一无源组合构造性不可触发），M4 与 M3 的许可来源沉默现状相同，故延展非新增约束。新增**M4 覆盖率后果**段：本 DUT 层次内全部 `axi_atop_filter` 实例均在 `axi_err_slv` 内例化，其 W/R FSM 离开 `*_FEEDTHROUGH` 的唯一触发条件恰为本约束所禁的激励，故该 FSM 中仅经此路径可达的状态/迁移弧在 M4 六类收敛中记为**环境约束致不可达**，按 §0 item 4"有 bin 但 <90%"分支走 rev 签核书面豁免（不适用"无 bin ⇒ N/A"三态规则）；解除本约束须先补 err_slv×ATOP 应答的许可来源并重开 BUG-0032。**REV-017 条件化未闭合**：判 CONDITIONAL PASS，条件 2（M4 config-matrix testplan 行须同步承载延展后的约束，REV-013 要件 (b)）与条件 3（M4 签核时 rev 出具书面豁免 + 跑 BUG-0032 guard 抽查）尚未兑现，M4 在此之前不得签核。§0 item 1-6、§4 clause 1-6、§6 全部未改动（surgical） | REV-017（doc/review/REV-017.md）；来源：doc/spec.md §4 clause 7 现文自身（L163-176）、REV-012（doc/review/REV-012.md §Item 1）、REV-013（doc/review/REV-013.md，M3/M4→M3 收窄 + 重开路径构成要件）、REV-016（doc/review/REV-016.md §6.2，本冲突发现处）；例化与 FSM 事实（orch 独立复核，仅用于测量范围/触发条件认定，未推导许可来源）：axi_err_slv.sv:45-58、axi_xbar_unmuxed.sv（grep atop_filter 零命中）、axi_atop_filter.sv:138、axi_pkg.sv:400/415 @ v0.39.9（SHA a256a3b8）。**无 RTL 实现体来源用于期望值推导**——err_slv×ATOP 应答形态仍许可来源未定义，本条只延展"不可触发"环境约束，spec-from-RTL 红线未破 |

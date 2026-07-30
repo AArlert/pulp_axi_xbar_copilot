@@ -1,4 +1,64 @@
 # Work log archive
+## [0.4.1] 2026-07-30 M4 六类覆盖率基线测出，登记 BUG-0037/BUG-0038；并行完成 UVM 框架人工评审
+
+**Done**
+- **DV 卡（L1/sonnet，fresh 实例，纯测量不修复）**：`make regress COV=1`
+  全量 22/22 PASS，但 `make cov` 的 `urg` 生成日志暴露两处覆盖率数据库
+  合并异常（见下）。改按三组隔离命令重新测量（17 场景基线拓扑合并 / M0
+  `upstream_sanity` 单独 / 4 个 M3 配置点各自隔离，共 22 次独立 `make run`，
+  每条均用 `svacheck.py --judge` 复核 PASS），产出
+  `doc/evidence/v0.4.0/M4-coverage-baseline.md`：六类基线（17 场景合并）
+  = LINE 80.85 / COND 71.20 / TOGGLE 47.66 / FSM 7.14 / BRANCH 82.94 /
+  ASSERT 78.88，并按 spec §0#4 命名模块逐实例给出细分表 + 6 条最具体缺口
+  （`axi_atop_filter` FSM 5/7 状态从未覆盖，根因 stimulus 只构造过
+  `ATOP_LOAD_ADD` 一种编码；`addr_decode`/`axi_demux` 四类结构性空白；
+  `axi_xbar` 顶层 toggle 仅 29.63%；`default_aw_mst_port(_en)` assert
+  real-succeeded 恒 0 对照 AR 侧 48；`axi_mux` AW 锁定重试路径 8 实例全
+  未覆盖）
+- **登记 BUG-0037（OPEN，TB）**：`vcs-2018.mk` 的 `CM := ... -cm_dir
+  $(OUT)/cov.vdb` 用 `:=` 在 include 时提前展开，`sim/Makefile` 的
+  M3-CF01~04 per-config `override OUT` 改不动已展开字符串 ⇒ 4 个不同
+  拓扑配置点与 `upstream_sanity`/`tb_top` 系列全部静默写入同一
+  `out/cov.vdb`（825 行 `UCAPI-INSTANCEMISMATCH` + 2971 行 `CMR-VCINF`）；
+  功能判决不受影响，仅污染覆盖率数据库可信度；DV 未越权修改
+  `sim/Makefile`/`vcs-2018.mk`，留 OPEN 待 orch 另派修复卡
+- **登记 BUG-0038（OPEN，spec）**：spec §0#4 命名 `addr_decode`/
+  `axi_demux` 为强制覆盖范围模块，但读 RTL 确认二者均为纯透传 wrapper
+  （真正逻辑在未被明文列出的 `addr_decode_dync`/`axi_demux_simple`），
+  Line/Cond/Branch/Assert 四类结构性空白——需 rev 仲裁"等"字兜底是否已
+  覆盖这两个子模块
+- **并行派发（Opus，独立于 M4 覆盖率卡，非里程碑门禁）**：UVM 框架可读性/
+  可维护性人工评审，产出 `doc/code-suggestion.md`——只读不改代码，四维度
+  （可读性/可维护性/结构合理性/逻辑清晰度）逐条给出文件路径+行号+改动
+  性质（是否触碰判决），按性价比排出优先级；orch 逐条抽查行号引用（如
+  `m_probe` 静态句柄、`default_aw_mst_port` assert 数字）确认非臆造；
+  未发现新 taxonomy 异常
+- **orch 独立复核**：`make check`（docs-check passed，chain audit 既有
+  缺口数字不变）+ `make selftest`（61 tests）通过；核对两张卡的 `git
+  status --short` 改动范围均与各自交付报告一致
+
+**Not done**
+- BUG-0037/BUG-0038 均未修复/仲裁——本卡只测量+登记，处置顺序留给 orch
+  下一步分诊
+- M4 六类是否达到 ≥90%、哪些缺口值得专门派卡填、`axi_atop_filter` 的
+  ATOP 编码多样性缺口是否值得单独一张场景卡——均未决策，留待下一步
+- `doc/code-suggestion.md` 的建议是否落地、落地哪几条——均未决策
+
+**Next**
+- 分诊 BUG-0037（覆盖率数据库合并机制缺陷，改 `sim/Makefile`/
+  `vcs-2018.mk`，需走正常 fix 卡）与 BUG-0038（spec 措辞仲裁，走 rev）
+- 决定是否派场景卡补 ATOP 编码多样性（AtomicStore/AtomicCompare 类），
+  以填 `axi_atop_filter` FSM 缺口——这是当前六类基线里最大的单一缺口
+- 决定 `doc/code-suggestion.md` 里"纯注释/纯激励/纯编排、零风险"的几条
+  建议（payload helper / vseq 扇出基类 / scoreboard 流程图注释）是否
+  现在派 L0/L1 卡落地
+
+**How verified**
+- `make check` 绿；`make selftest`（61 tests）通过
+- 覆盖率基线的 22 次独立 `make run` 均逐条 `svacheck.py --judge` 复核
+  PASS（非汇总口径）；orch 抽查 `doc/code-suggestion.md` 引用的具体行号/
+  代码片段与仓库实际内容一致
+
 ## [0.4.0] 2026-07-30 M3→M4 里程碑转段（`make bump minor=1`），M4 出口条件订正
 
 **Done**

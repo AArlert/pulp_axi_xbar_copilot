@@ -2,6 +2,83 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.4] 2026-07-30 BUG-0039 仲裁落地（REV-017）：§4 clause 7 环境约束延展至 M4 + atop_filter FSM 书面豁免出口，CONDITIONAL PASS 两条条件未兑现
+
+**Done**
+- **rev 卡（L3/opus，fresh 实例，未复用做过 REV-016 的实例）**：BUG-0039（M4
+  六类收敛对 `axi_atop_filter` FSM 的要求与 spec §4 clause 7 的 BUG-0032 环境
+  约束直接冲突）仲裁，产出 `doc/review/REV-017.md`。裁决 **CONDITIONAL
+  PASS**。逐一亲验 BUG-0039 行陈述的三条事实为真（例化层次——全部 6 例
+  `axi_atop_filter` 均在 `axi_err_slv.sv:45-58` 内例化、`axi_xbar_unmuxed.sv`
+  grep "atop_filter" 零命中；FSM 必要条件——`axi_atop_filter.sv:138` 离开
+  `W_FEEDTHROUGH`/`R_FEEDTHROUGH` 唯一触发即打到译码未命中地址；编码多样性
+  已满足——`ATOP_ATOMICLOAD=2'b10 != ATOP_NONE=2'b00`，"补 AtomicCompare 序列"
+  方向已被证伪）。**否决**"重开以定义 err_slv×ATOP 应答、放行激励"路径
+  （REV-016 §6.2 选项 a/c）——五份许可来源仍皆空，放行等于让 checker 抄被测
+  RTL 期望值，违不变量 #4。**采纳**选项 b：§4 clause 7 环境约束由 M3 延展至
+  M3+M4（目的不变，M3/M4 许可来源沉默现状相同）+ `axi_atop_filter` FSM 中仅
+  经被禁激励可达的状态/迁移弧走 §0 item 4"有 bin 但 <90%"分支出具 rev 签核
+  书面豁免（不适用"无 bin ⇒ N/A"三态规则）。BUG-0032 guard 被延展、非解除。
+- **orch 独立复核**（不采信卡内自报事实，亲跑 grep/sed 核对 REV-017 引用的
+  四条承重事实 + `doc/testplan.md` M3-DE01/CF01-03 措辞，全部与 REV-017 一致）
+  后**应用** REV-017 §"orch 应逐字应用的 spec 订正文本"：`doc/spec.md` §4
+  clause 7 整条按逐字文本替换（相对现文四处改动：引用锚追加 REV-017、约束
+  范围 M3→M3+M4、不阻塞范围同步扩、追加"M4 覆盖率后果"段），Change record
+  追加第 10 行，`python3 scripts/docs.py --pin-spec` 重 pin（sha256
+  `a177440c…c8fb083`）。§0 item 1-6、§4 clause 1-6、§6 全部未改动（surgical）。
+- `doc/bugs.md` BUG-0039 行状态由 OPEN 转 **SPEC_CHANGED**，root_cause/
+  verify_evidence 两列按 REV-017 逐字落，按 BUG-0029 guard 在两列写明实质
+  复验位置 = `doc/review/REV-017.md`。新建详情页 `doc/bugs/BUG-0039.md`
+  （原行内无该指针，本次按惯例补上 + 建页——REV-017 指出该详情页应承载本次
+  仲裁的推理与事实认定），含 `## arbitration` 段引 REV-017 四条 Item 逐条
+  摘要 + 三条未闭合条件清单。
+
+**Not done**
+- REV-017 CONDITIONAL PASS 的三条件只兑现了第 1 条（spec 应用 + 重 pin）。
+  第 2 条（REV-013 重开要件 (b)：M4 config-matrix testplan 行须同步承载延展
+  后的约束——现 `doc/testplan.md` 只有 M3-DE01 行范围为 M3，CF01-03 无该
+  约束句）与第 3 条（M4 签核时 rev 出具 atop_filter FSM 书面豁免 + 跑
+  BUG-0032 guard 抽查）均**未做**——M4 在此之前不得签核。
+- BUG-0037（COV=1 多设计合并污染 `out/cov.vdb`）仍 OPEN，本周期未触碰。
+- M4 尚无场景行、10 个 spec 子节无人引用（`make next` 第 3 项）——未派 arch
+  spec-gap 卡；REV-017 条件 2 的 testplan 行自然应与该缺口一并规划，而非孤立
+  补一行。
+- REV-016 §11 记的"六问/七问"措辞漂移、REV-017 §"范围外观察"复述同一问题
+  （`workflow/review/six_questions.md` 在本快照下为空、`workflow/review.md`
+  首行仍写"seven questions"）——两次均判非 taxonomy 类，登记与否仍留 orch
+  未决，本周期未处置。
+- **续记（防丢失，`make archive` 已把上条 [0.4.3] 块滚入
+  `doc/archive/log-archive.md`；BUG-0038 本周期同批被 `bug_done_keep=2` 挤出
+  `doc/bugs.md` 滚入 `doc/archive/bugs-archive.md`，故此条不能只靠翻旧块
+  找回）**：**REV-016 conditional pass 的条件 2 仍未兑现**——M4 覆盖率基线
+  须按 BUG-0038/REV-016 定的新三态口径（无 bin ⇒ N/A + 已核实成因）**重出**
+  报告（同一份干净 vdb、不重跑仿真），本行只完成条件 1（spec 应用+重 pin）。
+  该重出工作理应把本周期 BUG-0039/REV-017 的 atop_filter FSM 书面豁免一并
+  纳入同一份重出报告，不宜分两次改同一份文档。
+
+**Next**
+- 派 arch/dv 卡把延展后的约束落到 M4 config-matrix testplan 行（REV-017 条件
+  2），建议与 M4 spec-gap 缺口探测（`make next` 第 3 项）合并规划，避免"孤立
+  补一行"与"事后发现范围不够"两次改动
+- 分诊 BUG-0037
+- **重出 M4 覆盖率基线报告**（REV-016 条件 2，遗留未兑现；新文件，不回改
+  v0.4.0 旧记录）——一并纳入 atop_filter FSM 的书面豁免记录（REV-017 条件 3）
+- M4 签核前须兑现 REV-017 条件 3（书面豁免 + guard 抽查）——记入 M4 出口
+  条件清单，避免届时遗漏
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit gap 项与上周期一致，未新增
+  ——`make next` 第 3 项列的 10 个未引用子节、8 个仅锚定父节的引用、1 个
+  M0-01 未引 spec 均为既有已知缺口）
+- `make selftest` 61 tests OK
+- `python3 scripts/docs.py --pin-spec` 重 pin 成功，新 sha256 已写入
+  `doc/spec.sha256`
+- REV-017 引用的四条承重结构事实（例化层次/FSM 转移条件/编码/testplan 现文）
+  由 orch 亲跑 grep/sed 复核 vendor 原件与 `doc/testplan.md` 确认，非采信
+  子代理自报
+- 本周期**无仿真**：全部改动为 spec/台账/评审记录，无 RTL/TB 代码改动，故
+  不产生也不登记任何 evidence 行
+
 ## [0.4.3] 2026-07-30 BUG-0038 仲裁落地：spec §0 覆盖率范围改例化闭包口径 + 新登记 BUG-0039（atop_filter FSM 可达性冲突）
 
 **Done**
@@ -130,64 +207,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - scoreboard 改动经 `git diff | grep` 逐行确认零逻辑行变化
 - `doc/uvm.md` 文件:行引用抽查 11 处，与当前代码逐条核对一致
 - SVG 用 Python 标准库 XML parser 解析确认合法
-
-## [0.4.1] 2026-07-30 M4 六类覆盖率基线测出，登记 BUG-0037/BUG-0038；并行完成 UVM 框架人工评审
-
-**Done**
-- **DV 卡（L1/sonnet，fresh 实例，纯测量不修复）**：`make regress COV=1`
-  全量 22/22 PASS，但 `make cov` 的 `urg` 生成日志暴露两处覆盖率数据库
-  合并异常（见下）。改按三组隔离命令重新测量（17 场景基线拓扑合并 / M0
-  `upstream_sanity` 单独 / 4 个 M3 配置点各自隔离，共 22 次独立 `make run`，
-  每条均用 `svacheck.py --judge` 复核 PASS），产出
-  `doc/evidence/v0.4.0/M4-coverage-baseline.md`：六类基线（17 场景合并）
-  = LINE 80.85 / COND 71.20 / TOGGLE 47.66 / FSM 7.14 / BRANCH 82.94 /
-  ASSERT 78.88，并按 spec §0#4 命名模块逐实例给出细分表 + 6 条最具体缺口
-  （`axi_atop_filter` FSM 5/7 状态从未覆盖，根因 stimulus 只构造过
-  `ATOP_LOAD_ADD` 一种编码；`addr_decode`/`axi_demux` 四类结构性空白；
-  `axi_xbar` 顶层 toggle 仅 29.63%；`default_aw_mst_port(_en)` assert
-  real-succeeded 恒 0 对照 AR 侧 48；`axi_mux` AW 锁定重试路径 8 实例全
-  未覆盖）
-- **登记 BUG-0037（OPEN，TB）**：`vcs-2018.mk` 的 `CM := ... -cm_dir
-  $(OUT)/cov.vdb` 用 `:=` 在 include 时提前展开，`sim/Makefile` 的
-  M3-CF01~04 per-config `override OUT` 改不动已展开字符串 ⇒ 4 个不同
-  拓扑配置点与 `upstream_sanity`/`tb_top` 系列全部静默写入同一
-  `out/cov.vdb`（825 行 `UCAPI-INSTANCEMISMATCH` + 2971 行 `CMR-VCINF`）；
-  功能判决不受影响，仅污染覆盖率数据库可信度；DV 未越权修改
-  `sim/Makefile`/`vcs-2018.mk`，留 OPEN 待 orch 另派修复卡
-- **登记 BUG-0038（OPEN，spec）**：spec §0#4 命名 `addr_decode`/
-  `axi_demux` 为强制覆盖范围模块，但读 RTL 确认二者均为纯透传 wrapper
-  （真正逻辑在未被明文列出的 `addr_decode_dync`/`axi_demux_simple`），
-  Line/Cond/Branch/Assert 四类结构性空白——需 rev 仲裁"等"字兜底是否已
-  覆盖这两个子模块
-- **并行派发（Opus，独立于 M4 覆盖率卡，非里程碑门禁）**：UVM 框架可读性/
-  可维护性人工评审，产出 `doc/code-suggestion.md`——只读不改代码，四维度
-  （可读性/可维护性/结构合理性/逻辑清晰度）逐条给出文件路径+行号+改动
-  性质（是否触碰判决），按性价比排出优先级；orch 逐条抽查行号引用（如
-  `m_probe` 静态句柄、`default_aw_mst_port` assert 数字）确认非臆造；
-  未发现新 taxonomy 异常
-- **orch 独立复核**：`make check`（docs-check passed，chain audit 既有
-  缺口数字不变）+ `make selftest`（61 tests）通过；核对两张卡的 `git
-  status --short` 改动范围均与各自交付报告一致
-
-**Not done**
-- BUG-0037/BUG-0038 均未修复/仲裁——本卡只测量+登记，处置顺序留给 orch
-  下一步分诊
-- M4 六类是否达到 ≥90%、哪些缺口值得专门派卡填、`axi_atop_filter` 的
-  ATOP 编码多样性缺口是否值得单独一张场景卡——均未决策，留待下一步
-- `doc/code-suggestion.md` 的建议是否落地、落地哪几条——均未决策
-
-**Next**
-- 分诊 BUG-0037（覆盖率数据库合并机制缺陷，改 `sim/Makefile`/
-  `vcs-2018.mk`，需走正常 fix 卡）与 BUG-0038（spec 措辞仲裁，走 rev）
-- 决定是否派场景卡补 ATOP 编码多样性（AtomicStore/AtomicCompare 类），
-  以填 `axi_atop_filter` FSM 缺口——这是当前六类基线里最大的单一缺口
-- 决定 `doc/code-suggestion.md` 里"纯注释/纯激励/纯编排、零风险"的几条
-  建议（payload helper / vseq 扇出基类 / scoreboard 流程图注释）是否
-  现在派 L0/L1 卡落地
-
-**How verified**
-- `make check` 绿；`make selftest`（61 tests）通过
-- 覆盖率基线的 22 次独立 `make run` 均逐条 `svacheck.py --judge` 复核
-  PASS（非汇总口径）；orch 抽查 `doc/code-suggestion.md` 引用的具体行号/
-  代码片段与仓库实际内容一致
 
