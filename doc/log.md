@@ -2,6 +2,54 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.3.21] 2026-07-30 closer 独立复验+收口 BUG-0036，M3 里程碑完整签核成立
+
+**Done**
+- **closer 卡（fresh 独立实例，非修复卡，DV/sonnet/L1）**：独立复验 0.3.20
+  BUG-0036 修复（`4d712f9`：`sim/regress/regress.list` 补入
+  `m3_cfg02_reconfig_test 1`）——亲跑 `make run TEST=m3_cfg02_reconfig_test
+  SEED=1`（UVM_ERROR=0、SB 全 mismatch=0、2143 assertions 0 failures、
+  `c_bug31_livev1_aw/ar` 六实例各 1 match）+ `make regress`（22/22 PASS）+
+  证据链核对（`doc/evidence/v0.3.20/M3-CFG02.log` 首行即重放命令），未采信
+  修复卡 `## rerun` 段的转述数字
+- **BUG-0036 收口**：`make evidence BUG=BUG-0036 CMD='make regress'
+  EXPECT='22/22'` 机械生成 `doc/evidence/v0.3.20/BUG-0036.log`，
+  `doc/bugs.md` 行 status 转 `CLOSED`、`fix_commit=4d712f9`；
+  `doc/bugs/BUG-0036.md` 追加「closer 收口」子节记录独立复验过程
+- **KILL-0003 转录准确性核对**（C2）：对照 `doc/bugs/BUG-0034.md`
+  `## rerun` 段两次独立红→绿注伤自证，逐字核对 `doc/bugs.md` KILL-0003
+  行的四路数字/样本报文/证据路径，确认转录无误；未重新做 KILL 实验
+- **`doc/evidence/v0.3.20/signoff-M3.md` 追加 §八「C1/C2 兑现记录」**
+  （一至七节 rev 原文未改动，本卡只追加）：按 rev 终裁段预授权的机械路径
+  确认 C1（BUG-0036 CLOSED）与 C2（KILL-0003 入台账）均已兑现，未重开任何
+  功能验证、未新增 spot-check 判定
+- **orch 独立复核**（本次收尾，不同于 closer）：亲跑 `make check
+  MILESTONE=3`（4 条机器条件全 `[PASS]`：全 M3 场景 ✅、regress 摘要登记、
+  bug 终态/证据、KILL 覆盖率 ≥1 条 M3 标签）+ `make selftest`（61 tests
+  OK）+ diff 核对 closer 改动范围（`doc/bugs.md`/`doc/bugs/BUG-0036.md`/
+  `doc/evidence/v0.3.20/signoff-M3.md` 仅追加、`doc/evidence/v0.3.20/
+  BUG-0036.log` 新增），未采信 closer 的自我报告
+- **M3 里程碑完整签核成立**：五张 M3 执行卡（CF01-04+AT02）+ 4 个配置点 +
+  DE01/DE02/OR04/OR05/TL01/CFG02 共 11 条场景全绿 + BUG-0010/0011/0012/
+  0013/0016/0018/0021/0023/0024/0025/0028/0031/0032/0033/0034/0036 全部
+  终态或已接受 + KILL-0001/0002/0003 三条注伤自证 + rev 签核记录齐备
+
+**Not done**
+- M4（六类功能覆盖率收敛 ≥90%）尚未启动，待用户确认后再排期；BUG-0018
+  cross bin 待 M4 重采；lint baseline 285+ 条装饰性告警持续差分中
+- chain audit 既有记账缺口（M0-01 缺 spec_ref、8 处父节点锚定、10 个未
+  引用 spec 子节、22/22 evidence 缺 spec_ref header）本卡未触碰、未变化
+
+**Next**
+- 若用户确认推进：scope M4（六类覆盖率收敛）为下一里程碑；否则等待用户
+  下一步指示
+
+**How verified**
+- `make check MILESTONE=3` 全绿（4 条机器条件 PASS，signoff 文件存在）
+- `make selftest`（61 tests）通过
+- closer 与 orch 两次独立复跑 `make run TEST=m3_cfg02_reconfig_test
+  SEED=1` / `make regress`，数字逐位吻合，非采信
+
 ## [0.3.20] 2026-07-30 落地 M3-TL01：BUG-0010 跨桶定向回归守卫，M3 testplan 全绿
 
 **Done**
@@ -92,52 +140,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - `make selftest`（60 tests）通过
 - KILL 自证独立复现两次（fixer 一次、closer 一次，手法不同），数字均
   与 BUG-0034 记载基线逐位吻合，非巧合
-
-## [0.3.18] 2026-07-30 BUG-0034 TB 修复落地：R burst 重建改按 r_id 逐拍分流
-
-**Done**
-- **卡⑧（DV fixer，L2，独立于诊断/落地实例）**：按 REV-015 要求修复
-  BUG-0034——`tb/slvport_agent.sv` 的 UVM monitor R burst 重建由单槽
-  `r_busy`/`r_cur` 状态机改为按 `id_slv_t` 索引的关联数组（可并发跟踪
-  多个不同 r_id 的 burst）；`tb/sva/axi_chan_sva.sv` 的 `SVA_RLAST_LEN`
-  同步改为按 r_id 索引的 beat index/期望长度（atop 影子读的期望长度改
-  从其自身 AW handshake 取，而非依赖不存在的 AR）。全部 per-id 状态只在
-  `always_ff` 内读写、判决点为 immediate assert，不违反 BUG-0015（无
-  property/cover 直读 always_ff 状态）；未引入"断言交织不该发生"的判决
-  （spec §5.5.4 红线）；`scoreboard_refmodel.sv` 判决本体未改动（只读
-  核实 `SB_RBEATS` 依赖上游重建、monitor 修好后自动对齐）
-- 恢复 `tb/seq_lib.sv` `slvport_at02_seq` 多拍构造（leg A `p.len` 改回
-  `len_t'(3)`），`m3_at02_atop_read_test` 复跑：四路 checker 全部归零、
-  UVM_ERROR=0，M3-AT02 三条判据（含 `colliding_read_present` 达标 cover）
-  在多拍构造下依然满足
-- **KILL 自证（regression_guard 要求）**：临时去掉两处新增的 r_id 分流，
-  同 TEST+SEED 重跑，四路 checker 精确复现 BUG-0034 记载的基线数字
-  （`MON_RNOAR`=2/`SVA_RLAST_LEN`=3/`SB_RBEATS`=3/`SB_ATOP_DANGLING`=2，
-  UVM_ERROR=8）；恢复分流后再次归零。红→绿闭合，证明这四个 checker 确实
-  能对该条件见红，非恒真空转。KILL 临时改动已全部还原
-- 回归防线（改动落地后、验证本条前）：既有非交织场景逐位对照改动前
-  快照一致；全量 `make regress` = 20/20 PASS
-- `doc/bugs/BUG-0034.md` 的 `## fix`/`## rerun`/`## regression_guard`
-  三段按落地情况做记录性更新（非状态转换，closer≠fixer：状态字段仍是
-  REV-015 终判的 `TB_BUG`，未被 fixer 触碰）
-
-**Not done**
-- BUG-0034 尚未走独立 closer 复验 + `make evidence` 收口（fixer 不得
-  自己关闭）
-- fixer 观测到 `make lint-diff` 在**未改动的干净 master** 上对某些 UVM
-  test 即报新站点（本卡改动只贡献同文件既有风格类的行号平移，无新类别）
-  ——未新开 bug 行（fixer 主动避免越权/状态漂移），提请 orch 裁决是否
-  与 BUG-0021 已记载的"lint baseline 里程碑内正常漂移、签核时重生成"
-  同属一事；本轮判断：是同一现象，不新开行，留给 M3 签核卡处理
-
-**Next**
-- 派 closer 卡：独立复验修复（含独立重跑 KILL 自证，不采信 fixer 数字）、
-  确认无误后填 fix_commit、`make evidence BUG=BUG-0034 ...` 收口
-- M3 里程碑收尾：`make check MILESTONE=3` + rev 全 rubric，引用 REV-015
-  的 residual risk 披露（守卫落地后应已解除，签核卡复核确认）
-
-**How verified**
-- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
-- `make selftest`（60 tests）通过
-- KILL 自证红→绿数字与 BUG-0034 记载的原始基线逐位吻合，非近似值
 

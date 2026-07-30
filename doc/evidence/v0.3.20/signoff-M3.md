@@ -301,3 +301,76 @@ L0 卡把 `doc/lint-baseline.md` 快照刷新至本次 run（2026-07-30 / M3，8
   修复循环即其击杀见证），兑现不变量 5 字面要求。
 
 C1/C2 均机械、不重开功能验证；兑现后 M3 完整签核成立。
+
+---
+
+## 八、C1/C2 兑现记录（closer 独立复验，追加）
+
+**本节为追加，rev 原文（一至七节）一字未改。** 执行人：DV closer（独立于修复卡
+commit `4d712f9`，fresh 实例，未读修复卡推理，只读已落盘文件 + 亲跑仿真）。依据
+rev 本文终裁段原话——"C1/C2 均为机械动作、不需重开任何功能验证；兑现后 M3
+完整签核成立"——本节只做机械兑现确认，不出具新的 rubric/spot-check 判定。
+
+### C1 兑现——BUG-0036 CLOSED
+
+- **修复内容**（commit `4d712f9`，closer 亲读 `git show 4d712f9 --stat` 确认）：
+  `sim/regress/regress.list` 追加 `m3_cfg02_reconfig_test 1`（22 行，其余 21 行
+  原样保留，纯追加）；`doc/testplan.md` M3-CFG02 行 evidence 列刷新为
+  `doc/evidence/v0.3.20/M3-CFG02.log`；`sim/result_summary.txt` /
+  `doc/evidence/v0.3.20/result_summary.txt` 重登为 `passed=22/22`。
+- **closer 独立复验**（不采信修复卡转述数字，亲跑）：
+  - `make run TEST=m3_cfg02_reconfig_test SEED=1` → `UVM_ERROR: 0`、
+    `UVM_FATAL: 0`，`[SB_SUMMARY]` route/resp/resp-route(C3.2) 全 match=48
+    mismatch=0，`Summary: 2143 assertions, 870 with attempts, 0 with
+    failures`；`gen_slv_stall_sva[0..5]` 六实例 `c_bug31_livev1_aw`/
+    `c_bug31_livev1_ar` 各 1 match（BUG-0031 活值表守卫兑现，testplan
+    判据 (3)）。
+  - `make regress` → **22/22 PASS**（与已提交的 `result_summary.txt`
+    `passed=22/22` 逐行场景/SEED 一致，无任何既有场景变红）。
+  - `doc/evidence/v0.3.20/M3-CFG02.log` 亲读：首行为可重放命令
+    `make run TEST=m3_cfg02_reconfig_test SEED=1`，含 `scripts/evidence.py`
+    生成戳记，UVM_ERROR=0、SB_SUMMARY 全 mismatch=0，`doc/testplan.md`
+    M3-CFG02 行 evidence 列指向该文件、docs-check/chain audit PASS。
+  - `make evidence BUG=BUG-0036 CMD='make regress' EXPECT='22/22'` 机械生成
+    `doc/evidence/v0.3.20/BUG-0036.log`（CMD 首行即重放命令，命中
+    `passed=22/22` 签名行）；`doc/bugs.md` BUG-0036 行 status 机械回填
+    `CLOSED`，`fix_commit` 列由 closer 手工核对后回填 `4d712f9`。
+  - 独立复验详情见 `doc/bugs/BUG-0036.md` `## rerun` 段「closer 收口」
+    子节。
+- **结果**：BUG-0036 = CLOSED，`fix_commit=4d712f9`，
+  `verify_evidence=doc/evidence/v0.3.20/BUG-0036.log`。
+
+### C2 兑现——KILL-0003 已入台账
+
+- `doc/bugs.md` 新增 `KILL-0003` 行（TB，M3 标签），转录
+  `doc/bugs/BUG-0034.md` `## rerun` 段"KILL 自证"（fixer）与"独立 KILL
+  自证"（closer）两个子节：同 `TEST=m3_at02_atop_read_test SEED=1`
+  （leg A 多拍 `len_t'(3)`）下，去 r_id 分流态四路 checker 均见红
+  `MON_RNOAR=2/SVA_RLAST_LEN=3/SB_RBEATS=3/SB_ATOP_DANGLING=2/
+  UVM_ERROR=8`，恢复分流后同 SEED 复跑四路全归零、`UVM_ERROR=0`，
+  两次独立实例数字逐位吻合（含样本报文 `RLAST beat index 2 != AxLEN 3`/
+  `index 1 != AxLEN 0`/`R beat count 3 != (4)`/`count 2 != (1)` 逐字
+  复现）。
+- **转录准确性核对**（本节 closer 亲核，非重新做 KILL 实验——两次独立
+  自证已在 BUG-0034 完成）：`doc/bugs.md` KILL-0003 行的四路数字、样本
+  报文、证据路径 `doc/evidence/v0.3.15/M3-AT02.log` 逐字与
+  `doc/bugs/BUG-0034.md` 源文件一致；summary 字段含裸 token `M3`
+  （`check_kill_coverage()` 识别依据），本卡 `make check MILESTONE=3`
+  条件 4 打印 `KILL-0003, KILL-0002, KILL-0001` 三行确认其被机器识别。
+- **结果**：不变量 5「记一行 KILL」字面要求兑现，纯转录、未重新仿真、
+  未改动 TB 代码。
+
+### 机器条件复核（closer 兑现后亲跑）
+
+```
+[PASS] 1. all M3 scenarios ✅
+[PASS] 2. regress summary registered as evidence (result_summary.txt in doc/evidence/v0.3.*)
+[PASS] 3. all bugs terminal or ACCEPTED-unexpired, closures evidenced
+[PASS] 4. kill coverage: >=1 KILL row tagged M3 (KILL-0003, KILL-0002, KILL-0001)
+[yes] signoff file (signoff-M3*.md) in doc/evidence/v0.3.*
+```
+
+### M3 完整签核成立
+
+四条机器硬条件（1-4）与签核文件（本文件）均已就位；C1/C2 已按 rev 预授权的
+机械路径兑现，未重开任何功能验证、未新增 spot-check 判定。**M3 完整签核成立。**

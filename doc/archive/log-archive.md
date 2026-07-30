@@ -1,4 +1,52 @@
 # Work log archive
+## [0.3.18] 2026-07-30 BUG-0034 TB 修复落地：R burst 重建改按 r_id 逐拍分流
+
+**Done**
+- **卡⑧（DV fixer，L2，独立于诊断/落地实例）**：按 REV-015 要求修复
+  BUG-0034——`tb/slvport_agent.sv` 的 UVM monitor R burst 重建由单槽
+  `r_busy`/`r_cur` 状态机改为按 `id_slv_t` 索引的关联数组（可并发跟踪
+  多个不同 r_id 的 burst）；`tb/sva/axi_chan_sva.sv` 的 `SVA_RLAST_LEN`
+  同步改为按 r_id 索引的 beat index/期望长度（atop 影子读的期望长度改
+  从其自身 AW handshake 取，而非依赖不存在的 AR）。全部 per-id 状态只在
+  `always_ff` 内读写、判决点为 immediate assert，不违反 BUG-0015（无
+  property/cover 直读 always_ff 状态）；未引入"断言交织不该发生"的判决
+  （spec §5.5.4 红线）；`scoreboard_refmodel.sv` 判决本体未改动（只读
+  核实 `SB_RBEATS` 依赖上游重建、monitor 修好后自动对齐）
+- 恢复 `tb/seq_lib.sv` `slvport_at02_seq` 多拍构造（leg A `p.len` 改回
+  `len_t'(3)`），`m3_at02_atop_read_test` 复跑：四路 checker 全部归零、
+  UVM_ERROR=0，M3-AT02 三条判据（含 `colliding_read_present` 达标 cover）
+  在多拍构造下依然满足
+- **KILL 自证（regression_guard 要求）**：临时去掉两处新增的 r_id 分流，
+  同 TEST+SEED 重跑，四路 checker 精确复现 BUG-0034 记载的基线数字
+  （`MON_RNOAR`=2/`SVA_RLAST_LEN`=3/`SB_RBEATS`=3/`SB_ATOP_DANGLING`=2，
+  UVM_ERROR=8）；恢复分流后再次归零。红→绿闭合，证明这四个 checker 确实
+  能对该条件见红，非恒真空转。KILL 临时改动已全部还原
+- 回归防线（改动落地后、验证本条前）：既有非交织场景逐位对照改动前
+  快照一致；全量 `make regress` = 20/20 PASS
+- `doc/bugs/BUG-0034.md` 的 `## fix`/`## rerun`/`## regression_guard`
+  三段按落地情况做记录性更新（非状态转换，closer≠fixer：状态字段仍是
+  REV-015 终判的 `TB_BUG`，未被 fixer 触碰）
+
+**Not done**
+- BUG-0034 尚未走独立 closer 复验 + `make evidence` 收口（fixer 不得
+  自己关闭）
+- fixer 观测到 `make lint-diff` 在**未改动的干净 master** 上对某些 UVM
+  test 即报新站点（本卡改动只贡献同文件既有风格类的行号平移，无新类别）
+  ——未新开 bug 行（fixer 主动避免越权/状态漂移），提请 orch 裁决是否
+  与 BUG-0021 已记载的"lint baseline 里程碑内正常漂移、签核时重生成"
+  同属一事；本轮判断：是同一现象，不新开行，留给 M3 签核卡处理
+
+**Next**
+- 派 closer 卡：独立复验修复（含独立重跑 KILL 自证，不采信 fixer 数字）、
+  确认无误后填 fix_commit、`make evidence BUG=BUG-0034 ...` 收口
+- M3 里程碑收尾：`make check MILESTONE=3` + rev 全 rubric，引用 REV-015
+  的 residual risk 披露（守卫落地后应已解除，签核卡复核确认）
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit 无新增 dangling/gap）
+- `make selftest`（60 tests）通过
+- KILL 自证红→绿数字与 BUG-0034 记载的原始基线逐位吻合，非近似值
+
 ## [0.3.17] 2026-07-30 5 个 M3 covergroup 落地；BUG-0034 三工具诊断→rev 否决 DUT_BUG、改判 TB_BUG
 
 **Done**

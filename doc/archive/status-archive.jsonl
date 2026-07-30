@@ -1,3 +1,4 @@
+{"date": "2026-07-29", "version": "0.3.13", "summary": "卡③落地 BUG-0018 修复：给 scoreboard 增 AW/AR 接受时刻事件流，M2-OR01/WO01 转态覆盖率转绿；发现 REV-011 §3.3 cp_stall_state 判据几何上不可达，留待 closer 复核"}
 {"date": "2026-07-29", "version": "0.3.12", "summary": "卡②落地 BUG-0024 (b) 收窄 + M3-OR05；closer 独立复验 b-1~b-4 后转 BUG-0024 WONTFIX；archive 消化 5>4 终态行溢出"}
 {"date": "2026-07-29", "version": "0.3.11", "summary": "closer 卡（新独立实例）填 fix_commit=482a47e，独立复验通过后关闭 BUG-0025/BUG-0031"}
 {"date": "2026-07-29", "version": "0.3.10", "summary": "BUG-0025+0031 修复落地+新发 BUG-0033→REV-014 仲裁 SPEC_CHANGED→应用；ERR_RDATA 校正转绿 M3-DE01/DE02/OR04+KILL-0001；closer 复验全过但 fix_commit 空挡住关闭，已如实回退"}
