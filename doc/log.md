@@ -2,6 +2,81 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.3] 2026-07-30 BUG-0038 仲裁落地：spec §0 覆盖率范围改例化闭包口径 + 新登记 BUG-0039（atop_filter FSM 可达性冲突）
+
+**Done**
+- **rev 卡（L3/opus，fresh 实例，定级 vs 实际一致）**：BUG-0038 spec 歧义
+  仲裁，产出 `doc/review/REV-016.md`（579 行）。裁决 **conditional pass**，
+  taxonomy 终判维持 SPEC_ISSUE，处置 SPEC_CHANGED。核心裁定：spec §0 item 4
+  的"等"字**本就是例化闭包**（判据 = 是否出现在 `axi_xbar` 实例子树内，与
+  模块所属上游库目录无关），依据是 item 5 原文已有的"间接例化即计入 #4"
+  + REV-001 §3.3 C2 当年的判据本身就是例化关系而非模块名——故本次是**澄清
+  而非范围扩张**。同时补上原文完全缺失的可判定性规则。
+- **orch 应用（严格按 REV-016 §8 白名单，不外溢）**：`doc/spec.md` §0
+  item 4 / item 5 各整行替换为 P-REV016-1 / P-REV016-2 逐字原文；Change
+  record 追加第 9 行；`python3 scripts/docs.py --pin-spec` 重 pin
+  （sha256 `0ce9fc3a…983191b2`）。**§4 clause 7 的 BUG-0032 环境约束一字
+  未动**（REV-016 §8 明令，其重开是另案，不许搭顺风车）。
+- **新口径实质**：判定单位 =（模块, 类型）二元组；三态判定——无 bin（空白）
+  记 **N/A**，不入 ≥90% 的分子与分母，但**必须逐条写明已核实成因**；有 bin
+  须 ≥90% 或走 rev 签核书面豁免。**空白不得记作 0%、不得记作 100%、不得省略
+  不列**；父模块的 N/A 不得代表子模块达标。这正面回答了 BUG-0038 guard 点名
+  的诉求（否则仪表盘上"M4 完成"与"M4 完成但两个没人商定过范围的空白 wrapper
+  除外"完全同形）。
+- **orch 独立复核（不采信卡内自报事实）**：亲跑 grep/sed 复核 REV-016 的四条
+  承重结构事实，全部成立——(1) `axi_demux.sv` 有 7 个 `spill_register`
+  （:89/102/119/132/145/162/175）；(2) `axi_xbar_unmuxed.sv` 全文无
+  `atop_filter` 字样；(3) `axi_err_slv.sv:45-58` 才是 `axi_atop_filter` 的
+  例化点；(4) `axi_atop_filter.sv:137` 的转移条件 vs `axi_pkg.sv:400/415`
+  的 `ATOP_NONE`/`ATOP_ATOMICLOAD` 编码。
+- **两处记录保真度订正**（rev 抓出，orch 复核后落）：`doc/bugs/BUG-0038.md`
+  `## rca` 段"`axi_demux` 是纯透传 wrapper"**证伪**——它自身有 7 个
+  `spill_register`（由 `axi_xbar_unmuxed.sv:178-182` 的 `LatencyMode[9:5]`
+  驱动，即 spec §7.1 的物理载体）+ 4 条 assign，故其 Line/Cond/Branch 空白
+  **尚未被证明是结构性的**；`addr_decode` 那一半成立。另一处
+  （证据 §3.7 的 atop_filter 例化父模块记错）按 FB-23「冻结记录不回改」
+  **不回改旧证据文件**，由新登记的 BUG-0039 行与未来重测记录承载。
+- **BUG-0038 转 SPEC_CHANGED**，root_cause / verify_evidence 两列按 REV-016
+  §10 逐字落；按 BUG-0029 guard（非仿真类缺陷无机械 `.log`）在两列**与**详情页
+  `## rerun` 段三处写明实质复验位置 = `doc/review/REV-016.md §1/§3/§4`。
+- **新登记 BUG-0039（OPEN，spec）——本周期最有价值的副产物**：M4 六类收敛
+  对 `axi_atop_filter` FSM 的要求与 spec §4 clause 7 的 BUG-0032 环境约束
+  **直接冲突**。该 DUT 内 6 个 atop_filter 实例**全在 `axi_err_slv` 内**，
+  其 W FSM 离开 `W_FEEDTHROUGH` 的唯一条件是 `atop != 0` 的 AW 抵达 err_slv
+  ⇒ 必须打到**译码未命中地址**，而 §4 clause 7 明令禁止。**连带证伪了
+  0.4.1 记下的方向**：`doc/evidence/v0.4.0/M4-coverage-baseline.md` §4 第 1
+  条把 FSM 7.14% 归因于"ATOP 编码多样性不足"，但现有 `ATOP_LOAD_ADD` 已含
+  `ATOP_ATOMICLOAD=2'b10` ≠ `ATOP_NONE`，**编码条件早已满足**——缺的是地址
+  落点。故"派场景卡补 AtomicCompare/AtomicSwap 编码"这条路**无效**，M4 最大
+  缺口的钥匙一直找错了地方。
+
+**Not done**
+- REV-016 conditional pass 的三条件只兑现了第 1 条（spec 应用 + 重 pin）。
+  第 2 条（M4 基线按新口径**重出**报告，同一份干净 vdb、不重跑仿真，每个 N/A
+  附已核实成因）与第 3 条（BUG-0039 裁完才可推进 M4）均**未做**。
+- BUG-0037（COV=1 多设计合并污染 `out/cov.vdb`）仍 OPEN，本周期未触碰。
+- BUG-0039 只完成登记，未派仲裁卡。
+- REV-016 §11 记的一处措辞漂移（`workflow/review.md` 现文是**七问**，
+  CLAUDE.md L12 与派卡措辞沿用"六问"）**未登记也未订正**——rev 判其属文档
+  指针问题、非 taxonomy 类，登记与否留给 orch，本周期未决。
+
+**Next**
+- 派 rev 仲裁卡处置 BUG-0039（放宽 §4 clause 7 到 M4 / 出具 FSM 书面豁免 /
+  其他路径）——它是 M4 的前置门，不裁完派场景卡会白派
+- 按新口径重出 M4 基线报告（REV-016 条件 2；新文件，不回改 v0.4.0 旧记录）
+- 分诊 BUG-0037
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit 的 gap 项均为既有信息项，
+  本周期未新增）
+- `make selftest` 61 tests OK
+- `python3 scripts/docs.py --pin-spec` 重 pin 成功，新 sha256 已写入
+  `doc/spec.sha256`
+- REV-016 的四条承重结构事实由 orch 亲跑 grep/sed 复核 vendor 原件确认
+  （见上 Done 第 4 条），非采信子代理自报
+- 本周期**无仿真**：全部改动为 spec/台账/评审记录，无 RTL/TB 代码改动，
+  故不产生也不登记任何 evidence 行
+
 ## [0.4.2] 2026-07-30 落地 code-suggestion.md 三条零风险重构 + doc/uvm.md 验证环境入门读物
 
 **Done**
@@ -115,44 +190,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - 覆盖率基线的 22 次独立 `make run` 均逐条 `svacheck.py --judge` 复核
   PASS（非汇总口径）；orch 抽查 `doc/code-suggestion.md` 引用的具体行号/
   代码片段与仓库实际内容一致
-
-## [0.4.0] 2026-07-30 M3→M4 里程碑转段（`make bump minor=1`），M4 出口条件订正
-
-**Done**
-- **`make next` 机械推导**：M3 四条机器硬条件均已满足 → 执行
-  `make bump minor=1`（0.3.21 → 0.4.0，进入 M4）
-- **`doc/milestone.md` 记账更新**（orch 直接维护，纯 bookkeeping，非技术
-  制品）：M3 标题 🔲→✅，签核指针改为具体文件
-  `doc/evidence/v0.3.20/signoff-M3.md`（含 0.3.21 closer 追加的 §八）
-- **M4 出口条件措辞订正**：原文"line/toggle/branch/condition/fsm/
-  **functional** 六类 ≥90%"与 `doc/spec.md` §0 #4 钉死的口径
-  `line+cond+fsm+tgl+branch+**assert**`（VCS `-cm` 六个类型关键字，不含
-  functional covergroup）不一致——该口径已由 **REV-011 §3.3** 明确裁定
-  （"M4 机器判据接不住 covergroup"，即 BUG-0018 定档 M3 而非 M4 的依据），
-  本卡只是把 milestone.md 的陈旧措辞订正为与已裁决事实一致，**非新解释**。
-  订正后同时补一行："functional covergroup 非空转仍按既有 rubric 人工抽查
-  把关，不受六类机器口径约束"，避免误读为"M4 不需要看 covergroup"
-- **发现 git tag 命名撞车**：本地 `git tag -l` 显示 `v0.4.0`~`v0.8.0`
-  已被 `upstream`（iverif-workflow 框架）远端的发布 tag 占用（`git fetch
-  upstream` 拉取所得，`git merge-base --is-ancestor v0.4.0 HEAD` 为否，
-  证实其与本项目历史无关）；而本项目自己的里程碑 tag（`v0.1.0`/`v0.2.0`/
-  `v0.3.0`，均 `--is-ancestor HEAD` 为真）恰好在早期版本号上未撞车、侥幸
-  留存。本次要打的 `v0.4.0`（M3→M4 转段）与框架的
-  `v0.4.0`（"lean-and-turnkey overhaul"）撞名——**未打 tag**，留待用户裁决
-  命名方案（例如加前缀区分，或本项目改用 `doc/status.jsonl`/`version.json`
-  作为唯一版本真相、不再打本地 tag）
-
-**Not done**
-- git tag 命名冲突尚未解决，本次转段**未**执行 `git tag v0.4.0`
-- M4 实质工作（六类覆盖率基线测量、缺口分析）尚未开始，留给下一张派发卡
-
-**Next**
-- 派 DV 卡（L1/sonnet）：`make regress COV=1` 全量重跑 + `make cov`
-  生成 urg 报告，测出六类（line/cond/fsm/tgl/branch/assert）当前基线
-  百分比与差距最大的模块/条目，作为 M4 缺口分析的起点（纯测量，不做修复）
-- 待用户对 tag 命名冲突给出裁决后再补打 tag（或改用其他版本追踪方式）
-
-**How verified**
-- `make check`（非里程碑）docs-check passed，chain audit 既有缺口数字不变
-- `make selftest`（61 tests）通过
 
