@@ -2,6 +2,46 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.0] 2026-07-30 M3→M4 里程碑转段（`make bump minor=1`），M4 出口条件订正
+
+**Done**
+- **`make next` 机械推导**：M3 四条机器硬条件均已满足 → 执行
+  `make bump minor=1`（0.3.21 → 0.4.0，进入 M4）
+- **`doc/milestone.md` 记账更新**（orch 直接维护，纯 bookkeeping，非技术
+  制品）：M3 标题 🔲→✅，签核指针改为具体文件
+  `doc/evidence/v0.3.20/signoff-M3.md`（含 0.3.21 closer 追加的 §八）
+- **M4 出口条件措辞订正**：原文"line/toggle/branch/condition/fsm/
+  **functional** 六类 ≥90%"与 `doc/spec.md` §0 #4 钉死的口径
+  `line+cond+fsm+tgl+branch+**assert**`（VCS `-cm` 六个类型关键字，不含
+  functional covergroup）不一致——该口径已由 **REV-011 §3.3** 明确裁定
+  （"M4 机器判据接不住 covergroup"，即 BUG-0018 定档 M3 而非 M4 的依据），
+  本卡只是把 milestone.md 的陈旧措辞订正为与已裁决事实一致，**非新解释**。
+  订正后同时补一行："functional covergroup 非空转仍按既有 rubric 人工抽查
+  把关，不受六类机器口径约束"，避免误读为"M4 不需要看 covergroup"
+- **发现 git tag 命名撞车**：本地 `git tag -l` 显示 `v0.4.0`~`v0.8.0`
+  已被 `upstream`（iverif-workflow 框架）远端的发布 tag 占用（`git fetch
+  upstream` 拉取所得，`git merge-base --is-ancestor v0.4.0 HEAD` 为否，
+  证实其与本项目历史无关）；而本项目自己的里程碑 tag（`v0.1.0`/`v0.2.0`/
+  `v0.3.0`，均 `--is-ancestor HEAD` 为真）恰好在早期版本号上未撞车、侥幸
+  留存。本次要打的 `v0.4.0`（M3→M4 转段）与框架的
+  `v0.4.0`（"lean-and-turnkey overhaul"）撞名——**未打 tag**，留待用户裁决
+  命名方案（例如加前缀区分，或本项目改用 `doc/status.jsonl`/`version.json`
+  作为唯一版本真相、不再打本地 tag）
+
+**Not done**
+- git tag 命名冲突尚未解决，本次转段**未**执行 `git tag v0.4.0`
+- M4 实质工作（六类覆盖率基线测量、缺口分析）尚未开始，留给下一张派发卡
+
+**Next**
+- 派 DV 卡（L1/sonnet）：`make regress COV=1` 全量重跑 + `make cov`
+  生成 urg 报告，测出六类（line/cond/fsm/tgl/branch/assert）当前基线
+  百分比与差距最大的模块/条目，作为 M4 缺口分析的起点（纯测量，不做修复）
+- 待用户对 tag 命名冲突给出裁决后再补打 tag（或改用其他版本追踪方式）
+
+**How verified**
+- `make check`（非里程碑）docs-check passed，chain audit 既有缺口数字不变
+- `make selftest`（61 tests）通过
+
 ## [0.3.21] 2026-07-30 closer 独立复验+收口 BUG-0036，M3 里程碑完整签核成立
 
 **Done**

@@ -36,7 +36,7 @@ Exit criteria:
 - 功能覆盖 covergroup 落地，非空转自证
 - 签核：`doc/evidence/v0.2.5/signoff-M2.md`（rubric #7 首次实战）
 
-## M3 — 多配置回归 + 错误路径 🔲
+## M3 — 多配置回归 + 错误路径 ✅
 
 Exit criteria:
 
@@ -47,13 +47,20 @@ Exit criteria:
   在日志上同形（裁决见 log [0.3.3]）
 - 四条 `ACCEPTED@M3` 债务逐条了结：BUG-0018 / BUG-0024 / BUG-0025+BUG-0031
 - **KILL 覆盖：至少一条打 M3 标签的 KILL 行**（不变量 5 首个生效里程碑）
-- 签核：`doc/evidence/v0.3.*/signoff-M3.md`
+- 签核：`doc/evidence/v0.3.20/signoff-M3.md`（C1/C2 兑现记录见该文件 §八，
+  由 0.3.21 closer 卡追加）
 
 ## M4 — 六类覆盖 ≥90% 收敛 🔲
 
 Exit criteria:
 
-- line/toggle/branch/condition/fsm/functional 六类 ≥90%，缺口逐条或修或
+- **六类口径以 spec §0 #4 为准**：`line+cond+fsm+tgl+branch+assert`
+  （VCS `-cm` 六个类型关键字，**不含 functional covergroup**——REV-011 §3.3
+  已裁定"M4 机器判据接不住 covergroup"，本页原"…functional"措辞与 spec
+  不符，本次订正为与 spec 一致的表述，非新解释）≥90%，DUT 范围含
+  `axi_xbar` 及其全部强制内部子模块（spec §0 #4 列举），缺口逐条或修或
   书面豁免（豁免须 rev 签核）
+- functional covergroup（`cg_*`）非空转仍按既有 rubric 第 4/5 条人工抽查
+  把关，不受本页六类机器口径约束
 - BUG-0018 的 cross bin 盲区在此之前已解决（否则会以"永远填不满"形式再现）
 - 签核后转 v1.0.0
