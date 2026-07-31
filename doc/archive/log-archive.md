@@ -1,4 +1,97 @@
 # Work log archive
+## [0.4.8] 2026-08-01 M5 立项阶段 0 完成——验证方法学拓展提案过 rev 门禁；下一步转回 M4 收尾（重要顺序裁决，见 Next）
+
+**背景（供接手会话快速理解本次转折，非仅本条自己看）**：本周期用户提出重大
+范围拓展——要求把项目验证方法学补齐到工业界标准（约束随机测试、多种子回归、
+压力/soak 测试、覆盖率驱动闭环），已用 EnterPlanMode 产出分阶段派卡计划并获
+用户批准，**完整计划存档于 `/home/icarray/.claude/plans/misty-petting-horizon.md`
+——接手会话必读**。该计划把工作分五个阶段：阶段 -1（收尾在飞的 M4 spec-gap
+sweep，已完成，见上一条 0.4.7）→ 阶段 0（arch 起草方法学提案 + rev 把关）→
+阶段 1（既有场景补多种子回归）→ 阶段 2（约束随机基础设施）→ 阶段 3（压力/soak）
+→ 阶段 4（覆盖率驱动闭环脚本）。
+
+**Done**
+- **阶段 0 完成**：ARCH 全新实例（L3/opus）交付
+  `doc/design-prompt/verification_maturity.md`（348 行提案），覆盖五个决策点：
+  1. 里程碑归属——建议新开 **M5**，且**排在 M4 签核之后**（正交轴论证：M4 是
+     结构覆盖率百分比单一轴，M5 是验证方法论成熟度轴；并入会让 M4 出口条件
+     失焦）；
+  2. 约束随机架构——`axi_seq_item` 四个既有 `rand` 字段（`is_write/addr/
+     len/id`，现状：声明了但全仓 `.randomize()`/`constraint` 使用次数均为 0）
+     配硬约束（spec 合法性边界，如 §4 clause 7 ATOP×未命中地址环境约束）+
+     软约束（角落加权，如同桶 ID 撞车概率显式抬高——直接呼应本周期抓到的
+     BUG-0009/0023/0042「同拍时序巧合」类缺陷）；`atop` 升级为有界随机
+     （限定 `{'0} ∪ 合法 atomic-load 编码`，不放开 store/swap/compare，因为
+     spec §6 对后者无应答义务条款——此缺口即下述 BUG-0044）；集中 ID 分配器
+     兜住跨事务不变量（§5.3.1 UniqueIds / §6.4 ATOP 全方向唯一）；
+  3. 多种子回归——N=5 底线（时序敏感子集 N=10），给出编译 vs 运行时开销的
+     量化经济学论证（种子扫描复用已编译 simv，纯运行时开销）；
+  4. 压力/soak——多拓扑饱和场景 + watchdog 活性检查（新判据，非固定拍数
+     断言）+ 覆盖率饱和作停止判据（非 PASS/FAIL）；
+  5. 覆盖率驱动闭环——`scripts/cov_loop.py` 功能规格（覆盖率只测量不做
+     oracle、脚本不 turn green 任何行）。
+  全程恪守 arch 自己声明的四条治理边界 B0.1-B0.4（期望值只来自 spec、覆盖率
+  非 oracle、不 turn green 任何行、延迟不敏感）。
+- **REV 全新实例**（与 arch 隔离）出具 `doc/review/REV-019.md`，**CONDITIONAL
+  PASS**（四决策点 CONDITIONAL PASS + 一决策点 PASS）。逐条独立核实 spec 引用
+  与历史 bug 细节引用的真实性（非采信 arch 自报），四条闭合条件：
+  1. 一处引用勘误（watchdog 活性判据真实出处是 §5.5.4，提案误引 §5.5.3）；
+  2. 提案设计约束随机化时主动发现的 SPEC_ISSUE（spec §6 对 ATOP
+     atomicstore/atomicswap/atomiccompare 三个子类型无应答义务条款）——
+     "仲裁可以延后，但登记不可延后"；
+  3. 多种子落地卡必须显式承接"`regress.list ⊇ testplan ✅ 集合`这条既有
+     隐性完备度纪律（BUG-0028/0036 经验），种子行从个位数膨胀到约 120 行后
+     如何保持可审"——REV-019 亲验 `scripts/docs.py`/`scripts/regress.py`
+     均无任何机器交叉校验此差集，现状纯人工比对；
+  4. 一处未经 spec 授权的 DUT 行为断言（"crossbar 单次译码不逐拍重译码"）
+     需软化为纯参考模型简化理由。
+- **orch 逐条应用四条条件**：两处引用勘误（design-prompt + milestone 各一
+  处）；登记 **BUG-0044**（SPEC_ISSUE，`ACCEPTED@M5`，containment=有界随机
+  子集，不阻塞 M5）；design-prompt Decision 3 段落补充完备度审计的强制范围
+  条款（供后续落地卡执行）；C2.1 措辞改写（不再对 DUT 译码基数下断言）。
+  `doc/milestone.md` 已有完整 M5 章节草稿（Abstract 表 + 出口条件），状态
+  标"🔲 提案"（未派 DE/DV 卡）。
+- `make check`/`make selftest` 每次改动后复跑绿。
+
+**Not done**
+- **M5 阶段 1-4 均未开始**——按 REV-019 的裁决（本条最重要的信息），M5 应排
+  在 **M4 正式签核之后**才启动，理由是两条轴不同、且不应往在飞的 M4 里程碑
+  注入大改动。故下一步**不是**直接派阶段 1（多种子回归）的 DV 卡。
+- **M4 尚未签核**，遗留三项前置工作（均在本周期之前就已存在，非本周期新增）：
+  1. `REV-017` 条件 3 未兑现——atop_filter FSM 书面豁免 + `BUG-0032` guard
+     抽查，M4 签核前置条件；
+  2. M4 六类覆盖率基线报告需要重出（`REV-016` 条件 2 遗留）——现在 M4-OV01/
+     FT01/RC01/AW01 四条新场景已落地（0.4.6-0.4.7 完成），是重出这份报告
+     收益最大的时机，能看到真实收敛效果；
+  3. 走完整 M4 签核流程：`make check MILESTONE=4` 机器条件 + rev 人工抽查
+     rubric + KILL coverage 核对 + `doc/evidence/v1.0.0/signoff-M4.md`
+     （或按实际版本号）。
+- `BUG-0041`（OPEN，DUT 候选，`addr_decode_dync` 调试断言与重叠特性冲突）与
+  `BUG-0043`（OPEN，TOOL_ENV 候选，间歇性仿真进程非零退出）仍未分诊/仲裁，
+  与 M4 签核有交集（BUG-0041 底层 RTL 处置需要 rev 裁决，可能影响签核范围
+  判断）——建议 M4 签核前一并核对处置。
+- `BUG-0044`（新登记）仲裁本身延迟，不阻塞任何当前工作。
+
+**Next（接手会话按此顺序执行，不要跳到 M5）**
+1. **先收尾 M4**：重出 M4 六类覆盖率基线报告（复用现有干净隔离的
+   `out/{m0,cfgA..E}/cov.vdb` 若仍在，否则重跑 `make regress COV=1`）→ 兑现
+   `REV-017` 条件 3（atop_filter FSM 书面豁免，派 REV 卡）→ 视情况处置
+   `BUG-0041`/`BUG-0043` → 走完整 M4 签核（`make check MILESTONE=4` + rev
+   人工 rubric）→ `doc/milestone.md` M4 标记转 ✅、版本转段（建议 v1.0.0，
+   与 M5 草稿里"M4 签核转 v1.0.0"的占位假设一致）。
+2. **M4 签核后**才开始 M5 阶段 1（既有场景补多种子回归）——完整五阶段计划见
+   `/home/icarray/.claude/plans/misty-petting-horizon.md`，阶段 0 的具体
+   技术方案见 `doc/design-prompt/verification_maturity.md`（已过 rev 门禁，
+   可直接作为阶段 1-4 派卡的设计输入，不需要重新起草）。
+
+**How verified**
+- `make check` 绿：docs-check passed，chain audit 无新增缺口（与 0.4.7 一致）。
+- `make selftest` 61/61 OK。
+- 本周期无仿真运行（纯文档/提案层落地），故无新 evidence 记录、无 testplan
+  状态变化——`make evidence` 门禁不适用。
+- `doc/bugs.md` 新增 1 行（BUG-0044），`doc/review/` 新增 1 份（REV-019），
+  均按无条件登记纪律留痕。
+
 ## [0.4.7] 2026-08-01 M4 spec-gap sweep 收官——4 条候选场景全部落地，发现并处理 3 个真实缺陷/异常
 
 **Done**

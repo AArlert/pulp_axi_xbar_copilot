@@ -1,3 +1,4 @@
+{"date": "2026-07-30", "version": "0.4.3", "summary": "BUG-0038 rev 仲裁（REV-016）落地：spec §0 item 4/5 澄清为例化闭包口径 + 三态判定规则（无 bin ⇒ N/A），重 pin sha256，转 SPEC_CHANGED；新登记 BUG-0039——atop_filter FSM 唯一转移路径与 §4 clause 7 环境约束冲突，证伪旧归因，M4 须先仲裁。无仿真无代码改动"}
 {"date": "2026-07-30", "version": "0.4.2", "summary": "落地 code-suggestion.md 三条零风险重构（payload helper/vseq 扇出 helper/scoreboard 流转注释），全回归 22/22+全部 bug 守卫数字逐位复现；新增 doc/uvm.md（仿 axi.md 风格的验证环境入门读物）+ SVG 图 + README 验证环境概览节"}
 {"date": "2026-07-30", "version": "0.4.1", "summary": "M4 六类覆盖率基线测出（详见 log.md），登记 BUG-0037（COV 合并异常）+ BUG-0038（wrapper 模块 spec 范围疑点）；并行完成 UVM 框架人工评审，产出 doc/code-suggestion.md"}
 {"date": "2026-07-30", "version": "0.4.0", "summary": "M3→M4 里程碑转段：milestone.md M3 标记转 ✅、M4 出口条件措辞按 REV-011 §3.3 订正为与 spec §0 #4 一致的 line+cond+fsm+tgl+branch+assert（不含 covergroup）；发现本地 git tag 命名与 upstream 框架发布 tag 撞名（v0.4.0 起），暂缓打 tag，待用户裁决"}

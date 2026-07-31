@@ -1,3 +1,4 @@
+{"date": "2026-08-01", "version": "0.4.11", "summary": "BUG-0045→ACCEPTED@M5、BUG-0043→WONTFIX（REV-021/022 独立仲裁应用）；核验中新登记BUG-0046（同源独立spec-gap，已派REV-023）。M4机器门禁条件3阻塞项转移，条件4（KILL）待DV卡交付"}
 {"date": "2026-08-01", "version": "0.4.10", "summary": "M4 收尾第二项：六类覆盖率基线重出（REV-016条件2兑现）+ regress evidence 登记，M4 机器门禁4条中2条转PASS。剩余：BUG-0045/0043终态、M4 KILL覆盖、REV-017条件3、完整签核"}
 {"date": "2026-08-01", "version": "0.4.9", "summary": "M4 收尾第一项：BUG-0041 分诊闭环，REV-020 终判 WONTFIX（accepted-vendor-quirk）；顺带登记 BUG-0045（spec-gap 候选，非阻塞）；BUG-0043 维持观察。M4 收尾剩余：覆盖率基线重出、REV-017 条件3、完整签核"}
 {"date": "2026-08-01", "version": "0.4.8", "summary": "M5 立项阶段 0 完成（arch 提案+REV-019 CONDITIONAL PASS+登记 BUG-0044）。重要：REV-019 裁定 M5 须排 M4 签核之后，下一步转回收尾 M4（覆盖率基线重出+REV-017 条件3+签核），非直接开始 M5 阶段1。计划全文见 misty-petting-horizon.md"}
@@ -5,4 +6,3 @@
 {"date": "2026-07-31", "version": "0.4.6", "summary": "M4 spec-gap 全面扫描落地：arch 交付 11 小节处置+4 候选行+2 spec 提案，rev（REV-018）CONDITIONAL PASS 全部注册，orch 应用——spec 增 FallThrough 维+§4.7 范围澄清并重 pin，testplan 注册 M4-RC01/AW01/OV01/FT01（🔲）+ M3-DE01 约束句扩至 M3/M4"}
 {"date": "2026-07-30", "version": "0.4.5", "summary": "BUG-0037 修复关闭（COV=1 覆盖率数据库跨拓扑合并）：CM 改递归展开+COV_DIR 间接层，22/22 PASS 不变、六域 0 mismatch，orch 独立复验；新登 BUG-0040+FB-30"}
 {"date": "2026-07-30", "version": "0.4.4", "summary": "BUG-0039 rev 仲裁（REV-017）落地：§4 clause 7 环境约束延展 M3→M3+M4，atop_filter FSM 走书面豁免，重 pin，转 SPEC_CHANGED；REV-016/017 条件均未兑现（M4 基线重出+testplan行+签核豁免），M4 不得签核"}
-{"date": "2026-07-30", "version": "0.4.3", "summary": "BUG-0038 rev 仲裁（REV-016）落地：spec §0 item 4/5 澄清为例化闭包口径 + 三态判定规则（无 bin ⇒ N/A），重 pin sha256，转 SPEC_CHANGED；新登记 BUG-0039——atop_filter FSM 唯一转移路径与 §4 clause 7 环境约束冲突，证伪旧归因，M4 须先仲裁。无仿真无代码改动"}
