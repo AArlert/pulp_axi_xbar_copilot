@@ -1,3 +1,4 @@
+{"date": "2026-07-30", "version": "0.3.20", "summary": "落地 M3-TL01（BUG-0010 跨桶定向回归守卫）：DV 卡实证分桶口径、scoreboard 全绿+新非判决覆盖 cg_xbucket_total 命中，全回归 21/21 PASS，M3 testplan 转 11/11 全绿"}
 {"date": "2026-07-30", "version": "0.3.19", "summary": "closer 独立复验 BUG-0034 修复+KILL自证，转 CLOSED（fix_commit=d7f5011）；BUG-0034 全链路（诊断→REV-015仲裁→修复→收口）终结"}
 {"date": "2026-07-30", "version": "0.3.18", "summary": "BUG-0034 TB 修复落地：R burst 重建改按 r_id 逐拍分流，恢复 M3-AT02 多拍构造复跑转绿，KILL 自证红→绿完整；等待独立 closer 复验+收 evidence"}
 {"date": "2026-07-30", "version": "0.3.17", "summary": "落地 5 个 M3 covergroup（真接现有 SVA 事实源，不重复判断）；BUG-0034 三工具诊断→rev(REV-015)否决 DUT_BUG candidate、改判 TB_BUG；BUG-0035 TOOL_ENV WONTFIX"}
