@@ -1,4 +1,68 @@
 # Work log archive
+## [0.4.11] 2026-08-01 M4 收尾第三项（上半）：BUG-0045/0043 转终态，新登记 BUG-0046（同批发现的独立 spec-gap）
+
+**Done**
+- 并行派两张独立 rev 仲裁卡（L3/opus，各自 fresh instance，互不共享，均只产出
+  裁决记录不改 bugs.md）+ 一张 M4 KILL 覆盖自证 DV 卡：
+  - **REV-021 仲裁 BUG-0045**（spec §3.2 未载 `end_addr=='0` 末端哨兵）：
+    独立核实（算术自验 8 条 rule 的 `end_addr` 不回绕到 0 + tb 全域构造点
+    扫描）确认"当前无场景触及"为真——taxonomy 维持 SPEC_ISSUE（潜伏型，
+    "完全未定义"支），处置 **ACCEPTED@M5**，排除"现在补 spec"（会造不可
+    证伪 refmodel 死代码）与 WONTFIX（会永久埋没 RTL 全链路一等公民
+    特性）。给出可证伪解锁条件（任何场景构造 `end_addr=='0` 即刻作废）+
+    M5 到期二选一动作（覆盖哨兵走标准处置三件套 / 具体论证转 WONTFIX）+
+    ready-to-apply 的 spec 条款草案备料。**核实过程中独立发现新缺口**：
+    spec §3.2 条 2 `start_addr<=end_addr`（非严格）与 RTL `check_start`
+    严格 `<` 约束松紧不符——独立、非阻塞，orch 按无条件登记纪律登记为
+    **BUG-0046**（OPEN，spec，SPEC_ISSUE 候选）。
+  - **REV-022 处置 BUG-0043**（间歇性 `make regress` 非零退出）：独立复算
+    退出码机制归因（`rc!=0→FAIL` 是 `vcs-2018.mk` 明载的有意设计）+ 三次
+    两清一异事实链，taxonomy 确认 TOOL_ENV，终态 **WONTFIX（accepted-
+    transient）**——排除 `ACCEPTED@M<n>`（无可调度工作、无可证伪到期
+    条件，强设只会把不可复现现象伪装成日程债）。给出收紧后的
+    `regression_guard` 建议文本（声明终态、明确复现不重开本行、机械化
+    TODO 写诚实——诊断采集方向而非自动重跑）。
+  - **M4 KILL 覆盖自证卡**：仍在跑（见 Not done）。
+- **orch 应用两张裁决**（独立复核裁决记录，非采信自报结论）：
+  - `doc/bugs.md` BUG-0045 行 `OPEN → ACCEPTED@M5`（verify_evidence 点名
+    REV-021）；`doc/bugs/BUG-0045.md` `## fix` 段落补裁决记录，
+    `## regression_guard` 补到期锚点（M5 + 点名 REV-021）。
+  - `doc/bugs.md` BUG-0043 行 `OPEN → WONTFIX`（`fix_commit`/
+    `verify_evidence` 均 `-`，与既有 WONTFIX 行先例 BUG-0021/0024 写法
+    一致；suspect 保持 TB，class=TOOL_ENV 记在详情页）；
+    `doc/bugs/BUG-0043.md` `## fix` 补裁决记录，`## regression_guard`
+    按 REV-022 建议文本整体替换（声明终态 + 复现处置 + 可证伪解锁 +
+    不可机械化理由与唯一可行的诊断采集改进方向）。
+  - **新登记 BUG-0046**（OPEN，spec，SPEC_ISSUE 候选，非阻塞）：`doc/spec.md`
+    §3.2 条 2 用非严格 `<=`，RTL `check_start` 用严格 `<` 并对
+    `start==end`（`end≠0`）的 rule 判 fatal——spec 允许 RTL 会炸的配置。
+    与 BUG-0045 同源（同一次 REV-021 逐行核验）但内容/解锁条件独立，
+    不合并登记（`doc/bugs/BUG-0046.md`）。
+- `make check`/`make selftest`（61/61）复跑绿。
+
+**Not done**
+- **`make check MILESTONE=4` 条件 3 仍红，但阻塞项已从 BUG-0045/0043 转移
+  到新登记的 BUG-0046**——已派 REV-023（并行）仲裁，待其交付后 orch 应用。
+- **条件 4（KILL 覆盖）仍红**：M4-OV01 tie-break 的 KILL 自证 DV 卡仍在
+  后台跑，交付后 orch 登记 KILL-0004 行。
+- REV-017 条件 3、签核文件仍未动——待条件 3/4 转 PASS 后再派完整签核卡。
+
+**Next**
+1. REV-023（BUG-0046 仲裁）+ KILL 自证 DV 卡交付后，orch 应用两者到
+   `doc/bugs.md`。
+2. `make check MILESTONE=4` 四条机器门禁全绿后，派完整 M4 签核卡（L3/opus/
+   rev）：机器条件 + rev 人工 rubric + REV-017 条件 3（FSM 书面豁免 +
+   BUG-0032 guard 抽查）+ `doc/evidence/v0.4.*/signoff-M4.md`。
+
+**How verified**
+- `make check`：docs-check passed，chain audit 无新增缺口。
+- `make selftest`：61/61 OK。
+- `make check MILESTONE=4`：条件 1/2 PASS，条件 3 阻塞项从"BUG-0045,
+  BUG-0043"变为"BUG-0046"（净减少两项、新增一项，均为同批核验中独立
+  发现，非遗漏），条件 4 仍 FAIL（KILL 自证进行中）。
+- 本周期无仿真运行（纯裁决应用/登记），无新增 evidence/testplan 状态
+  变化——`make evidence` 门禁不适用。
+
 ## [0.4.10] 2026-08-01 M4 收尾第二项：六类覆盖率基线重出（REV-016 条件2兑现），regress evidence 登记；M4 机器门禁 4 条中 2 条转 PASS
 
 **Done**

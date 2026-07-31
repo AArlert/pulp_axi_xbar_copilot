@@ -2,6 +2,90 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.14] 2026-08-01 M4 完整签核卡：REJECTED——四条机器门禁全绿不等于签核，覆盖率定义性出口条件未满足；新登记 BUG-0047（判据可行性张力）
+
+**背景**：0.4.9-0.4.13 五个周期把 `make check MILESTONE=4` 的四条机器
+门禁逐条转绿（场景 ✅、regress evidence、bug 终态、KILL 覆盖）。本周期
+派出全套 rev 签核 rubric 卡，本以为是收尾的最后一步，结果卡本身给出了
+**REJECTED** 判决——这是本轮 M4 收尾里最重要的一次纠偏：机器门禁全绿
+从未等于"可以签核"，签核判的是"证据是否支撑风险已收敛"。
+
+**Done**
+- **M4 完整签核卡（L3/opus，fresh instance，与本轮全部 M4 相关卡作者
+  均不共享）**产出 `doc/evidence/v0.4.13/signoff-M4.md`。逐项：
+  - **机器条件（rubric #1-4）**：亲跑确认全绿，但明确指出机器脚本
+    `scripts/docs.py` **不检查覆盖率百分比**——四条绿只覆盖"场景/
+    证据/bug 状态/KILL"，不覆盖 M4 的定义性出口条件本身。
+  - **rubric #5**（coverage closure≠risk closure）：挑 3 个良好命中
+    bin 逐一核实确系预期场景命中（含 `axi_mux` 仲裁重试路径的
+    "模块级 100% 实为跨 8 实例并集、实际仅 1/8 端口真转绿"这一颗粒度
+    警示）；重读 atop_filter 环境约束不可达论证并**活体证伪**佐证
+    （注入 atop 到未命中地址后 FSM 确实 engage）。
+  - **rubric #6**（guard 消费+证伪）：实地证伪 BUG-0032 guard——注入
+    `atop=6'h30` 到 M3-DE01 未命中序列，`SB_ATOP_DECODE` 6 端口报红；
+    恢复后 `git diff` 净。
+  - **rubric #7/#8**（spec debt / accepted debt）：BUG-0044/0045/0046
+    均确认有可证伪解锁条件、非软承诺。
+  - **rubric #9**（chain audit）：逐类给处置意见。
+  - **REV-017 条件 3 正式兑现**：atop_filter FSM 书面豁免（逐弧列出
+    未覆盖状态/迁移，行号对当前 vendor 树逐条复核——orch 独立复验
+    `grep vendor/axi/src/axi_atop_filter.sv` 确认 BLOCK_AW:151/
+    HOLD_B:161/INJECT_B:163/ABSORB_W:167/WAIT_R:228/R_HOLD:275/
+    INJECT_R:281 全部准确）+ BUG-0032 guard 机械抽查（grep + 计数=0
+    两种形态均满足）。
+  - **核心否决理由**：M4-coverage-baseline.md §6 的 ~9 类残余缺口里
+    只有 2 类得到合法处置（atop_filter 环境约束豁免 + addr_decode/
+    axi_demux 结构性 N/A），其余 ~6 类（`axi_demux_simple`/
+    `addr_decode_dync`/`axi_mux` Toggle/`axi_err_slv`/`spill_register`
+    等）是"可达但未测"——按 REV-016 §9，豁免须给可证伪的不可达论证，
+    这些是"没测"非"测不到"，**不可合法豁免，必须补定向场景**。
+  - **附带发现并建议登记的方法学张力**：M4 出口条件"六类含 Toggle
+    ≥90%"与项目"M5 前仅定向、随机不得替代 M4 定向关闭"纪律叠加，对
+    宽 AXI 总线的 Toggle bin 产生可行性冲突——两条规则各自无误，组合
+    时无解，需 rev/arch 后续裁决扩展豁免框架或重议判据口径。
+- **orch 独立复验**（不采信卡内自报）：`git status`/`git diff` 确认
+  falsification 改动已完全恢复；`make check MILESTONE=4` 复跑确认四条
+  仍绿、签核文件条目转"yes"；`grep vendor/axi/src/axi_atop_filter.sv`
+  逐行核对 FSM 豁免的 7 处行号（100% 命中）；`sed` 核对 BUG-0032
+  guard 的注入点（`tb/seq_lib.sv:962` `atop='0`）与检测点
+  （`tb/scoreboard_refmodel.sv:469-472` `SB_ATOP_DECODE`）均如实存在。
+- **orch 按无条件登记纪律登记 BUG-0047**（OPEN，spec，SPEC_ISSUE 候选，
+  非本条自身触发失败——是签核卡的附带发现）：M4 出口条件与"M5 前仅
+  定向"纪律的可行性张力，详见 `doc/bugs/BUG-0047.md`。
+- `make check`/`make selftest`（61/61）复跑绿。**`doc/milestone.md` M4
+  状态维持 🔲，不转 ✅**（rev 明确裁决，未由 orch 越权改动）。
+
+**Not done**
+- M4 仍未签核。REJECTED verdict 给出的后续方向（signoff 记录已列，
+  非本周期落地）：
+  1. DV 定向覆盖卡（针对 ~6 类"可达但未测"缺口，逐（模块,类型）补
+     spec 引用+可证伪具名场景）；
+  2. rev 覆盖率豁免卡（先建 `doc/coverage-waivers.md`，为 `rst_ni`/
+     `test_i` scan/AW valid-but-not-ready 断言类等真正需要论证的项
+     出具可证伪不可达论证）；
+  3. **BUG-0047 方法学张力裁决**（arch/rev，二选一：成本豁免扩展 /
+     重议 Toggle 判据口径）——这条建议先走，因为它决定其余 Toggle
+     类缺口该走"补场景"还是"豁免"这条路；
+  4. feature-matrix 补 4 行（M4-RC01/AW01/OV01/FT01，chain audit
+     既有 gap）。
+- 上述四项工作量不小，且互相有依赖（尤其 3 影响 1 的范围），需要用户
+  确认优先级/是否现在就铺开，不是一次性能收尾的小任务。
+
+**Next**
+- 向用户汇报 REJECTED 判决全貌，请用户决定：先处理 BUG-0047 方法学
+  张力裁决，还是先铺开 DV 定向覆盖卡补场景，还是先建
+  `doc/coverage-waivers.md` 做豁免分诊，或调整 M4 出口条件本身的
+  优先级安排。
+
+**How verified**
+- `make check`：docs-check passed，chain audit 无新增缺口。
+- `make selftest`：61/61 OK。
+- `make check MILESTONE=4`：4/4 机器门禁仍 PASS（signoff 文件条目
+  转"yes"，但 verdict 本身是 REJECTED——机器门禁与签核判断是两回事，
+  本周期最大的一次认知纠偏）。
+- 独立复验详见 Done 段——FSM 行号逐条 grep 核对、guard 注入/检测点
+  逐行核对、falsification 恢复用 git diff 核实为空。
+
 ## [0.4.13] 2026-08-01 M4 收尾第三项完成：BUG-0046 仲裁应用——`make check MILESTONE=4` 四条机器门禁全绿
 
 **Done**
@@ -96,68 +180,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - `make check MILESTONE=4`：条件 1/2/4 PASS（较上次 1/2 PASS 有进展），
   条件 3 仍 FAIL（阻塞项 = BUG-0046，仲裁中）。
 - 本周期无新 evidence 文件；`doc/bugs.md` 新增 1 行（KILL-0004）。
-
-## [0.4.11] 2026-08-01 M4 收尾第三项（上半）：BUG-0045/0043 转终态，新登记 BUG-0046（同批发现的独立 spec-gap）
-
-**Done**
-- 并行派两张独立 rev 仲裁卡（L3/opus，各自 fresh instance，互不共享，均只产出
-  裁决记录不改 bugs.md）+ 一张 M4 KILL 覆盖自证 DV 卡：
-  - **REV-021 仲裁 BUG-0045**（spec §3.2 未载 `end_addr=='0` 末端哨兵）：
-    独立核实（算术自验 8 条 rule 的 `end_addr` 不回绕到 0 + tb 全域构造点
-    扫描）确认"当前无场景触及"为真——taxonomy 维持 SPEC_ISSUE（潜伏型，
-    "完全未定义"支），处置 **ACCEPTED@M5**，排除"现在补 spec"（会造不可
-    证伪 refmodel 死代码）与 WONTFIX（会永久埋没 RTL 全链路一等公民
-    特性）。给出可证伪解锁条件（任何场景构造 `end_addr=='0` 即刻作废）+
-    M5 到期二选一动作（覆盖哨兵走标准处置三件套 / 具体论证转 WONTFIX）+
-    ready-to-apply 的 spec 条款草案备料。**核实过程中独立发现新缺口**：
-    spec §3.2 条 2 `start_addr<=end_addr`（非严格）与 RTL `check_start`
-    严格 `<` 约束松紧不符——独立、非阻塞，orch 按无条件登记纪律登记为
-    **BUG-0046**（OPEN，spec，SPEC_ISSUE 候选）。
-  - **REV-022 处置 BUG-0043**（间歇性 `make regress` 非零退出）：独立复算
-    退出码机制归因（`rc!=0→FAIL` 是 `vcs-2018.mk` 明载的有意设计）+ 三次
-    两清一异事实链，taxonomy 确认 TOOL_ENV，终态 **WONTFIX（accepted-
-    transient）**——排除 `ACCEPTED@M<n>`（无可调度工作、无可证伪到期
-    条件，强设只会把不可复现现象伪装成日程债）。给出收紧后的
-    `regression_guard` 建议文本（声明终态、明确复现不重开本行、机械化
-    TODO 写诚实——诊断采集方向而非自动重跑）。
-  - **M4 KILL 覆盖自证卡**：仍在跑（见 Not done）。
-- **orch 应用两张裁决**（独立复核裁决记录，非采信自报结论）：
-  - `doc/bugs.md` BUG-0045 行 `OPEN → ACCEPTED@M5`（verify_evidence 点名
-    REV-021）；`doc/bugs/BUG-0045.md` `## fix` 段落补裁决记录，
-    `## regression_guard` 补到期锚点（M5 + 点名 REV-021）。
-  - `doc/bugs.md` BUG-0043 行 `OPEN → WONTFIX`（`fix_commit`/
-    `verify_evidence` 均 `-`，与既有 WONTFIX 行先例 BUG-0021/0024 写法
-    一致；suspect 保持 TB，class=TOOL_ENV 记在详情页）；
-    `doc/bugs/BUG-0043.md` `## fix` 补裁决记录，`## regression_guard`
-    按 REV-022 建议文本整体替换（声明终态 + 复现处置 + 可证伪解锁 +
-    不可机械化理由与唯一可行的诊断采集改进方向）。
-  - **新登记 BUG-0046**（OPEN，spec，SPEC_ISSUE 候选，非阻塞）：`doc/spec.md`
-    §3.2 条 2 用非严格 `<=`，RTL `check_start` 用严格 `<` 并对
-    `start==end`（`end≠0`）的 rule 判 fatal——spec 允许 RTL 会炸的配置。
-    与 BUG-0045 同源（同一次 REV-021 逐行核验）但内容/解锁条件独立，
-    不合并登记（`doc/bugs/BUG-0046.md`）。
-- `make check`/`make selftest`（61/61）复跑绿。
-
-**Not done**
-- **`make check MILESTONE=4` 条件 3 仍红，但阻塞项已从 BUG-0045/0043 转移
-  到新登记的 BUG-0046**——已派 REV-023（并行）仲裁，待其交付后 orch 应用。
-- **条件 4（KILL 覆盖）仍红**：M4-OV01 tie-break 的 KILL 自证 DV 卡仍在
-  后台跑，交付后 orch 登记 KILL-0004 行。
-- REV-017 条件 3、签核文件仍未动——待条件 3/4 转 PASS 后再派完整签核卡。
-
-**Next**
-1. REV-023（BUG-0046 仲裁）+ KILL 自证 DV 卡交付后，orch 应用两者到
-   `doc/bugs.md`。
-2. `make check MILESTONE=4` 四条机器门禁全绿后，派完整 M4 签核卡（L3/opus/
-   rev）：机器条件 + rev 人工 rubric + REV-017 条件 3（FSM 书面豁免 +
-   BUG-0032 guard 抽查）+ `doc/evidence/v0.4.*/signoff-M4.md`。
-
-**How verified**
-- `make check`：docs-check passed，chain audit 无新增缺口。
-- `make selftest`：61/61 OK。
-- `make check MILESTONE=4`：条件 1/2 PASS，条件 3 阻塞项从"BUG-0045,
-  BUG-0043"变为"BUG-0046"（净减少两项、新增一项，均为同批核验中独立
-  发现，非遗漏），条件 4 仍 FAIL（KILL 自证进行中）。
-- 本周期无仿真运行（纯裁决应用/登记），无新增 evidence/testplan 状态
-  变化——`make evidence` 门禁不适用。
 

@@ -1,3 +1,4 @@
+{"date": "2026-07-31", "version": "0.4.6", "summary": "M4 spec-gap 全面扫描落地：arch 交付 11 小节处置+4 候选行+2 spec 提案，rev（REV-018）CONDITIONAL PASS 全部注册，orch 应用——spec 增 FallThrough 维+§4.7 范围澄清并重 pin，testplan 注册 M4-RC01/AW01/OV01/FT01（🔲）+ M3-DE01 约束句扩至 M3/M4"}
 {"date": "2026-07-30", "version": "0.4.5", "summary": "BUG-0037 修复关闭（COV=1 覆盖率数据库跨拓扑合并）：CM 改递归展开+COV_DIR 间接层，22/22 PASS 不变、六域 0 mismatch，orch 独立复验；新登 BUG-0040+FB-30"}
 {"date": "2026-07-30", "version": "0.4.4", "summary": "BUG-0039 rev 仲裁（REV-017）落地：§4 clause 7 环境约束延展 M3→M3+M4，atop_filter FSM 走书面豁免，重 pin，转 SPEC_CHANGED；REV-016/017 条件均未兑现（M4 基线重出+testplan行+签核豁免），M4 不得签核"}
 {"date": "2026-07-30", "version": "0.4.3", "summary": "BUG-0038 rev 仲裁（REV-016）落地：spec §0 item 4/5 澄清为例化闭包口径 + 三态判定规则（无 bin ⇒ N/A），重 pin sha256，转 SPEC_CHANGED；新登记 BUG-0039——atop_filter FSM 唯一转移路径与 §4 clause 7 环境约束冲突，证伪旧归因，M4 须先仲裁。无仿真无代码改动"}
