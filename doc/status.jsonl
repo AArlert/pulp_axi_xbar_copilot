@@ -1,3 +1,4 @@
+{"date": "2026-08-01", "version": "0.4.9", "summary": "M4 收尾第一项：BUG-0041 分诊闭环，REV-020 终判 WONTFIX（accepted-vendor-quirk）；顺带登记 BUG-0045（spec-gap 候选，非阻塞）；BUG-0043 维持观察。M4 收尾剩余：覆盖率基线重出、REV-017 条件3、完整签核"}
 {"date": "2026-08-01", "version": "0.4.8", "summary": "M5 立项阶段 0 完成（arch 提案+REV-019 CONDITIONAL PASS+登记 BUG-0044）。重要：REV-019 裁定 M5 须排 M4 签核之后，下一步转回收尾 M4（覆盖率基线重出+REV-017 条件3+签核），非直接开始 M5 阶段1。计划全文见 misty-petting-horizon.md"}
 {"date": "2026-08-01", "version": "0.4.7", "summary": "M4 spec-gap sweep 收官：4 条候选场景全部落地转绿，orch 逐一独立复验；发现 BUG-0041/0042/0043；用户批准工业级验证方法学拓展计划，存档 misty-petting-horizon.md，尚未启动阶段 0"}
 {"date": "2026-07-31", "version": "0.4.6", "summary": "M4 spec-gap 全面扫描落地：arch 交付 11 小节处置+4 候选行+2 spec 提案，rev（REV-018）CONDITIONAL PASS 全部注册，orch 应用——spec 增 FallThrough 维+§4.7 范围澄清并重 pin，testplan 注册 M4-RC01/AW01/OV01/FT01（🔲）+ M3-DE01 约束句扩至 M3/M4"}
@@ -5,4 +6,3 @@
 {"date": "2026-07-30", "version": "0.4.4", "summary": "BUG-0039 rev 仲裁（REV-017）落地：§4 clause 7 环境约束延展 M3→M3+M4，atop_filter FSM 走书面豁免，重 pin，转 SPEC_CHANGED；REV-016/017 条件均未兑现（M4 基线重出+testplan行+签核豁免），M4 不得签核"}
 {"date": "2026-07-30", "version": "0.4.3", "summary": "BUG-0038 rev 仲裁（REV-016）落地：spec §0 item 4/5 澄清为例化闭包口径 + 三态判定规则（无 bin ⇒ N/A），重 pin sha256，转 SPEC_CHANGED；新登记 BUG-0039——atop_filter FSM 唯一转移路径与 §4 clause 7 环境约束冲突，证伪旧归因，M4 须先仲裁。无仿真无代码改动"}
 {"date": "2026-07-30", "version": "0.4.2", "summary": "落地 code-suggestion.md 三条零风险重构（payload helper/vseq 扇出 helper/scoreboard 流转注释），全回归 22/22+全部 bug 守卫数字逐位复现；新增 doc/uvm.md（仿 axi.md 风格的验证环境入门读物）+ SVG 图 + README 验证环境概览节"}
-{"date": "2026-07-30", "version": "0.4.1", "summary": "M4 六类覆盖率基线测出（详见 log.md），登记 BUG-0037（COV 合并异常）+ BUG-0038（wrapper 模块 spec 范围疑点）；并行完成 UVM 框架人工评审，产出 doc/code-suggestion.md"}

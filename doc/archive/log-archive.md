@@ -1,4 +1,78 @@
 # Work log archive
+## [0.4.6] 2026-07-31 M4 spec-gap 全面扫描——4 条候选场景注册 + 2 条 spec 提案仲裁应用 + REV-017 条件 2 部分兑现
+
+**Done**
+- **ARCH 自新实例（L3/opus，fresh instance）**：M4 spec-gap sweep，范围按
+  用户要求扩展到"整个验证空间、已知+未知 gap、主动探索"，不止步于机械
+  未引用小节清单。交付 `doc/review/M4-spec-gap-sweep.md`：11 个未引用小节
+  逐条处置（以 declined 为主，均附理由）、4 条候选 M4 testplan 行
+  （M4-RC01 default-port 运行时关闭方向、M4-AW01 mux 仲裁 lock-retry 背压、
+  M4-OV01 重叠 rule 优先级、M4-FT01 `FallThrough=1`）、未知空间主动探索
+  6 项 findings（含确认 atop_filter FSM 大缺口"不提案"判断成立）、2 条
+  spec change proposal（§0 #3 配置矩阵 `FallThrough` 维度归属；§4 clause 7
+  "译码未命中地址"范围两可）。分析用 `doc/evidence/v0.4.0/M4-coverage-baseline.md`
+  实测覆盖率数字定位真实缺口，非空转清单。
+- **REV 全新实例（L3/opus，与 arch 隔离，未共用）**：审核并出具
+  `doc/review/REV-018.md`，CONDITIONAL PASS。4 条候选行全部注册（各附
+  conditional 口径：判决门须锚 spec 性质、结构角落仅作非判决 cover，
+  M4-FT01 以提案 1 取 (a) 为前提）；11 个 declined 逐条复核全部站得住
+  （§6.2 建议补引 anchor）；提案 1 裁 **(a) 增维**（FallThrough 是可达
+  spec 合法逻辑，豁免应留给不可达而非不想测）；提案 2 裁 **(b) 确认宽读
+  有意保守**（与 M4-RC01 的运行时 default port 可变存在移动靶耦合，宽读
+  恒稳且零功能增益）；两个 open risk 关联项均给出立场（RC01 与既有 AW 侧
+  default assert 债务联动，留 DV 卡核对，不阻塞；M0-01 同意不回改）；无新
+  taxonomy-class 异常。
+- **orch 按 REV-018"可机械执行的落地清单"逐条应用**：`doc/spec.md` §0
+  item 3 增列 `× FallThrough {0,1}` 维；§4 clause 7 追加范围澄清段（宽读
+  有意保守 + 双条理由）；Change record #11；重 pin sha256（
+  `a480b728...`）。`doc/testplan.md` 注册 4 条候选行（状态 🔲，判决门/红线
+  /env 约束逐条写入描述，与 M2-WO01/M3-TL01 既有先例同款措辞纪律）；
+  M3-DE01 约束句范围由"其余全部 M3 场景"扩为"M3 与 M4 全部场景"（REV-017
+  条件 2 部分兑现——spec 侧 §4 clause 7 上周期已是"M3 与 M4"，本周期补齐
+  testplan 侧措辞同步）；M3-CF04 env 约束锚点由 `SPEC-6` 精化为
+  `SPEC-6/SPEC-6.2`（§6.2 补引，非新场景）。另提交并推送用户直接编辑的
+  `doc/milestone.md` Abstract 汇总表（M0-M4 场景/状态一览）。
+
+**Not done**
+- 4 条新 M4 testplan 行仍是 🔲（planned）：未派 DV 卡实现、未跑仿真、未
+  registered evidence——本周期只完成"注册"这一步（spec-gap sweep + rev
+  仲裁 + 落地登记），场景实现是下一周期的事。
+- 4 条新行暂无 feature-matrix 关联（`make check` 报 orphans 4 个，非阻塞
+  gap，非 FAIL）——REV-018 落地清单未要求本周期做这步，留给对应 DV 卡
+  实现时按需补（可能挂靠既有 F-M2-01/F-M3-03 或新开 F-M4-xx，由后续
+  arch/orch 视实现范围判断，非本周期预判）。
+- REV-017 条件 2 仍未**完全**闭合：spec+testplan 两侧措辞已同步"M3 与
+  M4"，但条件 2 原文还要求"M4 config-matrix testplan 行须承载"——本周期
+  四条新行均已承载该约束句（各行"env 约束"段），此条实质已随本周期落地
+  行为同步兑现，留待 M4 签核时由 rev 复核确认。
+- REV-017 条件 3（atop_filter FSM 书面豁免 + BUG-0032 guard 抽查）未动，
+  仍留给 M4 签核。
+- M4 覆盖率基线报告重出（REV-016 条件 2 遗留）未动。
+- regress.list 未动（待 4 行任一转 ✅ 后才需要，BUG-0028/0036 纪律）。
+
+**Next**
+- 派 DV 卡实现 4 条新 M4 场景之一或多个（每卡独立、fresh instance，closer
+  ≠ fixer 路由预先想清）；M4-OV01 落地时按 REV-018 纪律：若 SPEC-3.1.3
+  取向消歧不清则登记 SPEC_ISSUE，不读 RTL；M4-RC01 落地时核对 open risk
+  （AW 侧 default assert 是否随之 real-succeed，联动 BUG-0025/BUG-0031/
+  M3-DE02）。
+- 4 条场景任一 ✅ 后即时并入 `sim/regress/regress.list`（BUG-0028/0036
+  常驻纪律）。
+- 重出 M4 覆盖率基线报告（REV-016 条件 2 + 现有干净隔离的
+  `out/{m0,cfgA..D}/cov.vdb`，同一份 vdb 不必重跑 `make regress COV=1`）。
+- M4 签核前须兑现 REV-017 条件 3（atop_filter FSM 书面豁免 + BUG-0032
+  guard 抽查）。
+
+**How verified**
+- `make check` 绿：docs-check passed；chain audit 未引用小节由 11 降至 7
+  （§2.1/§6.2/§7.3/§7.4.3 经新行/anchor 补引清零，与 arch/rev 裁决的
+  declined 集合一致，非误差）；dangling refs 0；orphans 4（本周期预期内的
+  非阻塞可见性提示，见 Not done）。
+- `doc/spec.sha256` 已重 pin 且与 `doc/spec.md` 当前内容一致
+  （`python3 scripts/docs.py --pin-spec` 输出确认）。
+- 本周期无仿真运行、无场景转 ✅，故无新 evidence 记录、无 testplan 状态
+  回填——纯 spec/testplan/review 文档层落地，`make evidence` 门禁不适用。
+
 ## [0.4.5] 2026-07-30 BUG-0037 修复并关闭——COV=1 覆盖率数据库跨拓扑静默合并，orch 独立复验后机械关闭
 
 **Done**
