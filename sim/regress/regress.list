@@ -21,3 +21,4 @@ m3_cf04_cfgd_test 1
 m3_at02_atop_read_test 1
 m3_tl01_xbucket_test 1
 m3_cfg02_reconfig_test 1
+m4_ov01_overlap_test 1

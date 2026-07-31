@@ -464,3 +464,33 @@ class m3_tl01_xbucket_test extends base_test;
     phase.drop_objection(this, "m3_tl01_xbucket_vseq done");
   endtask
 endclass
+
+// M4-OV01 overlapping-rule tie-break (testplan.md M4-OV01, spec §3.1.3/
+// §3.2.1). Baseline config (same as M1-01); fetches the runtime config-bus
+// handle and hands it to the vseq, which applies the ADDR_MAP_OV1 overlap
+// table in the post-reset idle window before any traffic (same pattern as
+// m2_cfg01_reconfig_test / m3_cfg02_reconfig_test).
+class m4_ov01_overlap_test extends base_test;
+  `uvm_component_utils(m4_ov01_overlap_test)
+
+  virtual xbar_cfg_if cfg_vif;
+
+  function new(string name = "m4_ov01_overlap_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual xbar_cfg_if)::get(this, "", "cfg_vif", cfg_vif))
+      `uvm_fatal("NOCFGVIF", "m4_ov01_overlap_test: cfg_vif not set")
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m4_ov01_overlap_vseq vseq;
+    phase.raise_objection(this, "m4_ov01_overlap_vseq running");
+    vseq = m4_ov01_overlap_vseq::type_id::create("vseq");
+    vseq.cfg_vif = cfg_vif;
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m4_ov01_overlap_vseq done");
+  endtask
+endclass

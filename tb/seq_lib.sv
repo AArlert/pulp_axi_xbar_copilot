@@ -1620,3 +1620,110 @@ class m3_tl01_xbucket_vseq extends uvm_sequence #(uvm_sequence_item);
     s.start(p_sequencer.slv_sqr[0]);
   endtask
 endclass
+
+// ----------------------------------------------------------------------------
+// M4-OV01 — overlapping-rule tie-break (testplan.md M4-OV01, spec §3.1.3/
+// §3.2.1). Applies xbar_types_pkg::ADDR_MAP_OV1 (one pair of overlapping-
+// region rules, OV1_LOW_RULE/OV1_HIGH_RULE, pointing at different master
+// ports — see xbar_types_pkg.sv) via the SAME runtime-reconfiguration path
+// M2-CFG01/M3-CFG02 use (spec §3.4: table changes only in an all-ports-
+// AW/AR-idle window), but applied in the natural post-reset idle window
+// BEFORE any traffic — no batch split is needed since the whole scenario
+// runs against one table version. Every slave port then sends write/read
+// bursts whose addresses stay inside the overlap region (OV1_LOW_RULE's
+// original span, [0, REGION_SIZE)); every such address now matches BOTH
+// overlapping rules. Per §3.1.3 the rule at the higher (more significant)
+// table position wins — OV1_HIGH_RULE, the table's highest index — so the
+// scoreboard's shared decode_mst_port() (fixed for §3.1.3 in
+// xbar_types_pkg.sv) computes the expected target as
+// ADDR_MAP_OV1[OV1_HIGH_RULE].idx; if the DUT instead routed to
+// OV1_LOW_RULE's target, the scoreboard's route/ID-prefix check would
+// mismatch and the test would go red (strong falsifiability, REV-018). All
+// addresses in the overlap region resolve to the SAME target master port,
+// so no cross-target same-ID stall (§5.2.1) is triggered — legal same-
+// target stacking only (§5.2.4). No unmapped-address ATOP anywhere (spec §4
+// clause 7 env constraint, wide reading, REV-018 — vacuously satisfied here
+// since every address hits a rule, `atop` stays '0 throughout regardless).
+// ----------------------------------------------------------------------------
+class slvport_ov01_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_ov01_seq)
+  int unsigned slv_port_idx;
+  int unsigned num_iter = 4;
+
+  function new(string name = "slvport_ov01_seq"); super.new(name); endfunction
+
+  task automatic send(input bit is_write, input xbar_types_pkg::addr_t addr,
+                      input xbar_types_pkg::id_slv_t id, input axi_pkg::len_t len);
+    axi_seq_item it;
+    it = axi_seq_item::type_id::create(
+        $sformatf("ov01_%0d_%s_%0h", slv_port_idx, is_write ? "w" : "r", addr));
+    start_item(it);
+    it.is_write = is_write;
+    it.addr     = addr;
+    it.len      = len;
+    it.id       = id;
+    it.atop     = '0; // spec §4 clause 7 env constraint (wide reading, REV-018)
+    if (is_write) fill_wr_payload(it, len);
+    finish_item(it);
+  endtask
+
+  task body();
+    xbar_types_pkg::addr_t close_addr;
+    for (int unsigned k = 0; k < num_iter; k++) begin
+      xbar_types_pkg::addr_t addr;
+      // Stays inside OV1_LOW_RULE's span [0, REGION_SIZE) — every address
+      // here now matches both overlapping rules (§3.2.1 half-open interval).
+      // Per-port/per-iter offsets keep addresses distinct across the fanout.
+      addr = xbar_types_pkg::addr_t'(slv_port_idx) * 32'h1000
+             + xbar_types_pkg::addr_t'(k) * 32'h40;
+      send(1'b1, addr, xbar_types_pkg::id_slv_t'(slv_port_idx),
+           axi_pkg::len_t'($urandom_range(0, 3)));
+      send(1'b0, addr, xbar_types_pkg::id_slv_t'(slv_port_idx + 8),
+           axi_pkg::len_t'($urandom_range(0, 3)));
+    end
+    // Closing pair, deliberately routed to region 1 — untouched by
+    // ADDR_MAP_OV1's overlap (only OV1_LOW_RULE/OV1_HIGH_RULE were
+    // remapped), so it matches exactly one rule. slvport_driver holds each
+    // channel's addr bus at its last-driven value after valid drops (it is
+    // never cleared back to 0), and 0 itself sits inside the overlap region
+    // — so without this closing leg, every port's AW/AR addr bus would still
+    // read an overlapping address at $finish. That trips
+    // addr_decode_dync's `matched_rules` end-of-sim debug assertion (BUG-
+    // 0041; a onehot0 check over a signal the module's own header marks
+    // "purely for address map debugging" — not the module's functional
+    // decode output, which the scoreboard already judges mismatch-free
+    // above). This leg is pure bus-quiescence hygiene: SPEC-3.1.3's
+    // tie-break is already fully exercised by the num_iter legs above.
+    close_addr = xbar_types_pkg::addr_t'(1) * xbar_types_pkg::REGION_SIZE
+                 + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+    send(1'b1, close_addr, xbar_types_pkg::id_slv_t'(slv_port_idx + 16),
+         axi_pkg::len_t'(0));
+    send(1'b0, close_addr, xbar_types_pkg::id_slv_t'(slv_port_idx + 24),
+         axi_pkg::len_t'(0));
+  endtask
+endclass
+
+class m4_ov01_overlap_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m4_ov01_overlap_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+
+  virtual xbar_cfg_if cfg_vif; // set by the test (config_db handle)
+
+  function new(string name = "m4_ov01_overlap_vseq"); super.new(name); endfunction
+
+  // Apply the overlap table once, before any traffic — the post-reset window
+  // is itself an all-ports-idle window (spec §3.4), same discipline as
+  // m2_cfg01_reconfig_vseq.do_reconfig / m3_cfg02_reconfig_vseq.do_reconfig.
+  task automatic do_reconfig();
+    do @(posedge cfg_vif.clk_i); while (!cfg_vif.all_ax_idle);
+    cfg_vif.addr_map <= xbar_types_pkg::ADDR_MAP_OV1;
+    repeat (3) @(posedge cfg_vif.clk_i);
+  endtask
+
+  task body();
+    if (cfg_vif == null)
+      `uvm_fatal("NOCFGVIF", "m4_ov01_overlap_vseq: cfg_vif not set")
+    do_reconfig();
+    fanout_per_slv#(slvport_ov01_seq)::run(p_sequencer, "ov01_seq");
+  endtask
+endclass

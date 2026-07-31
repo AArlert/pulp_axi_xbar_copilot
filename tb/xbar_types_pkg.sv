@@ -259,6 +259,28 @@ package xbar_types_pkg;
   localparam logic [NO_SLV_PORTS-1:0][MST_PORT_IDX_W-1:0] DEFAULT_MST_V1 =
       gen_default_mst_v1();
 
+  // ---- M4-OV01 overlapping-rule address table (spec §3.1.3/§3.2.1) -------
+  // One pair of overlapping-region rules pointing at different master ports,
+  // built from the baseline table by re-mapping OV1_HIGH_RULE (the table's
+  // highest array index, NoAddrRules-1 — the array's own declared high bound
+  // per spec §2.3's `rule_t [Cfg.NoAddrRules-1:0] addr_map_i`) onto the SAME
+  // address region as OV1_LOW_RULE (index 0), while leaving OV1_HIGH_RULE's
+  // `idx` (target master port) at its baseline value — so the two rules now
+  // fully overlap (§3.2.1: same start/end ⇒ every address in the region
+  // matches both) and target different master ports. Every other rule
+  // (1..NoAddrRules-2) is untouched, still routing exactly as baseline.
+  localparam int unsigned OV1_LOW_RULE  = 0;
+  localparam int unsigned OV1_HIGH_RULE = NO_ADDR_RULES - 1;
+
+  function automatic rule_t [NO_ADDR_RULES-1:0] gen_addr_map_ov1();
+    gen_addr_map_ov1 = gen_addr_map();
+    gen_addr_map_ov1[OV1_HIGH_RULE].start_addr =
+        gen_addr_map_ov1[OV1_LOW_RULE].start_addr;
+    gen_addr_map_ov1[OV1_HIGH_RULE].end_addr   =
+        gen_addr_map_ov1[OV1_LOW_RULE].end_addr;
+  endfunction
+  localparam rule_t [NO_ADDR_RULES-1:0] ADDR_MAP_OV1 = gen_addr_map_ov1();
+
   // Reference-model decode function shared with the scoreboard and the
   // protocol SVA (doc/design-prompt/scoreboard_refmodel.md C1.2/C1.3/C1.5,
   // sva_bind.md §3 "译码复用", spec §3.2/§3.1.3/§3.3/§3.4). The address table
@@ -269,20 +291,30 @@ package xbar_types_pkg;
   // Returns 1 when the address routes to a real master port (a rule hit, or
   // the enabled default master port), 0 on decode error (no rule + no
   // default — spec §4, only reached in M3 error-path scenarios).
-  // Rules are constructed non-overlapping (see REGION_SIZE above), so
-  // "highest-position rule wins on overlap" (§3.1.3) is never exercised —
-  // first (only) match found wins, scanned low-index-first.
+  // Scan ascending and keep overwriting on every match instead of returning
+  // on the first hit: spec §3.1.3 — on overlap, the rule at the higher (more
+  // significant) table position wins, i.e. the HIGHEST index among all rules
+  // that match. Scanning low-to-high and letting a later match overwrite an
+  // earlier one means whatever survives the loop is that highest-index hit.
+  // For every scenario before M4-OV01 the table is constructed non-
+  // overlapping (see REGION_SIZE above), so at most one rule ever matches and
+  // this is identical to the old first-match behaviour — M4-OV01's
+  // ADDR_MAP_OV1 is the first table where the distinction is observable.
   function automatic bit decode_mst_port(input addr_t addr,
                                           input rule_t [NO_ADDR_RULES-1:0] amap,
                                           input bit en_def,
                                           input logic [MST_PORT_IDX_W-1:0] def_port,
                                           output int unsigned mst_port);
+    bit hit;
+    hit      = 1'b0;
+    mst_port = '0;
     for (int unsigned r = 0; r < NO_ADDR_RULES; r++) begin
       if (addr >= amap[r].start_addr && addr < amap[r].end_addr) begin
         mst_port = amap[r].idx;
-        return 1'b1;
+        hit      = 1'b1;
       end
     end
+    if (hit) return 1'b1;
     if (en_def) begin
       mst_port = int'(def_port); // §3.3 default master port
       return 1'b1;
