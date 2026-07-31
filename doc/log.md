@@ -2,6 +2,50 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.12] 2026-08-01 M4 收尾第三项（下半）：KILL-0004 登记（M4-OV01 tie-break 自证），M4 机器门禁 4 条中 3 条转 PASS
+
+**Done**
+- **DV 卡（L1/sonnet，fresh instance）**完成 M4-OV01 重叠 rule tie-break
+  参考模型（`tb/xbar_types_pkg.sv` `decode_mst_port`）的注伤自证：临时给
+  扫描全表的 `for` 循环加一行 `break;`，把 tie-break 从"扫描全表、后命中
+  覆盖前命中（SPEC-3.1.3 高位置胜出）"改成"取第一个命中即停"。重跑
+  `make run TEST=m4_ov01_overlap_test SEED=1`：注伤后 `route: match=12
+  mismatch=48`、`UVM_ERROR:49`（DUT 仍正确路由到 port=7，即高位置
+  `OV1_HIGH_RULE` 胜出；被注伤的参考模型错误期望 port=0，证明是 TB 侧
+  故障非 DUT 问题）；恢复后同 SEED 复跑 `route: match=60 mismatch=0`、
+  `UVM_ERROR:0`；全量回归 `make regress` 26/26 PASS。
+- **orch 独立复验**：`git status`/`git diff tb/xbar_types_pkg.sv` 确认
+  恢复后无残留改动（逐字节一致）；`sim/result_summary.txt` 交叉核对
+  26 PASS/0 FAIL 与 `m4_ov01_overlap_test PASS` 一致；`make check`/
+  `make selftest`（61/61）复跑绿。
+- **orch 登记 KILL-0004**（`doc/bugs.md`，status=KILL，summary 含"M4"
+  裸词满足机器门禁扫描）：完整转录注伤/恢复的具体数字、样本报文、重放
+  命令，`fix_commit` 列填 `-`（自证记录非缺陷，无 fix 对象）。首次登记时
+  误将 KILL-0004 行与紧随的 BUG-0046 行合并到同一物理行（Edit 工具替换
+  时遗漏行边界），当场发现并修正——`grep`/`awk` 核实两行独立、8 列结构
+  完整后 `make check` 复跑绿。
+- `make check MILESTONE=4` 复跑：4 条机器门禁中 **3 条转 PASS**
+  （1. 全部 M4 场景 ✅；2. regress evidence 已登记；4. KILL 覆盖已登记）；
+  仅剩条件 3（`BUG-0046` 仍 OPEN，REV-023 仲裁中，见 Not done）。
+
+**Not done**
+- **条件 3**：`BUG-0046` 仍 OPEN，REV-023（独立 rev 实例）仲裁中，未交付。
+- REV-017 条件 3、签核文件仍未动——待条件 3 转 PASS 后再派完整签核卡。
+
+**Next**
+1. REV-023 交付后，orch 应用裁决到 `doc/bugs.md`（预期 BUG-0046 转终态
+   或 ACCEPTED，视裁决而定）。
+2. `make check MILESTONE=4` 四条机器门禁全绿后，派完整 M4 签核卡（L3/opus/
+   rev）：机器条件 + rev 人工 rubric + REV-017 条件 3（FSM 书面豁免 +
+   BUG-0032 guard 抽查）+ `doc/evidence/v0.4.*/signoff-M4.md`。
+
+**How verified**
+- `make check`：docs-check passed，chain audit 无新增缺口。
+- `make selftest`：61/61 OK。
+- `make check MILESTONE=4`：条件 1/2/4 PASS（较上次 1/2 PASS 有进展），
+  条件 3 仍 FAIL（阻塞项 = BUG-0046，仲裁中）。
+- 本周期无新 evidence 文件；`doc/bugs.md` 新增 1 行（KILL-0004）。
+
 ## [0.4.11] 2026-08-01 M4 收尾第三项（上半）：BUG-0045/0043 转终态，新登记 BUG-0046（同批发现的独立 spec-gap）
 
 **Done**
@@ -135,62 +179,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - regress 数字交叉核实：`doc/evidence/v0.4.9/result_summary.txt` 与
   `sim/result_summary.txt` 逐行一致，26 PASS/0 FAIL。
 - 本周期无新增 bugs.md 行/状态变化（DV 卡确认无新 taxonomy 异常）。
-
-## [0.4.9] 2026-08-01 M4 收尾第一项：BUG-0041 分诊闭环——REV-020 终判 WONTFIX，新登记 BUG-0045（spec-gap 候选），BUG-0043 保持观察
-
-**背景**：接手会话按 0.4.8 遗留的顺序裁决（M5 阶段 1-4 需排在 M4 签核之后）
-执行，用户选定先做 `make next` 给出的两个 OPEN bug 分诊，作为 M4 收尾三项
-（分诊两个 bug / 覆盖率基线重出 / REV-017 条件 3）的第一项。
-
-**Done**
-- **BUG-0041 完成分诊闭环**：派全新 rev 实例（L3/opus）出具
-  `doc/review/REV-020.md`，独立逐行核验 `addr_decode_dync.sv` 头注释/组合
-  译码/`ASSERT_FINAL`/宏体 + `tb/seq_lib.sv` 收尾腿工作绕过 + `doc/spec.md`
-  §3.1/§3.2，不采信 DV 详情页的任何转述。终判：**DUT_BUG（候选）不予签核**
-  （DUT 输出零失配，失败的是内部调试断言非功能输出，bar 未达）；**终态
-  WONTFIX（accepted-vendor-quirk）**；P-xxx 补丁与库级 `disable_assert_
-  final_checks` 逃生阀均排除（前者越只读红线，后者是断言库全局钝器，会
-  掩盖真实的其它 `final` 断言缺陷）；上游 doc-clarification issue 建议但
-  低优先、非阻塞。orch 应用终判：`doc/bugs.md` BUG-0041 行 `OPEN → WONTFIX`；
-  `doc/bugs/BUG-0041.md` `## fix` 段落补裁决记录；`## regression_guard`
-  按 REV-020 条件 2 收紧——原"未来可机械化为 lint 规则"的投机承诺降格为
-  "why it cannot（末态地址驻留是运行时激励属性，非静态可判定的构造属性）"，
-  改为 grep 锚（`more_than_1_bit_set`/`matched_rules`）+ 既有定向收尾腿模式。
-- **新登记 BUG-0045**（OPEN，spec，SPEC_ISSUE 候选，非阻塞）：REV-020 仲裁
-  过程中逐行亲读 `addr_decode_dync.sv` 时顺带发现——RTL L112 + 头注释 L60
-  记录 `end_addr=='0` 视为地址空间末端的哨兵分支，`doc/spec.md` §3.2 与
-  refmodel `decode_mst_port` 均未覆盖该分支；当前无场景构造此类地址表，
-  缺口潜伏无碍。按无条件登记纪律（CLAUDE.md §2）落 bugs.md 行 +
-  `doc/bugs/BUG-0045.md` 详情页，未越权代做 spec/RTL 改动，待后续 rev/arch
-  裁决是否补 spec 条款或记为 residual risk。
-- **BUG-0043 维持不动**：taxonomy TOOL_ENV（候选），触发条件未定位、
-  间歇性、无可执行判据——其自身 `regression_guard` 已明确"暂不可机械复现"，
-  本轮分诊结论就是"暂不派卡，保持 OPEN 观察"，不是遗漏。
-- `make check`（docs-check + chain audit，无新增缺口，与 0.4.8 一致）、
-  `make selftest`（61/61）本轮改动后复跑绿。
-
-**Not done**
-- M4 收尾其余两项未动：M4 六类覆盖率基线报告重出（REV-016 条件2遗留）、
-  REV-017 条件3（atop_filter FSM 书面豁免 + BUG-0032 guard 抽查）。
-- 完整 M4 签核（`make check MILESTONE=4` + rev 人工 rubric + KILL 核对 +
-  `doc/evidence/v1.0.0/signoff-M4.md`）未启动。
-- `BUG-0045` 本身尚待 rev/arch 裁决（补 spec 条款 vs 记为 residual risk），
-  本条不阻塞 M4 签核（当前无场景触及该分支）。
-- M5 阶段 1-4 仍未启动（按 REV-019 裁决，正确顺序）。
-
-**Next**
-- 按 CLAUDE.md 派卡定级表，从 M4 收尾剩余两项中选一项派发：M4 覆盖率基线
-  重出（可复用现有 cov.vdb 若仍在，否则 `make regress COV=1`）或 REV-017
-  条件3（atop_filter FSM 书面豁免卡）。
-- 之后走完整 M4 签核，`doc/milestone.md` M4 转 ✅，版本转段（建议 v1.0.0）。
-- `doc/bugs/BUG-0045.md` 待排期一张 rev/arch 裁决卡（非阻塞，可与 M4 收尾
-  并行或稍后处理）。
-
-**How verified**
-- `make check`：docs-check passed；chain audit 缺口与 0.4.8 一致（无新增）。
-- `make selftest`：61/61 OK。
-- 本周期无仿真运行（纯 bug 分诊/仲裁/登记），无新增 evidence、无 testplan
-  状态变化——`make evidence` 门禁不适用。
-- `doc/bugs.md` 净变化：1 行状态转态（BUG-0041 OPEN→WONTFIX）+ 1 行新增
-  （BUG-0045），`doc/review/` 新增 1 份（REV-020），均按无条件登记纪律留痕。
 

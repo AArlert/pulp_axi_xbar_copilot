@@ -1,3 +1,4 @@
+{"date": "2026-07-30", "version": "0.4.4", "summary": "BUG-0039 rev 仲裁（REV-017）落地：§4 clause 7 环境约束延展 M3→M3+M4，atop_filter FSM 走书面豁免，重 pin，转 SPEC_CHANGED；REV-016/017 条件均未兑现（M4 基线重出+testplan行+签核豁免），M4 不得签核"}
 {"date": "2026-07-30", "version": "0.4.3", "summary": "BUG-0038 rev 仲裁（REV-016）落地：spec §0 item 4/5 澄清为例化闭包口径 + 三态判定规则（无 bin ⇒ N/A），重 pin sha256，转 SPEC_CHANGED；新登记 BUG-0039——atop_filter FSM 唯一转移路径与 §4 clause 7 环境约束冲突，证伪旧归因，M4 须先仲裁。无仿真无代码改动"}
 {"date": "2026-07-30", "version": "0.4.2", "summary": "落地 code-suggestion.md 三条零风险重构（payload helper/vseq 扇出 helper/scoreboard 流转注释），全回归 22/22+全部 bug 守卫数字逐位复现；新增 doc/uvm.md（仿 axi.md 风格的验证环境入门读物）+ SVG 图 + README 验证环境概览节"}
 {"date": "2026-07-30", "version": "0.4.1", "summary": "M4 六类覆盖率基线测出（详见 log.md），登记 BUG-0037（COV 合并异常）+ BUG-0038（wrapper 模块 spec 范围疑点）；并行完成 UVM 框架人工评审，产出 doc/code-suggestion.md"}
