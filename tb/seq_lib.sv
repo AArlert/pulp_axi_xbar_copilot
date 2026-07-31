@@ -1806,3 +1806,68 @@ class m4_ft01_cfge_vseq extends uvm_sequence #(uvm_sequence_item);
     wait fork;
   endtask
 endclass
+
+// ----------------------------------------------------------------------------
+// M4-RC01 — default-master-port enable->close round trip (testplan.md
+// M4-RC01, spec §3.4 items 1/2 / §3.3 / §4.2-4.4, REV-018). Two runtime
+// reconfigurations, each in its own all-ports-AW/AR-idle window (same
+// discipline as m2_cfg01_reconfig_vseq/m3_cfg02_reconfig_vseq/
+// m4_ov01_overlap_vseq — SPEC-3.4.1), applied to the SAME per-port
+// en_default_mst_port/default_mst_port fields (addr_map stays baseline
+// throughout, unlike M2-CFG01/M3-CFG02):
+//   stage A: '0 -> EN_DEFAULT_RC01 (every slave port's default master port
+//     enabled, distinct index per port) — establishes the "already enabled"
+//     precondition the testplan row requires before the close direction is
+//     under test (spec §3.3/§3.4 item 2, SPEC-3.4.2 legality anchor).
+//   stage B: EN_DEFAULT_RC01 -> '0 (the CLOSE direction M4-RC01 is actually
+//     about — every prior M2/M3/M4 default-port scenario only ever went
+//     0->1, never 1->0).
+// Unmapped-address traffic (slvport_de01_seq, unchanged, §4.7/clause-7
+// no-ATOP env constraint already built in) is fanned out to every slave
+// port after EACH stage. No new judgement mechanism: the scoreboard's
+// existing cfg_hist/version_at machinery (scoreboard_refmodel.sv C1.5)
+// already decodes each transaction against whichever table/default-port
+// snapshot was in effect at that transaction's own AW/AR accept instant, so
+// stage A's batch is judged as default-port-routed (OKAY, non-DECERR) and
+// stage B's batch is judged as err_slv DECERR purely from the live cfg_vif
+// history — the same mechanism M2-CFG01/M3-DE02/M3-CFG02 already exercise,
+// here run through the opposite (enable->close) transition once each stage's
+// own batch has fully drained (fanout_per_slv's `wait fork` blocks on every
+// child's item_done, which slvport_driver only signals after that item's
+// B/rlast — slvport_agent.sv header) so each reconfig lands in a genuinely
+// idle window (an SVA violation would flag this independently, C3.1).
+// ----------------------------------------------------------------------------
+class m4_rc01_reclose_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m4_rc01_reclose_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+
+  virtual xbar_cfg_if cfg_vif; // set by the test (config_db handle)
+
+  function new(string name = "m4_rc01_reclose_vseq"); super.new(name); endfunction
+
+  // Stage A: enable every slave port's default master port (spec §3.3),
+  // distinct target index per port (xbar_types_pkg::DEFAULT_MST_RC01).
+  task automatic enable_default();
+    do @(posedge cfg_vif.clk_i); while (!cfg_vif.all_ax_idle);
+    cfg_vif.en_default_mst_port <= xbar_types_pkg::EN_DEFAULT_RC01;
+    cfg_vif.default_mst_port    <= xbar_types_pkg::DEFAULT_MST_RC01;
+    repeat (3) @(posedge cfg_vif.clk_i);
+  endtask
+
+  // Stage B: close the now-enabled default master port back off (spec §3.4
+  // item 2, the 1->0 direction under test).
+  task automatic close_default();
+    do @(posedge cfg_vif.clk_i); while (!cfg_vif.all_ax_idle);
+    cfg_vif.en_default_mst_port <= '0;
+    repeat (3) @(posedge cfg_vif.clk_i);
+  endtask
+
+  task body();
+    if (cfg_vif == null)
+      `uvm_fatal("NOCFGVIF", "m4_rc01_reclose_vseq: cfg_vif not set")
+    enable_default();
+    fanout_per_slv#(slvport_de01_seq)::run(p_sequencer, "rc01_on");  // default-routed, OKAY
+    close_default();
+    fanout_per_slv#(slvport_de01_seq)::run(p_sequencer, "rc01_off"); // closed -> err_slv DECERR
+  endtask
+endclass

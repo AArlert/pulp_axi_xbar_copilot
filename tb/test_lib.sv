@@ -514,3 +514,34 @@ class m4_ft01_cfge_test extends base_test;
     phase.drop_objection(this, "m4_ft01_cfge_vseq done");
   endtask
 endclass
+
+// M4-RC01 default-master-port enable->close round trip (testplan.md
+// M4-RC01, spec §3.4 items 1/2/§3.3/§4.2-4.4). Baseline config (same as
+// M1-01); fetches the runtime config-bus handle and hands it to the vseq,
+// which drives the two reconfigurations (enable, then close) each in its own
+// all-idle window (same cfg_vif plumbing as m2_cfg01_reconfig_test/
+// m3_cfg02_reconfig_test/m4_ov01_overlap_test).
+class m4_rc01_reclose_test extends base_test;
+  `uvm_component_utils(m4_rc01_reclose_test)
+
+  virtual xbar_cfg_if cfg_vif;
+
+  function new(string name = "m4_rc01_reclose_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual xbar_cfg_if)::get(this, "", "cfg_vif", cfg_vif))
+      `uvm_fatal("NOCFGVIF", "m4_rc01_reclose_test: cfg_vif not set")
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m4_rc01_reclose_vseq vseq;
+    phase.raise_objection(this, "m4_rc01_reclose_vseq running");
+    vseq = m4_rc01_reclose_vseq::type_id::create("vseq");
+    vseq.cfg_vif = cfg_vif;
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m4_rc01_reclose_vseq done");
+  endtask
+endclass

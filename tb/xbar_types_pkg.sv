@@ -282,6 +282,25 @@ package xbar_types_pkg;
   localparam logic [NO_SLV_PORTS-1:0][MST_PORT_IDX_W-1:0] DEFAULT_MST_V1 =
       gen_default_mst_v1();
 
+  // ---- M4-RC01 default-master-port enable->close round trip (spec §3.4,
+  // items 1/2 — SPEC-3.4.1/SPEC-3.4.2) -------------------------------------
+  // Same per-port-distinct-index shape as EN_DEFAULT_V1/DEFAULT_MST_V1 (every
+  // slave port enabled, default_mst_port[i] = i) but a separate named
+  // constant: M4-RC01 never touches addr_map (stays at baseline ADDR_MAP
+  // throughout), so it must not be entangled with M2-CFG01's rule-move table.
+  // The vseq applies this pair first (0->1, establishing the "already
+  // enabled" precondition), then drives en_default_mst_port back to '0 (the
+  // 1->0 direction under test, spec §3.4 item 2) in a second reconfig window.
+  localparam logic [NO_SLV_PORTS-1:0] EN_DEFAULT_RC01 = '1;
+
+  function automatic logic [NO_SLV_PORTS-1:0][MST_PORT_IDX_W-1:0]
+      gen_default_mst_rc01();
+    for (int unsigned i = 0; i < NO_SLV_PORTS; i++)
+      gen_default_mst_rc01[i] = i[MST_PORT_IDX_W-1:0];
+  endfunction
+  localparam logic [NO_SLV_PORTS-1:0][MST_PORT_IDX_W-1:0] DEFAULT_MST_RC01 =
+      gen_default_mst_rc01();
+
   // ---- M4-OV01 overlapping-rule address table (spec §3.1.3/§3.2.1) -------
   // One pair of overlapping-region rules pointing at different master ports,
   // built from the baseline table by re-mapping OV1_HIGH_RULE (the table's
