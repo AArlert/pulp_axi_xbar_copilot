@@ -15,6 +15,7 @@
 | M2 | 功能场景 + SVA + 功能覆盖 | 8/8 | ✅ |
 | M3 | 多配置回归 + 错误路径 | 11/11 | ✅ |
 | M4 | 六类覆盖 ≥90% | 0 场景行 | 🔲 进行中 |
+| M5 | 约束随机 + 多种子回归 + 压力/soak + 覆盖率驱动闭环 | 草稿（提案，rev 未过） | 🔲 提案 |
 
 ## M0 — 基建 + sanity + spec v0 ✅
 
@@ -60,3 +61,38 @@ Exit criteria:
 - [ ] functional covergroup（`cg_*`）非空转仍按既有 rubric 第 4/5 条人工抽查把关，不受本页六类机器口径约束
 - [ ] BUG-0018 的 cross bin 盲区在此之前已解决（否则会以"永远填不满"形式再现）
 - [ ] 签核后转 v1.0.0
+
+## M5 — 约束随机 + 多种子回归 + 压力/soak + 覆盖率驱动闭环 🔲（提案草稿，rev 未过）
+
+> **性质：arch 提案草稿，未经 rev 门禁，orch 未落地。** 设计输入与五个决策点见
+> `doc/design-prompt/verification_maturity.md`。轴与 M4 正交：M4 是结构覆盖率百分比
+> 单一轴，本里程碑是验证方法论成熟度轴；二者关系是"M5 随机/闭环产出**可能**帮更
+> 省力关上 M4 结构缺口"，但目标性质不同（提案 Decision 1，C1.1–C1.4）。
+> **排序：M5 起于 M4 签核转 v1.0.0 之后**（v1.0 后方法学加固线，版本占位 v1.1.*，
+> 实际版本方案由 orch 定）。定向优先（M4）、随机后（M5）是证据链项目的正确顺序——
+> 随机只能加固/发现，不能替代 M4 的定向关闭（每 ✅ 行须是有 spec 引用、可证伪描述的
+> 具名场景）。
+
+Exit criteria（草稿，rev 门禁前不生效）：
+
+- [ ] **约束随机激励层**：`axi_seq_item` 四 `rand` 字段配 rev 批准的 `constraint`
+      块（合法性边界编码进约束、非事后 scoreboard 兜底），`atop` 升为有界 `rand`
+      （`{'0} ∪ 合法 atomic-load 编码`，零 spec 改动）；一条配置无关的通用随机
+      虚拟序列（`xbar_random_vseq`）在 baseline + cfgA–E 全配置点复用跑通
+      （design-prompt Decision 2，C2.1–C2.7）
+- [ ] **多种子回归**：M1–M4 全 UVM 定向场景至少 N=5 固定记录种子全过（时序/保序
+      高价值子集 N=10），`sim/regress/regress.list` 承载种子行，`result_summary.txt`
+      捕获入回归证据显示全部种子 `passed=N/N`（testplan 行 canonical 种子不变、
+      scripts schema 零改动，design-prompt Decision 3）
+- [ ] **压力/soak**：每拓扑类（baseline 6×8 + cfgB 6×1 + cfgA 1×8）至少一条长随机
+      饱和场景，判据 = 自检三层（scoreboard/SVA/functional cov）零 mismatch/零 assert
+      失败 + **无 watchdog 超时（liveness，引 §5.5.4，REV-019 校正）** + **覆盖率趋于饱和**（连续
+      K 窗口增量 < ε，作停止判据非 PASS/FAIL）；判决延迟不敏感（§7.4），各桶在飞
+      同时压到 §5.4.1 有效上限（design-prompt Decision 4）
+- [ ] **覆盖率驱动闭环**：`scripts/cov_loop.py` 跑确定性随机种子、查功能+结构覆盖、
+      缺口未闭合则继续、饱和/预算上限则停，逐种子记边际贡献 + 停止时残余缺口清单；
+      残余缺口 → 派生定向 testplan 行**或**书面记随机不可达（脚本不 turn green 任何
+      行，覆盖率只测量不作 oracle，design-prompt Decision 5，B0.2/B0.3）
+- [ ] **KILL 覆盖（不变量 5）**：M5 新引入的每类 checker（soak watchdog liveness、
+      饱和探测器、随机约束合法性 env 兜底监视）各至少一条打 M5 标签的 KILL 行
+- [ ] 签核：`doc/evidence/v1.1.*/signoff-M5.md`（rev 全 rubric）
