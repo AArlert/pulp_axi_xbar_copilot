@@ -1,0 +1,27 @@
+pulp_axi_xbar_copilot regression  date=2026-08-01  passed=26/26
+PASS   upstream_sanity SEED=1
+PASS   m1_01_smoke_test SEED=1
+PASS   m1_02_id_prefix_test SEED=1
+PASS   m2_cfg01_reconfig_test SEED=1
+PASS   m2_or01_stall_test SEED=1
+PASS   m2_or02_nonstall_test SEED=1
+PASS   m2_or03_guard_test SEED=1
+PASS   m2_tl01_txlimit_test SEED=1
+PASS   m2_tl02_slvtrans_test SEED=1
+PASS   m2_wo01_worder_test SEED=1
+PASS   m2_at01_atop_test SEED=1
+PASS   m3_de01_decerr_test SEED=1
+PASS   m3_de02_default_test SEED=1
+PASS   m3_or04_order_test SEED=1
+PASS   m3_or05_range_test SEED=1
+PASS   m3_cf01_cfga_test SEED=1
+PASS   m3_cf02_cfgb_test SEED=1
+PASS   m3_cf03_cfgc_test SEED=1
+PASS   m3_cf04_cfgd_test SEED=1
+PASS   m3_at02_atop_read_test SEED=1
+PASS   m3_tl01_xbucket_test SEED=1
+PASS   m3_cfg02_reconfig_test SEED=1
+PASS   m4_ov01_overlap_test SEED=1
+PASS   m4_ft01_cfge_test SEED=1
+PASS   m4_rc01_reclose_test SEED=1
+PASS   m4_aw01_awbp_test SEED=1
