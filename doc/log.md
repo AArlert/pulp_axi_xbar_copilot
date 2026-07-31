@@ -2,6 +2,86 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.16] 2026-08-01 逐位 Toggle 分解完成（Kind-B 前置兑现）——M4 阶段合法 Kind-B 豁免集为空集，转正 3 条 Kind-A（err_slv 恒定输出）
+
+**背景**：REV-024 授权了 Kind-B（方法论受限、延后 M5）豁免路径，但明确"不
+预先授予任何具体豁免，须先有逐信号/逐位 toggle 分解证据"。本周期用
+Workflow 工具跑一套多 agent 流水线兑现这个前置：刷新覆盖率数据 → 4 模块
+（axi_mux/axi_xbar/axi_demux_simple/axi_err_slv）并行逐位分解 → 每条
+"载荷候选"由 3 个独立怀疑者做对抗性反驳投票 → 综合报告 → 独立 rev 复核
+（REV-025）。
+
+**Done**
+- **覆盖率数据刷新**：核实并确认此前 sim/out 已因两次不带 COV=1 的
+  make regress（KILL-0004 自证卡、M4 签核卡 falsification）变成非
+  instrumented 空壳，干净重跑 make clean && make regress COV=1（26/26
+  PASS）；基线聚合数字与 v0.4.9 逐位一致（LINE 80.84/COND 71.66/
+  TOGGLE 47.87/FSM 7.14/BRANCH 82.99/ASSERT 78.62/GROUP 90.89，orch 独立
+  核对 doc/evidence/v0.4.9/M4-coverage-baseline.md 表格逐位吻合），证明
+  数据库确系真实 instrumented。
+- **4 模块并行逐位分解**：每个模块独立读 urg Toggle Port Details 报告 +
+  RTL 逐信号核实语义。关键发现——
+  - `axi_mux` 是唯一被标"载荷候选"的模块：`mst_resp_i.r.data[63:0]`
+    （散布 ~30/64 位未双向翻）。同模块 `mst_req_o.w.data[63:0]` 与
+    `id[7:0]` 前缀+原ID 两段经核实**已 100% 覆盖、非缺口**，直接反驳
+    REV-024 把 W/R.data 打包处理的假设。
+  - `axi_xbar` 顶层核实"0 载荷位"——54 个 toggle 位全是窄控制/配置
+    （clk/rst/test/en_default/default_mst_port），载荷 toggle 转移到子
+    模块度量，无残余宽载荷缺口。
+  - `axi_demux_simple` 写载荷 100% 覆盖，读载荷 87.5%（8 位残），主导
+    缺口是属性字段（119/225 bin）与地址（67/225 bin），均非载荷类。
+  - `axi_err_slv` 入侧写载荷 100% 覆盖；出侧发现三处**恒定常量输出**
+    （`r.data=RespData`、`r.resp/b.resp=Resp`、`user` tie-off）——
+    结构性 Kind-A，非 Kind-B。
+- **对抗性核实**：唯一"载荷候选"（axi_mux R.data）被 3/3 独立怀疑者
+  反驳——核心证据：TB `predict_beat_data` 返回 `{beat_a,beat_a}`（32-bit
+  地址镜像拼成 64-bit），R.data 实际由读地址决定、并非不透明随机载荷；
+  toggle 覆盖每位只需 all-0/all-1 两个饱和向量即可翻遍，根本不需要
+  "扫大量互异取值"，故不满足 Kind-B 判据(2)"纯定向不经济"。
+- **REV-025（独立 rev 实例）复核**：亲验 `axi_err_slv.sv`/
+  `axi_xbar_unmuxed.sv`/`xbar_types_pkg.sv`/`mstport_agent.sv`/
+  `seq_lib.sv` 具体行号，确认综合报告结论成立且比报告自述更强（R.data
+  的判据(1)"纯载荷"本身也不成立，两判据双失）。Conditional pass，三条
+  应用条件：仅新增 Kind-A A-1/A-2/A-3；size[2] 暂缓转正（须先确认 cfgA-E
+  全部配置数据总线 ≤64 位）；订正报告一处内部措辞不一致。
+- **orch 独立复验**（不采信自报）：亲读 `axi_err_slv.sv:23-27/145/
+  188-198` 确认三个常量赋值点；亲读 `axi_xbar_unmuxed.sv:195-211` 确认
+  两处例化点均未 override `RespData`；亲读 `xbar_types_pkg.sv:374-385`
+  确认 `predict_beat_data` 返回值；亲读 `seq_lib.sv:32-35` 确认 wdata 用
+  `$urandom` 随机填充；交叉核对覆盖率数字与 v0.4.9 基线逐位一致。
+- **orch 应用**：`doc/coverage-waivers.md` 新增 CW-003/004/005（err_slv
+  三条 Kind-A，引 REV-025）；Kind-B 模板行保留但注明"当前结论为空集"；
+  待建档区新增 size[2] 条目（附暂缓理由）；`doc/bugs/BUG-0047.md` 标记
+  逐位分解前置已完成、清单 B 已具体化到信号/位段级。产出
+  `doc/evidence/v0.4.15/M4-toggle-bit-decomposition.md`（完整分解报告 +
+  4 模块附录）+ `doc/review/REV-025.md`（仲裁记录）。
+- `make check`/`make selftest`（61/61）复跑绿。
+
+**Not done**
+- **清单 B**（约 6 类具体信号/位段，已在证据文件里具体化到信号级）仍
+  需逐条派 DV 定向覆盖卡——不因本次分解免除，反而更精确（如 axi_mux/
+  demux 的 r.data 现在明确知道"定向饱和读 all-0→all-1 即可闭"，不再是
+  笼统的"需补场景"）。
+- size[2] Kind-A 候选转正前需要一次跨配置（cfgA-E）数据总线宽度确认。
+- M4 仍未签核（REJECTED 判决未变，本轮工作是把"该走哪条路"这件事从
+  猜测变成了有逐位证据支撑的确定结论——净结果是收窄了处置空间：没有
+  Kind-B 可用，全部要么已覆盖、要么走 Kind-A、要么得真去补场景）。
+
+**Next**
+- 用户已完成本轮方法学张力优先项。下一步需用户决定：是逐条铺开清单 B
+  的 DV 定向覆盖卡（现在已经有信号级精确指引），还是先处理 size[2] 的
+  跨配置确认，或是先看其它待建档 Kind-A 项（`rst_ni`、
+  `spill_register` tie-off）。
+
+**How verified**
+- `make check`：docs-check passed，chain audit 无新增缺口。
+- `make selftest`：61/61 OK。
+- 覆盖率数字交叉核对：本次刷新的基线聚合数字与 v0.4.9 报告逐位一致。
+- REV-025 亲验的全部 RTL/TB 行号，orch 二次独立核对（见 Done 段），
+  均准确无误。
+- 本周期产生真实仿真（make regress COV=1，26/26），但非 testplan 场景
+  评审——不涉及 evidence.py 登记，是覆盖率测量性质的证据文件。
+
 ## [0.4.15] 2026-08-01 BUG-0047 方法学张力仲裁应用——建 doc/coverage-waivers.md、milestone.md M4 追加 Kind-A/Kind-B 豁免框架，划界远比表面窄
 
 **背景**：用户对 BUG-0047（M4"六类含 Toggle≥90%"vs"M5 前仅定向"的可行性
@@ -149,55 +229,4 @@ REV-024 独立仲裁，特别要求它自行核实用户意见的适用范围，
   本周期最大的一次认知纠偏）。
 - 独立复验详见 Done 段——FSM 行号逐条 grep 核对、guard 注入/检测点
   逐行核对、falsification 恢复用 git diff 核实为空。
-
-## [0.4.13] 2026-08-01 M4 收尾第三项完成：BUG-0046 仲裁应用——`make check MILESTONE=4` 四条机器门禁全绿
-
-**Done**
-- **REV-023（独立 rev 实例）仲裁 BUG-0046**：补核许可来源
-  `vendor/axi/doc/axi_xbar.md`（L26"must be less than or **equal to**"，
-  非严格 `<=`）——**推翻**本条原登记的框架（当初误判"spec 蒸馏遗漏/spec
-  允许 RTL 会炸"）。真相：`doc/spec.md` §3.2 条 2 的 `<=` 是这条权威文档
-  的**忠实、正确蒸馏**，spec 侧无误；真实矛盾是**上游内部** doc-vs-RTL
-  不一致（`axi_xbar.md` `<=` vs common_cells `addr_decode_dync.sv`
-  `check_start` 断言 `<`，且该文件自身头注释 L26/L36-38 亦互相矛盾）。
-  taxonomy 重框为该上游矛盾的 SPEC_ISSUE 变体，处置 **ACCEPTED@M5**
-  （到期锚点与姐妹条 BUG-0045 对齐）——**独立否决"现在把 spec 收紧为
-  `<`"**：该路径预设的"文字性错误、成本极低"前提经核实为假，收紧只会
-  让 spec 偏离权威文档反向对齐 RTL（spec-from-RTL 红线）。给出可证伪
-  解锁条件（任何场景构造 `start==end` 即作废）+ M5 到期二选一动作
-  （DV 环境约束 + spec 注记两件套 / 具体论证转 WONTFIX）。
-- **orch 应用裁决**（独立复核，未盲从）：`doc/bugs.md` BUG-0046 行
-  `OPEN → ACCEPTED@M5`，`suspect` 由 `spec` 订正为 `upstream`（反映
-  "spec 无误、根因上游不一致"），`summary`/`root_cause` 按 REV-023 的
-  订正框架重写（不再说"spec 允许 RTL 会炸"），`verify_evidence` 点名
-  REV-023；`doc/bugs/BUG-0046.md` 顶部加订正提示 + 重写 `## symptom`/
-  `## taxonomy`/`## rca`（纠正失实归因）+ 新增 `## arbitration`（含
-  addr_decode_dync 头注释内部自相矛盾的上游 issue 线索，并入本条不单开
-  行）+ `## regression_guard` 补到期锚点（M5 + 点名 REV-023）。
-- `make check`/`make selftest`（61/61）复跑绿。
-- **`make check MILESTONE=4` 四条机器门禁全部转 PASS**：1. 全部 M4
-  场景 ✅；2. regress evidence 已登记；3. 全部 bug 终态/ACCEPTED-
-  unexpired；4. KILL 覆盖已登记（KILL-0004）。仅剩签核文件本身
-  （`signoff-M4*.md` "not yet"）+ rev 人工 rubric（第 5-9 条）+
-  REV-017 条件 3 未走。
-
-**Not done**
-- REV-017 条件 3（atop_filter FSM 书面豁免 + BUG-0032 guard 机械抽查）
-  仍未走——按 REV-017 原文，此条件挂在"M4 签核时"一并出具，非独立前置卡。
-- 签核文件 `signoff-M4*.md` 未生成，rev 人工 rubric（`workflow/review.md`
-  第 5-9 条：coverage closure 抽查、guards 证伪、SPEC_ISSUE 清单核对、
-  ACCEPTED 债务可证伪性、chain audit 归档）未走。
-
-**Next**
-- 派完整 M4 签核卡（L3/opus/rev，fresh instance）：机器条件（已全绿）
-  + rev 人工 rubric 七问/五条抽查 + REV-017 条件 3（FSM 书面豁免 +
-  BUG-0032 guard 抽查）+ 产出 `doc/evidence/v0.4.*/signoff-M4.md`。
-  **M4 签核本身不转版本**（v1.0.0 转段挂 M5 签核后，见 `doc/milestone.md`）。
-
-**How verified**
-- `make check`：docs-check passed，chain audit 无新增缺口。
-- `make selftest`：61/61 OK。
-- `make check MILESTONE=4`：**4/4 机器门禁 PASS**（本周期完成条件 3
-  最后一项）。
-- 本周期无仿真运行（纯裁决应用），无新增 evidence/testplan 状态变化。
 

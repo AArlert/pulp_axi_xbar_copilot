@@ -1,3 +1,4 @@
+{"date": "2026-08-01", "version": "0.4.8", "summary": "M5 立项阶段 0 完成（arch 提案+REV-019 CONDITIONAL PASS+登记 BUG-0044）。重要：REV-019 裁定 M5 须排 M4 签核之后，下一步转回收尾 M4（覆盖率基线重出+REV-017 条件3+签核），非直接开始 M5 阶段1。计划全文见 misty-petting-horizon.md"}
 {"date": "2026-08-01", "version": "0.4.7", "summary": "M4 spec-gap sweep 收官：4 条候选场景全部落地转绿，orch 逐一独立复验；发现 BUG-0041/0042/0043；用户批准工业级验证方法学拓展计划，存档 misty-petting-horizon.md，尚未启动阶段 0"}
 {"date": "2026-07-31", "version": "0.4.6", "summary": "M4 spec-gap 全面扫描落地：arch 交付 11 小节处置+4 候选行+2 spec 提案，rev（REV-018）CONDITIONAL PASS 全部注册，orch 应用——spec 增 FallThrough 维+§4.7 范围澄清并重 pin，testplan 注册 M4-RC01/AW01/OV01/FT01（🔲）+ M3-DE01 约束句扩至 M3/M4"}
 {"date": "2026-07-30", "version": "0.4.5", "summary": "BUG-0037 修复关闭（COV=1 覆盖率数据库跨拓扑合并）：CM 改递归展开+COV_DIR 间接层，22/22 PASS 不变、六域 0 mismatch，orch 独立复验；新登 BUG-0040+FB-30"}

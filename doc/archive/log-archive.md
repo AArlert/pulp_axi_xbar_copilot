@@ -1,4 +1,55 @@
 # Work log archive
+## [0.4.13] 2026-08-01 M4 收尾第三项完成：BUG-0046 仲裁应用——`make check MILESTONE=4` 四条机器门禁全绿
+
+**Done**
+- **REV-023（独立 rev 实例）仲裁 BUG-0046**：补核许可来源
+  `vendor/axi/doc/axi_xbar.md`（L26"must be less than or **equal to**"，
+  非严格 `<=`）——**推翻**本条原登记的框架（当初误判"spec 蒸馏遗漏/spec
+  允许 RTL 会炸"）。真相：`doc/spec.md` §3.2 条 2 的 `<=` 是这条权威文档
+  的**忠实、正确蒸馏**，spec 侧无误；真实矛盾是**上游内部** doc-vs-RTL
+  不一致（`axi_xbar.md` `<=` vs common_cells `addr_decode_dync.sv`
+  `check_start` 断言 `<`，且该文件自身头注释 L26/L36-38 亦互相矛盾）。
+  taxonomy 重框为该上游矛盾的 SPEC_ISSUE 变体，处置 **ACCEPTED@M5**
+  （到期锚点与姐妹条 BUG-0045 对齐）——**独立否决"现在把 spec 收紧为
+  `<`"**：该路径预设的"文字性错误、成本极低"前提经核实为假，收紧只会
+  让 spec 偏离权威文档反向对齐 RTL（spec-from-RTL 红线）。给出可证伪
+  解锁条件（任何场景构造 `start==end` 即作废）+ M5 到期二选一动作
+  （DV 环境约束 + spec 注记两件套 / 具体论证转 WONTFIX）。
+- **orch 应用裁决**（独立复核，未盲从）：`doc/bugs.md` BUG-0046 行
+  `OPEN → ACCEPTED@M5`，`suspect` 由 `spec` 订正为 `upstream`（反映
+  "spec 无误、根因上游不一致"），`summary`/`root_cause` 按 REV-023 的
+  订正框架重写（不再说"spec 允许 RTL 会炸"），`verify_evidence` 点名
+  REV-023；`doc/bugs/BUG-0046.md` 顶部加订正提示 + 重写 `## symptom`/
+  `## taxonomy`/`## rca`（纠正失实归因）+ 新增 `## arbitration`（含
+  addr_decode_dync 头注释内部自相矛盾的上游 issue 线索，并入本条不单开
+  行）+ `## regression_guard` 补到期锚点（M5 + 点名 REV-023）。
+- `make check`/`make selftest`（61/61）复跑绿。
+- **`make check MILESTONE=4` 四条机器门禁全部转 PASS**：1. 全部 M4
+  场景 ✅；2. regress evidence 已登记；3. 全部 bug 终态/ACCEPTED-
+  unexpired；4. KILL 覆盖已登记（KILL-0004）。仅剩签核文件本身
+  （`signoff-M4*.md` "not yet"）+ rev 人工 rubric（第 5-9 条）+
+  REV-017 条件 3 未走。
+
+**Not done**
+- REV-017 条件 3（atop_filter FSM 书面豁免 + BUG-0032 guard 机械抽查）
+  仍未走——按 REV-017 原文，此条件挂在"M4 签核时"一并出具，非独立前置卡。
+- 签核文件 `signoff-M4*.md` 未生成，rev 人工 rubric（`workflow/review.md`
+  第 5-9 条：coverage closure 抽查、guards 证伪、SPEC_ISSUE 清单核对、
+  ACCEPTED 债务可证伪性、chain audit 归档）未走。
+
+**Next**
+- 派完整 M4 签核卡（L3/opus/rev，fresh instance）：机器条件（已全绿）
+  + rev 人工 rubric 七问/五条抽查 + REV-017 条件 3（FSM 书面豁免 +
+  BUG-0032 guard 抽查）+ 产出 `doc/evidence/v0.4.*/signoff-M4.md`。
+  **M4 签核本身不转版本**（v1.0.0 转段挂 M5 签核后，见 `doc/milestone.md`）。
+
+**How verified**
+- `make check`：docs-check passed，chain audit 无新增缺口。
+- `make selftest`：61/61 OK。
+- `make check MILESTONE=4`：**4/4 机器门禁 PASS**（本周期完成条件 3
+  最后一项）。
+- 本周期无仿真运行（纯裁决应用），无新增 evidence/testplan 状态变化。
+
 ## [0.4.12] 2026-08-01 M4 收尾第三项（下半）：KILL-0004 登记（M4-OV01 tie-break 自证），M4 机器门禁 4 条中 3 条转 PASS
 
 **Done**
