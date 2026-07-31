@@ -1,4 +1,65 @@
 # Work log archive
+## [0.4.5] 2026-07-30 BUG-0037 修复并关闭——COV=1 覆盖率数据库跨拓扑静默合并，orch 独立复验后机械关闭
+
+**Done**
+- **DV 自修卡（L1/sonnet，fresh 实例，仅做 fixer，未做 closer）**：诊断并修复
+  BUG-0037（`make regress COV=1` 把 `upstream_sanity`/cfgA-D/baseline 三类
+  结构不同的拓扑静默合并进同一 `out/cov.vdb`，`make cov` 报 825 行
+  `UCAPI-INSTANCEMISMATCH` + 千余行 `CMR-VCINF`）。根因确认：
+  `scripts/make/vcs-2018.mk` 的 `CM := ... -cm_dir $(OUT)/cov.vdb` 用 `:=`
+  在 `include` 时提前展开、冻结默认 `OUT`，晚于其展开的 `sim/Makefile`
+  per-config `override OUT` 改不动已展开字符串。修法两处：① `vcs-2018.mk`
+  新增 `COV_DIR` 间接层，`CM`/`COV_DIR` 均改 `=`（递归展开，在
+  `compile:`/`run:` recipe 执行时才求值，此时 per-config `override OUT`
+  已生效）——cfgA-D 零改动自动获得正确隔离；② `sim/Makefile` 给
+  `TEST=upstream_sanity` 分支单加 `COV_DIR := $(OUT)/m0/cov.vdb`，只挪覆盖率
+  库路径、不动 `OUT` 本身（避免波及 `make clean` 默认作用域与 M0 构建产物
+  路径）。`scripts/make/vcs-2018.mk` 是上游 pinned 文件，本地改动均按
+  CLAUDE.md §5 加内联注释 + 登记 `doc/fw-feedback.md` FB-30。
+- **orch 独立复验并直接关闭**（非另派 closer DV 实例——按本仓库既有先例
+  BUG-0014/0019/0022，非仿真判定类 TOOL_ENV 修复由 orch 亲自复验即满足
+  closer≠fixer）：亲跑 `make regress COV=1`（`sim/Makefile`/`scripts/`
+  已改后），22/22 PASS 与修复前逐字一致；逐一 `make cov TEST=<domain>`
+  核对 baseline（17 场景，确认仍正确合并、未被拆散）/ M0 / cfgA-D 共六个
+  查询，0 处 `mismatch`/`CMR-VCINF`。经 `make evidence BUG=BUG-0037
+  CMD=... EXPECT=BUG0037_VERIFIED_CLEAN` 机械关闭（非仿真判定关闭形态，
+  BUG-0029 先例），证据 `doc/evidence/v0.4.4/BUG-0037.log`；`fix_commit`
+  按既有先例（7ebff52 回填 BUG-0014 的做法）在拿到 commit hash 后单独一次
+  小提交回填为 `13cdeda`。
+- DV 卡在复验本卡自身 guard 清单（BUG-0014/0019/0021/0022）时意外发现
+  `doc/lint-baseline.md` 快照（2026-07-28）落后于 `tb/` 0.4.2 重构提交
+  （`01e7976`，2026-07-30），`make lint-diff` 报 153 个新站点（7 个既有
+  类别、无新类别）；用 `git stash` 确认与本卡改动无关后，按登记无条件规则
+  新开 **BUG-0040**（OPEN，TOOL_ENV），未分诊未修。
+
+**Not done**
+- BUG-0040 未分诊（153 个新站点风格 vs 真缺陷未逐条核实）、未修。
+- 本周期未触碰 M4 backlog 的其余三项：REV-017 条件 2（M4 config-matrix
+  testplan 行同步承载延展后的环境约束）、REV-016 条件 2 遗留（M4 覆盖率
+  基线须按新三态口径重出，且应一并纳入 atop_filter FSM 书面豁免）、M4
+  spec-gap 缺口探测（10 个未被引用的 spec 子节）。
+
+**Next**
+- 分诊 BUG-0040（`doc/lint-baseline.md` 差分重跑 + 153 站点逐条风格/真
+  缺陷判定）
+- 派 arch/dv 卡把 REV-017 延展后的约束落到 M4 config-matrix testplan 行，
+  建议与 M4 spec-gap 缺口探测合并规划
+- 重出 M4 覆盖率基线报告（REV-016 条件 2 + REV-017 条件 3 书面豁免一并
+  纳入，同一份干净 vdb、不重跑仿真——现在有了本次修复后干净隔离的
+  `out/{m0,cfgA..D}/cov.vdb`，可直接复用而不必二次跑 `make regress COV=1`）
+- M4 签核前须兑现 REV-017 条件 3（atop_filter FSM 书面豁免 + BUG-0032
+  guard 抽查）
+
+**How verified**
+- `make check` 绿（docs-check passed；chain audit gap 项与上周期一致，未
+  新增）
+- `make selftest` 61 tests OK
+- `make regress COV=1` 修复前后均 22/22 PASS（功能判定不受本次改动影响，
+  仅覆盖率数据库受影响）；修复后六个拓扑域查询 0 处
+  `mismatch`/`CMR-VCINF`（orch 亲跑，非采信 DV 自报数字）
+- `make evidence BUG=BUG-0037 CMD=... EXPECT=...` 生成
+  `doc/evidence/v0.4.4/BUG-0037.log`，`doc/bugs.md` 状态机械回填为 CLOSED
+
 ## [0.4.4] 2026-07-30 BUG-0039 仲裁落地（REV-017）：§4 clause 7 环境约束延展至 M4 + atop_filter FSM 书面豁免出口，CONDITIONAL PASS 两条条件未兑现
 
 **Done**

@@ -1,3 +1,4 @@
+{"date": "2026-07-30", "version": "0.4.0", "summary": "M3→M4 里程碑转段：milestone.md M3 标记转 ✅、M4 出口条件措辞按 REV-011 §3.3 订正为与 spec §0 #4 一致的 line+cond+fsm+tgl+branch+assert（不含 covergroup）；发现本地 git tag 命名与 upstream 框架发布 tag 撞名（v0.4.0 起），暂缓打 tag，待用户裁决"}
 {"date": "2026-07-30", "version": "0.3.21", "summary": "closer 独立复验+收口 BUG-0036（regress.list 缺 M3-CFG02，转 22/22，fix_commit=4d712f9），KILL-0003 转录准确性核对通过；M3 签核 C1/C2 均按 rev 预授权机械路径兑现，signoff-M3.md 追加 §八，make check MILESTONE=3 四条机器条件全 PASS——M3 里程碑完整签核成立"}
 {"date": "2026-07-30", "version": "0.3.20", "summary": "落地 M3-TL01（BUG-0010 跨桶定向回归守卫）：DV 卡实证分桶口径、scoreboard 全绿+新非判决覆盖 cg_xbucket_total 命中，全回归 21/21 PASS，M3 testplan 转 11/11 全绿"}
 {"date": "2026-07-30", "version": "0.3.19", "summary": "closer 独立复验 BUG-0034 修复+KILL自证，转 CLOSED（fix_commit=d7f5011）；BUG-0034 全链路（诊断→REV-015仲裁→修复→收口）终结"}
