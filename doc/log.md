@@ -2,6 +2,71 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.17] 2026-08-01 清单 B 分诊 + rev 门禁应用——注册 M4-EB01/M4-BP02，登记 CW-006/007；orch 独立复核纠正"P0 merge-remeasure"前提错误
+
+**背景**：用 Workflow 派 arch 把清单 B（Toggle 定向覆盖缺口）分诊成"(a) 扩充
+既有场景/(b) 新 testplan 行"两类提案，再派独立 rev 门禁审核（REV-026，
+CONDITIONAL PASS）。
+
+**Done**
+- **arch 分诊**：清单 B 六类（A-F）逐条给出 (a)/(b) 归属 + 具体构造思路；
+  新增两条 testplan 行草案（M4-EB01：err_slv B 通道背压，非 merge-gated；
+  M4-BP02：demux 锁定 FSM + ID 计数饱和，arch 原判 merge-gated）；
+  `rst_ni` 运行中复位给出二选一建议（范围豁免 vs 造一个"空闲窗口热复位"
+  新场景），不自行拍板；顺手核实 size[2] 转正前置（全配置 DATA_W=64）。
+- **REV-026（独立 rev 实例）门禁**：CONDITIONAL PASS。批准 A-1/A-2/B-1/
+  B-2/B-3/E-1（(a) 加固，无新判决维度）；C-1 需修改后批准（预测器扩展
+  须做 KILL 注伤自证+期望锚 AXI4 非 RTL，enrichment 须显式列入 testplan
+  行禁静默改激励）；C-2 批准附残余上报纪律（exotic ATOP 编码走
+  SPEC_ISSUE，不现场解释）；M4-EB01 批准可直接派；M4-BP02 批准为条件
+  注册；**独立裁决 rst_ni**——采纳范围豁免（CW-006），**明确驳回**
+  "造一个空闲窗口热复位场景"这个方案（判定其为"toggle-theater"：构造性
+  保证零在飞、不测试任何有意义的复位语义，纯粹为翻一个 toggle 位造场景，
+  违反"目标即门"纪律）；size[2] 独立复核确认转正前置已解。
+- **orch 独立复验并发现一处重要premise错误**：REV-026 把"P0 merge-
+  remeasure"定为全体加固卡的强制前置（理由：怀疑 M2-TL01/TL02/M3-TL01/
+  M4-AW01/M3-DE02/M2-CFG01 等场景的覆盖率数字未被合并进基线报告）。
+  orch 独立核查 `sim/Makefile` `COV_DIR` 解析逻辑 + `sim/regress/
+  regress.list` + `doc/testplan.md` 各行拓扑列，证实：**这个前提是错的**
+  ——这 6 个场景全部是 baseline 拓扑（`COV_DIR` 默认走同一个
+  `out/cov.vdb`），且全部在 `regress.list` 里，`make regress COV=1`
+  会把它们的覆盖率累积合并进同一份数据库；`doc/evidence/v0.4.15/
+  M4-toggle-bit-decomposition.md` 引用的 `urgReport_baseline` 报告本就是
+  这次合并后的产物（`make cov TEST=m1_01_smoke_test` 只是借用一个基线
+  拓扑成员的名字去解析已合并数据库的路径，不是"只测了 m1_01 一个"）。
+  **结论：不需要另跑一次"合并重测"——现有残余数字已经是真实合并后数字**，
+  `lock_aw/ar` FSM 与 `w_open[3:2]` 的缺口是确凿的、可以直接注册
+  M4-BP02，不必等待一个实际上已经做过的步骤。
+- **orch 应用**：`doc/testplan.md` 注册 M4-EB01（🔲）+ M4-BP02（🔲，
+  行文本按 arch 草案 + 前提纠正说明）；`doc/coverage-waivers.md` 新增
+  CW-006（`rst_ni` 运行中复位范围豁免）+ CW-007（`size[2]` 总线宽度上限
+  位，转正）；`doc/review/REV-026.md` 落盘。
+- `make check`/`make selftest`（61/61）复跑绿。
+
+**Not done**
+- M4-EB01/M4-BP02 均只是**注册**（🔲），尚未实现——下一步要派 DV 卡写场景。
+- 清单 B 的 (a) 类加固（A-1/A-2/B-1/B-2/B-3/C-1/C-2/D-1/E-1/F-1）均未
+  动手——已有明确构造思路，等待 DV 卡逐条落地。
+- CW-006 平行的 spec §2.3 条款订正（P-REV026-1）未走——REV-026 明确这是
+  独立门禁、非 CW-006 生效阻塞，可稍后处理。
+- `spill_register` tie-off 的 Kind-A 论证仍待建档。
+
+**Next**
+- 派多个 DV 卡实现批准清单：M4-EB01/M4-BP02 两条新场景（相互独立，可
+  并行）；M1-01 目标的多项 (a) 加固（A-1+A-2/B-1/C-1/D-1）因同时触及
+  同一份激励代码，按"小闭环、非并行"顺序处理；M2-AT01（C-2）/M3-DE01
+  （B-2+E-1）/M2-CFG01+M3-CFG02（B-3+F-1）等目标不同场景的加固可与
+  M4-EB01/M4-BP02 并行。
+
+**How verified**
+- `make check`：docs-check passed，chain audit 无新增缺口（testplan 新增
+  2 行计入既有 feature-matrix gap 类别，非新增 gap 类型）。
+- `make selftest`：61/61 OK。
+- orch 独立核查 `sim/Makefile` COV_DIR 解析逻辑（`ifeq ($(TEST),
+  upstream_sanity)` 分支外一律走默认 `out/cov.vdb`）+ `grep` 确认 6 个
+  场景均在 `regress.list` + `doc/testplan.md` 拓扑列均为 baseline，
+  纠正 REV-026 的 merge-premise 错误，证据充分、可复核。
+
 ## [0.4.16] 2026-08-01 逐位 Toggle 分解完成（Kind-B 前置兑现）——M4 阶段合法 Kind-B 豁免集为空集，转正 3 条 Kind-A（err_slv 恒定输出）
 
 **背景**：REV-024 授权了 Kind-B（方法论受限、延后 M5）豁免路径，但明确"不
@@ -145,88 +210,4 @@ REV-024 独立仲裁，特别要求它自行核实用户意见的适用范围，
 - `make selftest`：61/61 OK。
 - `git diff doc/spec.md doc/spec.sha256`：均无输出，确认未误改/误重 pin。
 - 本周期无仿真运行（纯治理文档订正+登记），无新增 sim evidence。
-
-## [0.4.14] 2026-08-01 M4 完整签核卡：REJECTED——四条机器门禁全绿不等于签核，覆盖率定义性出口条件未满足；新登记 BUG-0047（判据可行性张力）
-
-**背景**：0.4.9-0.4.13 五个周期把 `make check MILESTONE=4` 的四条机器
-门禁逐条转绿（场景 ✅、regress evidence、bug 终态、KILL 覆盖）。本周期
-派出全套 rev 签核 rubric 卡，本以为是收尾的最后一步，结果卡本身给出了
-**REJECTED** 判决——这是本轮 M4 收尾里最重要的一次纠偏：机器门禁全绿
-从未等于"可以签核"，签核判的是"证据是否支撑风险已收敛"。
-
-**Done**
-- **M4 完整签核卡（L3/opus，fresh instance，与本轮全部 M4 相关卡作者
-  均不共享）**产出 `doc/evidence/v0.4.13/signoff-M4.md`。逐项：
-  - **机器条件（rubric #1-4）**：亲跑确认全绿，但明确指出机器脚本
-    `scripts/docs.py` **不检查覆盖率百分比**——四条绿只覆盖"场景/
-    证据/bug 状态/KILL"，不覆盖 M4 的定义性出口条件本身。
-  - **rubric #5**（coverage closure≠risk closure）：挑 3 个良好命中
-    bin 逐一核实确系预期场景命中（含 `axi_mux` 仲裁重试路径的
-    "模块级 100% 实为跨 8 实例并集、实际仅 1/8 端口真转绿"这一颗粒度
-    警示）；重读 atop_filter 环境约束不可达论证并**活体证伪**佐证
-    （注入 atop 到未命中地址后 FSM 确实 engage）。
-  - **rubric #6**（guard 消费+证伪）：实地证伪 BUG-0032 guard——注入
-    `atop=6'h30` 到 M3-DE01 未命中序列，`SB_ATOP_DECODE` 6 端口报红；
-    恢复后 `git diff` 净。
-  - **rubric #7/#8**（spec debt / accepted debt）：BUG-0044/0045/0046
-    均确认有可证伪解锁条件、非软承诺。
-  - **rubric #9**（chain audit）：逐类给处置意见。
-  - **REV-017 条件 3 正式兑现**：atop_filter FSM 书面豁免（逐弧列出
-    未覆盖状态/迁移，行号对当前 vendor 树逐条复核——orch 独立复验
-    `grep vendor/axi/src/axi_atop_filter.sv` 确认 BLOCK_AW:151/
-    HOLD_B:161/INJECT_B:163/ABSORB_W:167/WAIT_R:228/R_HOLD:275/
-    INJECT_R:281 全部准确）+ BUG-0032 guard 机械抽查（grep + 计数=0
-    两种形态均满足）。
-  - **核心否决理由**：M4-coverage-baseline.md §6 的 ~9 类残余缺口里
-    只有 2 类得到合法处置（atop_filter 环境约束豁免 + addr_decode/
-    axi_demux 结构性 N/A），其余 ~6 类（`axi_demux_simple`/
-    `addr_decode_dync`/`axi_mux` Toggle/`axi_err_slv`/`spill_register`
-    等）是"可达但未测"——按 REV-016 §9，豁免须给可证伪的不可达论证，
-    这些是"没测"非"测不到"，**不可合法豁免，必须补定向场景**。
-  - **附带发现并建议登记的方法学张力**：M4 出口条件"六类含 Toggle
-    ≥90%"与项目"M5 前仅定向、随机不得替代 M4 定向关闭"纪律叠加，对
-    宽 AXI 总线的 Toggle bin 产生可行性冲突——两条规则各自无误，组合
-    时无解，需 rev/arch 后续裁决扩展豁免框架或重议判据口径。
-- **orch 独立复验**（不采信卡内自报）：`git status`/`git diff` 确认
-  falsification 改动已完全恢复；`make check MILESTONE=4` 复跑确认四条
-  仍绿、签核文件条目转"yes"；`grep vendor/axi/src/axi_atop_filter.sv`
-  逐行核对 FSM 豁免的 7 处行号（100% 命中）；`sed` 核对 BUG-0032
-  guard 的注入点（`tb/seq_lib.sv:962` `atop='0`）与检测点
-  （`tb/scoreboard_refmodel.sv:469-472` `SB_ATOP_DECODE`）均如实存在。
-- **orch 按无条件登记纪律登记 BUG-0047**（OPEN，spec，SPEC_ISSUE 候选，
-  非本条自身触发失败——是签核卡的附带发现）：M4 出口条件与"M5 前仅
-  定向"纪律的可行性张力，详见 `doc/bugs/BUG-0047.md`。
-- `make check`/`make selftest`（61/61）复跑绿。**`doc/milestone.md` M4
-  状态维持 🔲，不转 ✅**（rev 明确裁决，未由 orch 越权改动）。
-
-**Not done**
-- M4 仍未签核。REJECTED verdict 给出的后续方向（signoff 记录已列，
-  非本周期落地）：
-  1. DV 定向覆盖卡（针对 ~6 类"可达但未测"缺口，逐（模块,类型）补
-     spec 引用+可证伪具名场景）；
-  2. rev 覆盖率豁免卡（先建 `doc/coverage-waivers.md`，为 `rst_ni`/
-     `test_i` scan/AW valid-but-not-ready 断言类等真正需要论证的项
-     出具可证伪不可达论证）；
-  3. **BUG-0047 方法学张力裁决**（arch/rev，二选一：成本豁免扩展 /
-     重议 Toggle 判据口径）——这条建议先走，因为它决定其余 Toggle
-     类缺口该走"补场景"还是"豁免"这条路；
-  4. feature-matrix 补 4 行（M4-RC01/AW01/OV01/FT01，chain audit
-     既有 gap）。
-- 上述四项工作量不小，且互相有依赖（尤其 3 影响 1 的范围），需要用户
-  确认优先级/是否现在就铺开，不是一次性能收尾的小任务。
-
-**Next**
-- 向用户汇报 REJECTED 判决全貌，请用户决定：先处理 BUG-0047 方法学
-  张力裁决，还是先铺开 DV 定向覆盖卡补场景，还是先建
-  `doc/coverage-waivers.md` 做豁免分诊，或调整 M4 出口条件本身的
-  优先级安排。
-
-**How verified**
-- `make check`：docs-check passed，chain audit 无新增缺口。
-- `make selftest`：61/61 OK。
-- `make check MILESTONE=4`：4/4 机器门禁仍 PASS（signoff 文件条目
-  转"yes"，但 verdict 本身是 REJECTED——机器门禁与签核判断是两回事，
-  本周期最大的一次认知纠偏）。
-- 独立复验详见 Done 段——FSM 行号逐条 grep 核对、guard 注入/检测点
-  逐行核对、falsification 恢复用 git diff 核实为空。
 
