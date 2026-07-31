@@ -60,7 +60,6 @@ Exit criteria:
 - [ ] **六类口径以 spec §0 #4 为准**：`line+cond+fsm+tgl+branch+assert`（VCS `-cm` 六个类型关键字，**不含 functional covergroup**——REV-011 §3.3 已裁定"M4 机器判据接不住 covergroup"，本页原"…functional"措辞与 spec 不符，本次订正为与 spec 一致的表述，非新解释）≥90%，DUT 范围含 `axi_xbar` 及其全部强制内部子模块（spec §0 #4 列举），缺口逐条或修或书面豁免（豁免须 rev 签核）
 - [ ] functional covergroup（`cg_*`）非空转仍按既有 rubric 第 4/5 条人工抽查把关，不受本页六类机器口径约束
 - [ ] BUG-0018 的 cross bin 盲区在此之前已解决（否则会以"永远填不满"形式再现）
-- [ ] 签核后转 v1.0.0
 
 ## M5 — 约束随机 + 多种子回归 + 压力/soak + 覆盖率驱动闭环 🔲（提案草稿，rev 未过）
 
@@ -68,8 +67,7 @@ Exit criteria:
 > `doc/design-prompt/verification_maturity.md`。轴与 M4 正交：M4 是结构覆盖率百分比
 > 单一轴，本里程碑是验证方法论成熟度轴；二者关系是"M5 随机/闭环产出**可能**帮更
 > 省力关上 M4 结构缺口"，但目标性质不同（提案 Decision 1，C1.1–C1.4）。
-> **排序：M5 起于 M4 签核转 v1.0.0 之后**（v1.0 后方法学加固线，版本占位 v1.1.*，
-> 实际版本方案由 orch 定）。定向优先（M4）、随机后（M5）是证据链项目的正确顺序——
+> 定向优先（M4）、随机后（M5）是证据链项目的正确顺序——
 > 随机只能加固/发现，不能替代 M4 的定向关闭（每 ✅ 行须是有 spec 引用、可证伪描述的
 > 具名场景）。
 
@@ -96,3 +94,4 @@ Exit criteria（草稿，rev 门禁前不生效）：
 - [ ] **KILL 覆盖（不变量 5）**：M5 新引入的每类 checker（soak watchdog liveness、
       饱和探测器、随机约束合法性 env 兜底监视）各至少一条打 M5 标签的 KILL 行
 - [ ] 签核：`doc/evidence/v1.1.*/signoff-M5.md`（rev 全 rubric）
+- [ ] 签核后转 v1.0.0
