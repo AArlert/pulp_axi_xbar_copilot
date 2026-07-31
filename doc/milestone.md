@@ -58,6 +58,10 @@ Exit criteria:
 Exit criteria:
 
 - [ ] **六类口径以 spec §0 #4 为准**：`line+cond+fsm+tgl+branch+assert`（VCS `-cm` 六个类型关键字，**不含 functional covergroup**——REV-011 §3.3 已裁定"M4 机器判据接不住 covergroup"，本页原"…functional"措辞与 spec 不符，本次订正为与 spec 一致的表述，非新解释）≥90%，DUT 范围含 `axi_xbar` 及其全部强制内部子模块（spec §0 #4 列举），缺口逐条或修或书面豁免（豁免须 rev 签核）
+- [ ] **覆盖率缺口的书面豁免须声明种类并登记于 `doc/coverage-waivers.md`**（每条一行，rev 签核；REV-024 裁决）：
+  - **Kind-A（结构/环境不可达，永久）**：给可证伪的**不可达性**论证——哪个具体事实被推翻则本豁免作废。例：`axi_atop_filter` FSM（§4 clause 7 环境约束，REV-017）、`test_i` scan（出验证范围）、`axi_err_slv` 恒定错误应答数据位。
+  - **Kind-B（方法论受限、延后 M5，临时）**：**仅限**经 rev 逐 bin 判定为"宽数据**载荷**位翻转、纯定向激励不经济可达"的 (模块,类型) 子集（判据见 REV-024 §2.1，须附**逐信号/逐位 toggle 分解**为前置证据）。出口 = **书面记录残余风险 + Kind-B 豁免条目**，**非当下 ≥90%**。可证伪解锁 = **M5 决策点 2（约束随机激励层）落地 + 决策点 5（cov_loop）对这些具体 bin 重新测量；若仍 <90% 方可讨论转 Kind-A 或补定向**；被推翻即作废 = 任一 M5 随机跑使该 bin ≥90%。
+  - **控制/使能/模式/窄配置索引/握手背压/地址-rule 多样性/实例级颗粒度/Cond/Branch/Line/Assert 类缺口一律不得记入 Kind-B**——那些是定向可达的"需补场景"，走正常 DV 微闭环。
 - [ ] functional covergroup（`cg_*`）非空转仍按既有 rubric 第 4/5 条人工抽查把关，不受本页六类机器口径约束
 - [ ] BUG-0018 的 cross bin 盲区在此之前已解决（否则会以"永远填不满"形式再现）
 

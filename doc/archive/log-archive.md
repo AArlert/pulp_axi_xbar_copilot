@@ -1,4 +1,48 @@
 # Work log archive
+## [0.4.12] 2026-08-01 M4 收尾第三项（下半）：KILL-0004 登记（M4-OV01 tie-break 自证），M4 机器门禁 4 条中 3 条转 PASS
+
+**Done**
+- **DV 卡（L1/sonnet，fresh instance）**完成 M4-OV01 重叠 rule tie-break
+  参考模型（`tb/xbar_types_pkg.sv` `decode_mst_port`）的注伤自证：临时给
+  扫描全表的 `for` 循环加一行 `break;`，把 tie-break 从"扫描全表、后命中
+  覆盖前命中（SPEC-3.1.3 高位置胜出）"改成"取第一个命中即停"。重跑
+  `make run TEST=m4_ov01_overlap_test SEED=1`：注伤后 `route: match=12
+  mismatch=48`、`UVM_ERROR:49`（DUT 仍正确路由到 port=7，即高位置
+  `OV1_HIGH_RULE` 胜出；被注伤的参考模型错误期望 port=0，证明是 TB 侧
+  故障非 DUT 问题）；恢复后同 SEED 复跑 `route: match=60 mismatch=0`、
+  `UVM_ERROR:0`；全量回归 `make regress` 26/26 PASS。
+- **orch 独立复验**：`git status`/`git diff tb/xbar_types_pkg.sv` 确认
+  恢复后无残留改动（逐字节一致）；`sim/result_summary.txt` 交叉核对
+  26 PASS/0 FAIL 与 `m4_ov01_overlap_test PASS` 一致；`make check`/
+  `make selftest`（61/61）复跑绿。
+- **orch 登记 KILL-0004**（`doc/bugs.md`，status=KILL，summary 含"M4"
+  裸词满足机器门禁扫描）：完整转录注伤/恢复的具体数字、样本报文、重放
+  命令，`fix_commit` 列填 `-`（自证记录非缺陷，无 fix 对象）。首次登记时
+  误将 KILL-0004 行与紧随的 BUG-0046 行合并到同一物理行（Edit 工具替换
+  时遗漏行边界），当场发现并修正——`grep`/`awk` 核实两行独立、8 列结构
+  完整后 `make check` 复跑绿。
+- `make check MILESTONE=4` 复跑：4 条机器门禁中 **3 条转 PASS**
+  （1. 全部 M4 场景 ✅；2. regress evidence 已登记；4. KILL 覆盖已登记）；
+  仅剩条件 3（`BUG-0046` 仍 OPEN，REV-023 仲裁中，见 Not done）。
+
+**Not done**
+- **条件 3**：`BUG-0046` 仍 OPEN，REV-023（独立 rev 实例）仲裁中，未交付。
+- REV-017 条件 3、签核文件仍未动——待条件 3 转 PASS 后再派完整签核卡。
+
+**Next**
+1. REV-023 交付后，orch 应用裁决到 `doc/bugs.md`（预期 BUG-0046 转终态
+   或 ACCEPTED，视裁决而定）。
+2. `make check MILESTONE=4` 四条机器门禁全绿后，派完整 M4 签核卡（L3/opus/
+   rev）：机器条件 + rev 人工 rubric + REV-017 条件 3（FSM 书面豁免 +
+   BUG-0032 guard 抽查）+ `doc/evidence/v0.4.*/signoff-M4.md`。
+
+**How verified**
+- `make check`：docs-check passed，chain audit 无新增缺口。
+- `make selftest`：61/61 OK。
+- `make check MILESTONE=4`：条件 1/2/4 PASS（较上次 1/2 PASS 有进展），
+  条件 3 仍 FAIL（阻塞项 = BUG-0046，仲裁中）。
+- 本周期无新 evidence 文件；`doc/bugs.md` 新增 1 行（KILL-0004）。
+
 ## [0.4.11] 2026-08-01 M4 收尾第三项（上半）：BUG-0045/0043 转终态，新登记 BUG-0046（同批发现的独立 spec-gap）
 
 **Done**

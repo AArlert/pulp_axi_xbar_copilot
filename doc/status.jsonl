@@ -1,3 +1,4 @@
+{"date": "2026-08-01", "version": "0.4.15", "summary": "BUG-0047→SPEC_CHANGED：REV-024划界确认方法论受限面远比表面窄（仅axi_mux宽载荷Toggle子集），建doc/coverage-waivers.md+milestone.md M4追加Kind-A/Kind-B框架，不重pin spec。M4 REJECTED整体仍成立，待逐位分解卡+清单B定向覆盖卡"}
 {"date": "2026-08-01", "version": "0.4.14", "summary": "M4 完整签核卡 REJECTED——机器门禁全绿≠签核，覆盖率定义性出口条件（六类≥90%）未满足，~6类残余缺口可达但未测、不可合法豁免。新登记BUG-0047（Toggle判据vs仅定向纪律的可行性张力）。M4维持🔲，待用户定夺后续优先级"}
 {"date": "2026-08-01", "version": "0.4.13", "summary": "BUG-0046→ACCEPTED@M5（REV-023推翻原失实框架：spec忠实上游文档、根因是上游doc-vs-RTL矛盾）。make check MILESTONE=4 四条机器门禁全绿，只剩签核卡（rev rubric+REV-017条件3+signoff文件）"}
 {"date": "2026-08-01", "version": "0.4.12", "summary": "登记KILL-0004（M4-OV01 tie-break注伤自证，orch独立复验）。M4机器门禁4条中3条转PASS，仅剩条件3（BUG-0046仲裁中，REV-023）"}
@@ -5,4 +6,3 @@
 {"date": "2026-08-01", "version": "0.4.10", "summary": "M4 收尾第二项：六类覆盖率基线重出（REV-016条件2兑现）+ regress evidence 登记，M4 机器门禁4条中2条转PASS。剩余：BUG-0045/0043终态、M4 KILL覆盖、REV-017条件3、完整签核"}
 {"date": "2026-08-01", "version": "0.4.9", "summary": "M4 收尾第一项：BUG-0041 分诊闭环，REV-020 终判 WONTFIX（accepted-vendor-quirk）；顺带登记 BUG-0045（spec-gap 候选，非阻塞）；BUG-0043 维持观察。M4 收尾剩余：覆盖率基线重出、REV-017 条件3、完整签核"}
 {"date": "2026-08-01", "version": "0.4.8", "summary": "M5 立项阶段 0 完成（arch 提案+REV-019 CONDITIONAL PASS+登记 BUG-0044）。重要：REV-019 裁定 M5 须排 M4 签核之后，下一步转回收尾 M4（覆盖率基线重出+REV-017 条件3+签核），非直接开始 M5 阶段1。计划全文见 misty-petting-horizon.md"}
-{"date": "2026-08-01", "version": "0.4.7", "summary": "M4 spec-gap sweep 收官：4 条候选场景全部落地转绿，orch 逐一独立复验；发现 BUG-0041/0042/0043；用户批准工业级验证方法学拓展计划，存档 misty-petting-horizon.md，尚未启动阶段 0"}
