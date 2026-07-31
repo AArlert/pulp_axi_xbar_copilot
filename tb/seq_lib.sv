@@ -1871,3 +1871,59 @@ class m4_rc01_reclose_vseq extends uvm_sequence #(uvm_sequence_item);
     fanout_per_slv#(slvport_de01_seq)::run(p_sequencer, "rc01_off"); // closed -> err_slv DECERR
   endtask
 endclass
+
+// ----------------------------------------------------------------------------
+// M4-EB01 — err_slv decode-error B-channel backpressure (testplan.md M4-EB01,
+// spec §4.2/§4.3/§4.5/§5.1/§7.4/§7.4.5). One axi_burst_item per slave port of
+// NUM_WR single-beat writes to unmapped addresses (baseline en_default='0 ⇒
+// err_slv, §3.2/§4.2), all aw.atop≡'0 (spec §4 clause 7 env constraint, wide
+// reading — same discipline as slvport_de01_seq). b_backpressure=1 makes
+// slvport_driver hold this port's b_ready low for a bounded window and present
+// the AWs decoupled from their W bursts, so the port's internal err_slv fills
+// its 2-deep B-fifo (its consumer starved) and then its w_fifo — driving the
+// input-side w_ready/aw_ready low (structural motive, non-decisional). NUM_WR
+// exceeds the err_slv b_fifo+w_fifo depth so the input backpressure is genuinely
+// reached; distinct full ids keep each write's response-route / decerr-order
+// bookkeeping independent (scoreboard resp_expect/err_order_q, reused verbatim
+// from M3-DE01). JUDGEMENT gate (unchanged from M3-DE01): after release each
+// write returns a single B(DECERR) routed back to its source port with no loss/
+// duplication (SB_DECERR_BRESP / SB_RESP_ROUTE / SB_DECERR_ORDER, plus
+// report_phase's residual resp_expect = 0). Nothing here asserts the b_fifo
+// depth or the cycle aw_ready drops (spec §7.4.5 red line).
+class slvport_eb01_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_eb01_seq)
+  int unsigned slv_port_idx;
+  int unsigned num_wr = 10; // > err_slv b_fifo(2)+w_fifo depth, so the input backpressure is reached
+  function new(string name = "slvport_eb01_seq"); super.new(name); endfunction
+
+  task body();
+    axi_burst_item wb;
+    xbar_types_pkg::addr_t base;
+    base = M3_UNMAPPED_BASE + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h1000;
+    wb = axi_burst_item::type_id::create($sformatf("eb01_w_%0d", slv_port_idx));
+    wb.b_backpressure = 1'b1;
+    for (int unsigned k = 0; k < num_wr; k++) begin
+      axi_seq_item it;
+      it = axi_seq_item::type_id::create(
+          $sformatf("eb01_w_%0d_%0d", slv_port_idx, k));
+      it.is_write = 1'b1;
+      it.addr     = base + xbar_types_pkg::addr_t'(k) * 32'h40;
+      it.len      = axi_pkg::len_t'(0); // single beat: fastest to fill the b_fifo
+      it.id       = xbar_types_pkg::id_slv_t'(k); // distinct full ids (k < 32)
+      it.atop     = '0; // spec §4 clause 7: never ATOP to an unmapped address
+      fill_wr_payload(it, it.len);
+      wb.items.push_back(it);
+    end
+    start_item(wb);
+    finish_item(wb);
+  endtask
+endclass
+
+class m4_eb01_errbp_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m4_eb01_errbp_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m4_eb01_errbp_vseq"); super.new(name); endfunction
+  task body();
+    fanout_per_slv#(slvport_eb01_seq)::run(p_sequencer, "eb01_seq");
+  endtask
+endclass

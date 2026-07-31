@@ -337,6 +337,15 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
   // silent pass). Every sub-item is the SAME direction (the sequence builds it
   // that way), so one completion channel tallies the whole burst; this port
   // runs exactly one burst at a time, so no unrelated B/R is miscounted.
+  // M4-EB01 response-side backpressure hold (testplan M4-EB01, spec
+  // §4.3/§7.4.5): cycles this port's b_ready is held LOW before release. Pure
+  // stimulus timing — long enough that the internal err_slv B-fifo fills and
+  // its input w_ready/aw_ready are driven low (the structural motive), then
+  // released so every decode-error write's single B(DECERR) drains. The value
+  // is NOT a judgement anchor: nothing asserts which cycle aw_ready drops or
+  // the b_fifo fills (spec §7.4.5 red line).
+  localparam int unsigned BP_B_HOLD_CYC = 50;
+
   task automatic drive_burst(axi_burst_item item);
     int unsigned done_cnt;
     int unsigned total;
@@ -344,6 +353,9 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
     total    = item.items.size();
     done_cnt = 0;
     is_w     = (total > 0) ? item.items[0].is_write : 1'b1;
+    // M4-EB01: drop b_ready so the port's internal err_slv B-response fifo fills
+    // (its consumer, b_ready, is now starved) — see axi_burst_item.b_backpressure.
+    if (item.b_backpressure) vif.b_ready <= 1'b0;
     fork
       forever begin
         @(posedge vif.clk_i);
@@ -353,19 +365,42 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
           if (vif.r_valid && vif.r_ready && vif.r_last) done_cnt++;
         end
       end
+      // M4-EB01: bounded b_ready hold, then release. Runs concurrently with the
+      // presentation below so the AW/W loops (which stall while the fifos are
+      // full) can make progress once b_ready lets the B(DECERR)s drain.
+      if (item.b_backpressure) begin
+        repeat (BP_B_HOLD_CYC) @(posedge vif.clk_i);
+        vif.b_ready <= 1'b1;
+      end
     join_none
-    foreach (item.items[i]) begin
-      axi_seq_item sub;
-      sub = item.items[i];
-      if (sub.is_write) begin
-        drive_aw(sub);
-        drive_w_burst(sub);
-      end else begin
-        drive_ar(sub);
+    if (item.b_backpressure && is_w) begin
+      // M4-EB01: present all AWs decoupled from (running ahead of) their W
+      // bursts. With b_ready held low the err_slv b_fifo fills after two
+      // collected writes → its w_ready drops (W stalls), and the AWs still
+      // piling in fill its w_fifo → its input aw_ready drops too — the input-
+      // side backpressure this scenario targets. AW-before-W order per item is
+      // still enforced by the DUT (the demux gates each W burst on its own AW's
+      // routing, and err_slv raises w_ready only once the matching AW is in its
+      // w_fifo), so the slv monitor's FIFO AW/W pairing never sees a W with no
+      // AW (no MON_WNOAW).
+      fork
+        foreach (item.items[i]) drive_aw(item.items[i]);
+        foreach (item.items[i]) drive_w_burst(item.items[i]);
+      join
+    end else begin
+      foreach (item.items[i]) begin
+        axi_seq_item sub;
+        sub = item.items[i];
+        if (sub.is_write) begin
+          drive_aw(sub);
+          drive_w_burst(sub);
+        end else begin
+          drive_ar(sub);
+        end
       end
     end
     wait (done_cnt >= total);
-    disable fork; // reap the background completion counter
+    disable fork; // reap the background completion counter (+ b_ready hold)
   endtask
 endclass
 
@@ -474,6 +509,26 @@ class slvport_monitor extends uvm_monitor;
       if (vif.aw_valid && vif.aw_ready && vif.w_valid && vif.w_ready
           && xbar_functional_coverage::m_probe != null)
         xbar_functional_coverage::m_probe.sample_fallthrough(1'b1);
+
+      // M4-EB01 non-decisional err_slv-backpressure witness (testplan M4-EB01,
+      // spec §4.3/§7.4.5): this slave port's AW (or W) was offered but not
+      // ready-accepted on this sampled edge — the external image of the port's
+      // internal err_slv B-fifo filling (b_ready starved) and back-pressuring
+      // its input aw_ready/w_ready. In the M4-EB01 run decode-error writes are
+      // the only traffic, so a held AW/W here can only be that path (proving
+      // 背压非空转); other configs may also hold these for mux-side reasons —
+      // an entered-only bin, same convention as cg_fallthrough/cg_aw_retry.
+      // Purely external valid/ready (CLAUDE.md input boundary); draws no verdict
+      // (spec §7.4.5 red line — neither the b_fifo depth nor the exact cycle
+      // aw_ready drops is ever asserted).
+      if (xbar_functional_coverage::m_probe != null) begin
+        if (vif.aw_valid && !vif.aw_ready)
+          xbar_functional_coverage::m_probe.sample_errbp(
+            xbar_functional_coverage::EB_AW_HELD);
+        if (vif.w_valid && !vif.w_ready)
+          xbar_functional_coverage::m_probe.sample_errbp(
+            xbar_functional_coverage::EB_W_HELD);
+      end
 
       if (vif.aw_valid && vif.aw_ready) begin
         aw_rec_t a;

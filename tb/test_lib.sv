@@ -578,3 +578,28 @@ class m4_aw01_awbp_test extends base_test;
     phase.drop_objection(this, "m4_aw01_awbp_vseq done");
   endtask
 endclass
+
+// M4-EB01 err_slv decode-error B-channel backpressure (testplan.md M4-EB01,
+// spec §4.2/§4.3/§4.5/§5.1/§7.4/§7.4.5). Baseline config (same as M1-01;
+// en_default_mst_port='0 by reset default ⇒ unmapped addresses route to each
+// port's internal err_slv). No config_db knob: the b_ready backpressure is
+// carried on the burst item itself (axi_burst_item.b_backpressure), applied
+// per slave port by slvport_driver — so the mstport responders (never involved
+// in decode-error traffic) stay at their default zero hold, unlike the TL01/
+// TL02 tests. The DECERR judgement is the M3-DE01 SB_DECERR_* family, reused
+// verbatim (no new expected values).
+class m4_eb01_errbp_test extends base_test;
+  `uvm_component_utils(m4_eb01_errbp_test)
+
+  function new(string name = "m4_eb01_errbp_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m4_eb01_errbp_vseq vseq;
+    phase.raise_objection(this, "m4_eb01_errbp_vseq running");
+    vseq = m4_eb01_errbp_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m4_eb01_errbp_vseq done");
+  endtask
+endclass

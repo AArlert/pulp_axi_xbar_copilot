@@ -96,6 +96,14 @@ class xbar_functional_coverage extends uvm_component;
     MO_ERRBUCKET = 1'b1  // §5.2.6 clause 2.b: same low bucket, diff full id, one err
   } miss_order_e;
 
+  // Which slave-port channel was observed held not-ready during the M4-EB01
+  // err_slv B-channel backpressure scenario (cg_errbp). Fed by slvport_monitor's
+  // own external valid/ready observation — never a DUT-internal fifo signal.
+  typedef enum bit {
+    EB_AW_HELD = 1'b0, // aw_valid && !aw_ready: err_slv w_fifo full (input aw stall)
+    EB_W_HELD  = 1'b1  // w_valid  && !w_ready : err_slv b_fifo full (input w stall)
+  } errbp_chan_e;
+
   // ---- cg_addr_reconfig (spec §3.4, M2-CFG01) ---------------------------
   // Which address-table version was live at this transaction's own AW/AR
   // accept instant, crossed with its source slave port.
@@ -244,6 +252,27 @@ class xbar_functional_coverage extends uvm_component;
     }
   endgroup
 
+  // ---- cg_errbp (non-decisional, testplan M4-EB01, spec §4.3/§7.4.5) -------
+  // Which slave-port request channel was EVER seen held not-ready — the
+  // external image of the port's internal err_slv back-pressuring its input
+  // when its B-response fifo is starved (b_ready held low): the b_fifo-full
+  // path shows as w_valid && !w_ready, and the further w_fifo-full path as
+  // aw_valid && !aw_ready. Fed by slvport_monitor's own external valid/ready
+  // observation only (no DUT-internal fifo signal — CLAUDE.md input boundary).
+  // Proves the M4-EB01 backpressure stimulus genuinely entered the err_slv
+  // input-side backpressure path (证背压非空转); draws no verdict (spec §7.4.5
+  // red line — the b_fifo depth and the exact aw_ready-drop cycle are never
+  // asserted). Entered-only bins (a bin at 0 ⇒ that channel never held this
+  // run — expected for every config that sends no sustained err_slv write
+  // stream).
+  covergroup cg_errbp with function sample(errbp_chan_e chan);
+    option.per_instance = 1;
+    cp_chan: coverpoint chan {
+      bins aw_held = {EB_AW_HELD};
+      bins w_held  = {EB_W_HELD};
+    }
+  endgroup
+
   // ==== M3 covergroups (functional_coverage.md §4 "M3 覆盖点清单") ============
   // Sampling instant / hook obey §1 C1.1/C1.2. §4's opening scopes decisional-
   // adjacency: every §4 group is 非判决留痕 EXCEPT cg_decode_error /
@@ -383,6 +412,7 @@ class xbar_functional_coverage extends uvm_component;
   int unsigned n_xbucket_total;
   int unsigned n_fallthrough;
   int unsigned n_aw_retry;
+  int unsigned n_errbp;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -401,6 +431,7 @@ class xbar_functional_coverage extends uvm_component;
     cg_xbucket_total         = new();
     cg_fallthrough           = new();
     cg_aw_retry              = new();
+    cg_errbp                 = new();
     // Publish this single instance for the stall-SVA instrumentation bridge
     // (see m_probe's declaration). One scoreboard builds one fcov, so the last
     // (only) assignment is the live collector.
@@ -503,6 +534,14 @@ class xbar_functional_coverage extends uvm_component;
     n_aw_retry++;
   endfunction
 
+  // Driven directly by slvport_monitor's own external aw_valid/aw_ready and
+  // w_valid/w_ready folds — testplan M4-EB01, spec §4.3/§7.4.5. Non-decisional
+  // (see cg_errbp header above).
+  function void sample_errbp(errbp_chan_e chan);
+    cg_errbp.sample(chan);
+    n_errbp++;
+  endfunction
+
   // Per-run, log-visible coverage evidence: sample count + instance coverage
   // for every covergroup (the "非空转" proof functional_coverage.md §4 asks
   // for). A zero sample count means the scenario never produced that kind of
@@ -542,6 +581,11 @@ class xbar_functional_coverage extends uvm_component;
     `uvm_info("FCOV_SUMMARY",
       $sformatf("cg_aw_retry samples=%0d inst_cov=%0.2f%%",
                  n_aw_retry, cg_aw_retry.get_inst_coverage()),
+      UVM_LOW)
+    `uvm_info("FCOV_SUMMARY",
+      $sformatf("cg_errbp samples=%0d inst_cov=%0.2f%% cp_chan=%0.2f%%",
+                 n_errbp, cg_errbp.get_inst_coverage(),
+                 cg_errbp.cp_chan.get_inst_coverage()),
       UVM_LOW)
     `uvm_info("FCOV_SUMMARY",
       $sformatf("cg_decode_error coverpoints: cp_route=%0.2f%% cp_src_port=%0.2f%% cp_dir=%0.2f%% x_route_src_dir=%0.2f%% | cg_decerr_shape cp_len=%0.2f%% cp_dir=%0.2f%% x_len_dir=%0.2f%% | cg_miss_order cp_miss=%0.2f%% | cg_default_port_tracked cp_entered=%0.2f%% | cg_live_addr_map cp_live_tgt=%0.2f%%",

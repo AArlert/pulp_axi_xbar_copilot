@@ -81,6 +81,19 @@ endclass
 class axi_burst_item extends axi_seq_item;
   axi_seq_item items[$];
 
+  // M4-EB01 response-side backpressure selector (testplan M4-EB01, spec
+  // §4.3/§7.4.5): when set on a WRITE burst, the driver (slvport_agent.sv
+  // drive_burst) holds this slave port's b_ready LOW for a bounded window and
+  // presents the burst's AWs decoupled from (ahead of) their W bursts, so the
+  // port's internal err_slv fills its B-response fifo and then its w_fifo,
+  // driving its input-side w_ready/aw_ready low (the structural coverage
+  // motive). '0 (default) for every other axi_burst_item (M2-TL01/TL02/
+  // M3-TL01/M3-OR05), whose b_ready stays tied high and whose AW/W stay
+  // presented sequentially exactly as before. Pure stimulus timing on the
+  // response side — never changes any payload/id/completion order (a master
+  // may delay b_ready arbitrarily, legal AXI4, spec §1).
+  bit b_backpressure;
+
   `uvm_object_utils(axi_burst_item)
 
   function new(string name = "axi_burst_item");
