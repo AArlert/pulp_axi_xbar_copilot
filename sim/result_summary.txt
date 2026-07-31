@@ -26,3 +26,4 @@ PASS   m4_ft01_cfge_test SEED=1
 PASS   m4_rc01_reclose_test SEED=1
 PASS   m4_aw01_awbp_test SEED=1
 PASS   m4_eb01_errbp_test SEED=1
+PASS   m4_bp02_demuxlock_test SEED=1
