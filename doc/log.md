@@ -2,6 +2,57 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.13] 2026-08-01 M4 收尾第三项完成：BUG-0046 仲裁应用——`make check MILESTONE=4` 四条机器门禁全绿
+
+**Done**
+- **REV-023（独立 rev 实例）仲裁 BUG-0046**：补核许可来源
+  `vendor/axi/doc/axi_xbar.md`（L26"must be less than or **equal to**"，
+  非严格 `<=`）——**推翻**本条原登记的框架（当初误判"spec 蒸馏遗漏/spec
+  允许 RTL 会炸"）。真相：`doc/spec.md` §3.2 条 2 的 `<=` 是这条权威文档
+  的**忠实、正确蒸馏**，spec 侧无误；真实矛盾是**上游内部** doc-vs-RTL
+  不一致（`axi_xbar.md` `<=` vs common_cells `addr_decode_dync.sv`
+  `check_start` 断言 `<`，且该文件自身头注释 L26/L36-38 亦互相矛盾）。
+  taxonomy 重框为该上游矛盾的 SPEC_ISSUE 变体，处置 **ACCEPTED@M5**
+  （到期锚点与姐妹条 BUG-0045 对齐）——**独立否决"现在把 spec 收紧为
+  `<`"**：该路径预设的"文字性错误、成本极低"前提经核实为假，收紧只会
+  让 spec 偏离权威文档反向对齐 RTL（spec-from-RTL 红线）。给出可证伪
+  解锁条件（任何场景构造 `start==end` 即作废）+ M5 到期二选一动作
+  （DV 环境约束 + spec 注记两件套 / 具体论证转 WONTFIX）。
+- **orch 应用裁决**（独立复核，未盲从）：`doc/bugs.md` BUG-0046 行
+  `OPEN → ACCEPTED@M5`，`suspect` 由 `spec` 订正为 `upstream`（反映
+  "spec 无误、根因上游不一致"），`summary`/`root_cause` 按 REV-023 的
+  订正框架重写（不再说"spec 允许 RTL 会炸"），`verify_evidence` 点名
+  REV-023；`doc/bugs/BUG-0046.md` 顶部加订正提示 + 重写 `## symptom`/
+  `## taxonomy`/`## rca`（纠正失实归因）+ 新增 `## arbitration`（含
+  addr_decode_dync 头注释内部自相矛盾的上游 issue 线索，并入本条不单开
+  行）+ `## regression_guard` 补到期锚点（M5 + 点名 REV-023）。
+- `make check`/`make selftest`（61/61）复跑绿。
+- **`make check MILESTONE=4` 四条机器门禁全部转 PASS**：1. 全部 M4
+  场景 ✅；2. regress evidence 已登记；3. 全部 bug 终态/ACCEPTED-
+  unexpired；4. KILL 覆盖已登记（KILL-0004）。仅剩签核文件本身
+  （`signoff-M4*.md` "not yet"）+ rev 人工 rubric（第 5-9 条）+
+  REV-017 条件 3 未走。
+
+**Not done**
+- REV-017 条件 3（atop_filter FSM 书面豁免 + BUG-0032 guard 机械抽查）
+  仍未走——按 REV-017 原文，此条件挂在"M4 签核时"一并出具，非独立前置卡。
+- 签核文件 `signoff-M4*.md` 未生成，rev 人工 rubric（`workflow/review.md`
+  第 5-9 条：coverage closure 抽查、guards 证伪、SPEC_ISSUE 清单核对、
+  ACCEPTED 债务可证伪性、chain audit 归档）未走。
+
+**Next**
+- 派完整 M4 签核卡（L3/opus/rev，fresh instance）：机器条件（已全绿）
+  + rev 人工 rubric 七问/五条抽查 + REV-017 条件 3（FSM 书面豁免 +
+  BUG-0032 guard 抽查）+ 产出 `doc/evidence/v0.4.*/signoff-M4.md`。
+  **M4 签核本身不转版本**（v1.0.0 转段挂 M5 签核后，见 `doc/milestone.md`）。
+
+**How verified**
+- `make check`：docs-check passed，chain audit 无新增缺口。
+- `make selftest`：61/61 OK。
+- `make check MILESTONE=4`：**4/4 机器门禁 PASS**（本周期完成条件 3
+  最后一项）。
+- 本周期无仿真运行（纯裁决应用），无新增 evidence/testplan 状态变化。
+
 ## [0.4.12] 2026-08-01 M4 收尾第三项（下半）：KILL-0004 登记（M4-OV01 tie-break 自证），M4 机器门禁 4 条中 3 条转 PASS
 
 **Done**
@@ -109,74 +160,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
   发现，非遗漏），条件 4 仍 FAIL（KILL 自证进行中）。
 - 本周期无仿真运行（纯裁决应用/登记），无新增 evidence/testplan 状态
   变化——`make evidence` 门禁不适用。
-
-## [0.4.10] 2026-08-01 M4 收尾第二项：六类覆盖率基线重出（REV-016 条件2兑现），regress evidence 登记；M4 机器门禁 4 条中 2 条转 PASS
-
-**Done**
-- **DV 卡（L1/sonnet，fresh instance，纯测量不修复）**重出
-  `doc/evidence/v0.4.9/M4-coverage-baseline.md`：核实现有 `sim/out` 覆盖率
-  库不可信复用（`comp.log` 显示上次编译未带 `-cm`），`make clean && make
-  regress COV=1` 全量重跑 26/26 PASS；BUG-0037 修复（`COV_DIR` 间接层）
-  已让单条 `make regress COV=1` 正确按 7 个拓扑分流覆盖率库，7 组
-  `make cov` 均 0 mismatch/CMR-VCINF/UCAPI-INSTANCEMISMATCH。六类基线数字
-  较 v0.4.0 逐项对比：`axi_mux` 仲裁重试路径 Line/Branch 72.41/71.43→
-  100/100（M4-AW01 之功，但**逐实例**核对后只有背压的那 1/8 实例真转绿，
-  其余 7 个未变——如实标注避免过度解读模块级并集数字）；`axi_xbar` 顶层
-  Toggle 29.63%→40.74%（M4-RC01 补齐 `en_default_mst_port_i` 的 1→0 方向）；
-  `axi_atop_filter` FSM 两条状态机与 v0.4.0 完全相同、未见任何改善
-  （M4 四条新场景均不涉及 AtomicStore/AtomicCompare，REV-017 条件 3 的
-  书面豁免仍未兑现，本卡如实标注"转交 orch"）；`axi_xbar_unmuxed`/
-  `axi_demux_simple` 的 AW 侧 valid-but-not-ready 类 assert 仍 0
-  real-succeeded（与 M4-RC01 testplan 行"DV 核对项（非阻塞）"预告一致，
-  未改善）。REV-016 澄清后首次单独测量 `addr_decode_dync`/
-  `axi_demux_simple`/`axi_multicut`/`axi_cut`/`spill_register` 五个子
-  模块（均 <90%，是"有 bin 需补场景"而非结构性 N/A）。无新 taxonomy 异常
-  （一处操作细节：裸 `make cov` 因 `TEST` 缺省值解到 `out/m0/cov.vdb`，
-  已记录不登记新 bug）；未撞见 BUG-0043 同型号异常。
-- **orch 独立复验**（不采信卡内自报数字）：对照 `sim/result_summary.txt`
-  逐行核实 26 PASS/0 FAIL 与报告 §2 一致；`make check`/`make selftest`
-  （61/61）复跑绿；确认本卡未改动任何 RTL/TB/spec（`git status` 只有新增
-  的 evidence 目录）。
-- **orch 机械登记**：`cp sim/result_summary.txt doc/evidence/v0.4.9/
-  result_summary.txt`，满足 `make check MILESTONE=4` 条件 2（regress
-  summary registered as evidence）——该条件只要求文件按名落在
-  `doc/evidence/v0.4.*` 下，纯机械操作，非产出技术判断。
-- `make check MILESTONE=4` 复跑：4 条机器门禁中 2 条（1. 全部 M4 场景 ✅；
-  2. regress evidence 已登记）转 **PASS**；另 2 条仍 FAIL（见 Not done）。
-
-**Not done**
-- **`make check MILESTONE=4` 条件 3**：`BUG-0045`/`BUG-0043` 仍是 OPEN，
-  按机器门禁"所有 bug 须终态或 ACCEPTED-unexpired"，M4 不得签核——上一
-  周期我曾误判这两条"不阻塞 M4"，已在会话内向用户澄清并订正。
-- **`make check MILESTONE=4` 条件 4**：M4 尚无任何打 M4 标签的 KILL 行
-  （不变量 5 要求每 milestone 每类 checker 至少一次注伤自证）。
-- **REV-017 条件 3**：`axi_atop_filter` FSM 书面豁免 + BUG-0032 guard
-  机械抽查——本轮报告 §5 第 3 条再次确认该缺口未获改善，仍待 rev 在 M4
-  签核时一并出具（REV-017 原文即把此条件挂在"M4 签核时"，非独立前置卡）。
-- 签核文件 `signoff-M4*.md` 未生成。
-- `doc/evidence/v0.4.9/M4-coverage-baseline.md` §6 列出的多项"需补场景"
-  残余缺口（`axi_xbar` Toggle、`addr_decode_dync`/`axi_demux_simple` 多类、
-  `axi_mux` Toggle、`axi_err_slv` Cond/Toggle 等）——本卡明确声明"只测量
-  不判定"，是否需要为这些缺口另开 testplan 行或走书面豁免，留给 M4 签核
-  卡的 rev rubric 判断，不是本条自动待办。
-
-**Next**
-1. 派 rev 卡仲裁 BUG-0045（当前唯一路径，`make next` 已给出）。
-2. 处置 BUG-0043（无可执行判据，大概率走 ACCEPTED/WONTFIX 终态，需 rev
-   record 背书）。
-3. 补 M4 至少一条 KILL 覆盖行（挑一个 M4 新 checker，注伤→红→恢复→绿）。
-4. 三项齐备后派完整 M4 签核卡（L3/opus/rev）：`make check MILESTONE=4`
-   全绿 + rev 人工 rubric（`workflow/review.md` 七问 + 第 5/6 条抽查）+
-   REV-017 条件 3（FSM 书面豁免 + BUG-0032 guard 抽查）一并出具 +
-   `doc/evidence/v0.4.*/signoff-M4.md`。**M4 签核本身不转版本**（用户已
-   订正：v1.0.0 转段挂在 M5 签核后，见 `doc/milestone.md`）。
-
-**How verified**
-- `make check`：docs-check passed，chain audit 无新增缺口。
-- `make selftest`：61/61 OK。
-- `make check MILESTONE=4`：4 条机器门禁中 2 条 PASS（较上次全 4 条中
-  1 条 PASS 有进展），2 条仍 FAIL（如上）。
-- regress 数字交叉核实：`doc/evidence/v0.4.9/result_summary.txt` 与
-  `sim/result_summary.txt` 逐行一致，26 PASS/0 FAIL。
-- 本周期无新增 bugs.md 行/状态变化（DV 卡确认无新 taxonomy 异常）。
 
