@@ -24,3 +24,4 @@ m3_cfg02_reconfig_test 1
 m4_ov01_overlap_test 1
 m4_ft01_cfge_test 1
 m4_rc01_reclose_test 1
+m4_aw01_awbp_test 1

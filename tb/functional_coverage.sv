@@ -226,6 +226,24 @@ class xbar_functional_coverage extends uvm_component;
     }
   endgroup
 
+  // ---- cg_aw_retry (non-decisional, testplan M4-AW01, spec §7.4 item 1/5) --
+  // Was a master port's AW EVER seen `aw_valid && !aw_ready` on some sampled
+  // edge, then LATER `aw_valid && aw_ready` (the same AXI-held beat — AXI
+  // requires valid/payload to stay stable once asserted until the
+  // handshake, so no re-decode of which beat is possible)? Fed by
+  // mstport_monitor's own external valid/ready observation at that master
+  // port only — no DUT-internal signal (`lock_aw_valid_q` or similar) is
+  // read (CLAUDE.md input boundary). Proves the M4-AW01 backpressure
+  // stimulus genuinely produced an AW held past its first offered cycle;
+  // draws no verdict (SPEC-5.5.4/7.4.3 red line — which source's AW was
+  // eventually granted, or on which cycle, is never asserted here).
+  covergroup cg_aw_retry with function sample(bit held_then_accepted);
+    option.per_instance = 1;
+    cp_retry: coverpoint held_then_accepted {
+      bins hit = {1'b1};
+    }
+  endgroup
+
   // ==== M3 covergroups (functional_coverage.md §4 "M3 覆盖点清单") ============
   // Sampling instant / hook obey §1 C1.1/C1.2. §4's opening scopes decisional-
   // adjacency: every §4 group is 非判决留痕 EXCEPT cg_decode_error /
@@ -364,6 +382,7 @@ class xbar_functional_coverage extends uvm_component;
   int unsigned n_live_addr;
   int unsigned n_xbucket_total;
   int unsigned n_fallthrough;
+  int unsigned n_aw_retry;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -381,6 +400,7 @@ class xbar_functional_coverage extends uvm_component;
     cg_live_addr_map         = new();
     cg_xbucket_total         = new();
     cg_fallthrough           = new();
+    cg_aw_retry              = new();
     // Publish this single instance for the stall-SVA instrumentation bridge
     // (see m_probe's declaration). One scoreboard builds one fcov, so the last
     // (only) assignment is the live collector.
@@ -474,6 +494,15 @@ class xbar_functional_coverage extends uvm_component;
     n_fallthrough++;
   endfunction
 
+  // Driven directly by mstport_monitor's own external aw_valid/aw_ready fold
+  // (held on a prior sampled edge, accepted on a later one) — testplan
+  // M4-AW01, spec §7.4 item 1/5. Non-decisional (see cg_aw_retry header
+  // above).
+  function void sample_aw_retry(bit held_then_accepted);
+    cg_aw_retry.sample(held_then_accepted);
+    n_aw_retry++;
+  endfunction
+
   // Per-run, log-visible coverage evidence: sample count + instance coverage
   // for every covergroup (the "非空转" proof functional_coverage.md §4 asks
   // for). A zero sample count means the scenario never produced that kind of
@@ -509,6 +538,10 @@ class xbar_functional_coverage extends uvm_component;
     `uvm_info("FCOV_SUMMARY",
       $sformatf("cg_fallthrough samples=%0d inst_cov=%0.2f%%",
                  n_fallthrough, cg_fallthrough.get_inst_coverage()),
+      UVM_LOW)
+    `uvm_info("FCOV_SUMMARY",
+      $sformatf("cg_aw_retry samples=%0d inst_cov=%0.2f%%",
+                 n_aw_retry, cg_aw_retry.get_inst_coverage()),
       UVM_LOW)
     `uvm_info("FCOV_SUMMARY",
       $sformatf("cg_decode_error coverpoints: cp_route=%0.2f%% cp_src_port=%0.2f%% cp_dir=%0.2f%% x_route_src_dir=%0.2f%% | cg_decerr_shape cp_len=%0.2f%% cp_dir=%0.2f%% x_len_dir=%0.2f%% | cg_miss_order cp_miss=%0.2f%% | cg_default_port_tracked cp_entered=%0.2f%% | cg_live_addr_map cp_live_tgt=%0.2f%%",

@@ -39,6 +39,22 @@ class mstport_responder extends uvm_component;
   // ordering or payload changes.
   int unsigned resp_hold = 0;
 
+  // M4-AW01 (testplan M4-AW01, spec §7.4 items 1/5 — backpressure is a
+  // legal, delay-insensitive slave stimulus): optional, off-by-default
+  // periodic backpressure on `aw_ready` ONLY (`ar_ready` untouched). Default
+  // 0 keeps every other test's `aw_ready` tie-high exactly as before (byte-
+  // identical to the pre-existing single `vif.aw_ready <= 1'b1;`); the
+  // M4-AW01 test config_db-sets this true on ONE master port's responder
+  // before build_phase, so >=2 concurrent source AW requests at that port
+  // hit a genuinely not-ready cycle and force the DUT's arbiter to retry
+  // its selection (structural motive only — see accept_loop()). The
+  // hold/high period (BP_HOLD_CYC) is a simplification: this env does not
+  // (and per CLAUDE.md's input boundary must not) know which cycle the
+  // DUT's arbiter actually decided on, so it just denies periodically.
+  bit                    bp_enable = 1'b0;
+  local int unsigned     bp_cnt;
+  localparam int unsigned BP_HOLD_CYC = 2; // aw_ready low this many cycles, then 1 cycle high
+
   typedef struct {
     xbar_types_pkg::id_mst_t id;
     xbar_types_pkg::addr_t   addr;
@@ -82,6 +98,8 @@ class mstport_responder extends uvm_component;
       `uvm_fatal("NOPIDX", "mstport_responder: port_idx not set")
     // Optional: absent config keeps the default 0 (immediate response).
     void'(uvm_config_db#(int)::get(this, "", "resp_hold", resp_hold));
+    // Optional: absent config keeps the default 0 (no backpressure, M4-AW01).
+    void'(uvm_config_db#(bit)::get(this, "", "bp_enable", bp_enable));
   endfunction
 
   task automatic drive_idle();
@@ -119,10 +137,21 @@ class mstport_responder extends uvm_component;
   endtask
 
   task automatic accept_loop();
-    vif.aw_ready <= 1'b1;
+    bp_cnt = 0;
+    vif.aw_ready <= bp_enable ? 1'b0 : 1'b1;
     vif.ar_ready <= 1'b1;
     forever begin
       @(posedge vif.clk_i);
+      // M4-AW01: when enabled, periodically deny aw_ready regardless of
+      // whether anything is currently requesting it — a legal, delay-
+      // insensitive backpressure pattern (spec §7.4 items 1/5) that does not
+      // need to know which cycle the DUT's arbiter picked (see bp_enable
+      // header comment above). Every other test (bp_enable=0) skips this
+      // block entirely, so aw_ready stays tied high exactly as before.
+      if (bp_enable) begin
+        vif.aw_ready <= (bp_cnt == BP_HOLD_CYC) ? 1'b1 : 1'b0;
+        bp_cnt = (bp_cnt == BP_HOLD_CYC) ? 0 : bp_cnt + 1;
+      end
       if (vif.aw_valid && vif.aw_ready) begin
         req_rec_t r;
         r.id = vif.aw_id; r.addr = vif.aw_addr; r.len = vif.aw_len;
@@ -287,6 +316,7 @@ class mstport_monitor extends uvm_monitor;
   local xbar_types_pkg::data_t   w_data_q[$];
   local xbar_types_pkg::strb_t   w_strb_q[$];
   local orphan_w_rec_t           orphan_w_q[$]; // BUG-0042: completed W bursts awaiting their AW
+  local bit                      aw_was_held; // M4-AW01: aw_valid seen with aw_ready low on a prior edge
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -324,14 +354,28 @@ class mstport_monitor extends uvm_monitor;
   virtual task run_phase(uvm_phase phase);
     w_busy       = 1'b0;
     w_cur_has_aw = 1'b0;
+    aw_was_held  = 1'b0;
     aw_q.delete();
     orphan_w_q.delete();
     forever begin
       @(posedge vif.clk_i);
       if (!vif.rst_ni) continue;
 
+      // M4-AW01 non-decisional retry witness (testplan M4-AW01, spec §7.4
+      // items 1/5): this AW was offered but not ready-accepted on THIS
+      // edge — remember it so a later edge where it IS accepted can be
+      // recognized as "held, then accepted" (AXI requires valid/payload to
+      // stay stable across the hold, so no re-decode of identity is
+      // needed). Purely external valid/ready observation, no DUT-internal
+      // signal (cg_aw_retry header, functional_coverage.sv). Never feeds a
+      // judgement — SPEC-5.5.4/7.4.3 red line.
+      if (vif.aw_valid && !vif.aw_ready) aw_was_held = 1'b1;
+
       if (vif.aw_valid && vif.aw_ready) begin
         aw_rec_t a;
+        if (aw_was_held && xbar_functional_coverage::m_probe != null)
+          xbar_functional_coverage::m_probe.sample_aw_retry(1'b1);
+        aw_was_held = 1'b0;
         a.id = vif.aw_id; a.addr = vif.aw_addr; a.len = vif.aw_len;
         a.size = vif.aw_size; a.burst = vif.aw_burst;
         a.atop = vif.aw_atop;

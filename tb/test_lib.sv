@@ -545,3 +545,36 @@ class m4_rc01_reclose_test extends base_test;
     phase.drop_objection(this, "m4_rc01_reclose_vseq done");
   endtask
 endclass
+
+// M4-AW01 master-port AW arbitration under backpressure (testplan.md
+// M4-AW01, spec §5.5.1/§5.5.2/§5.5.3/§5.5.4, §7.4 items 1/5). Baseline
+// config (same as M1-01). Enables mstport_responder's off-by-default
+// bp_enable backpressure (mstport_agent.sv) on master port 0's responder
+// ONLY, before that component's own build_phase runs (same config_db-
+// before-super.build_phase ordering as M2-TL01/TL02's resp_hold above),
+// then reuses m2_wo01_worder_vseq UNCHANGED — its body already forks all
+// NO_SLV_PORTS source slave ports converging their writes on master port 0
+// (the exact "≥2 sources contend for one master port's AW" shape this
+// scenario needs), so no new vseq class is warranted (simplicity-first).
+// The W-burst-order judgement this stimulus feeds already lives in
+// scoreboard_refmodel.sv C5.4 (SPEC-5.5.1), unchanged by this card.
+class m4_aw01_awbp_test extends base_test;
+  `uvm_component_utils(m4_aw01_awbp_test)
+
+  function new(string name = "m4_aw01_awbp_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    uvm_config_db#(bit)::set(this, "env.mst_agent[0].responder", "bp_enable", 1'b1);
+    super.build_phase(phase);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m2_wo01_worder_vseq vseq;
+    phase.raise_objection(this, "m4_aw01_awbp_vseq running");
+    vseq = m2_wo01_worder_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m4_aw01_awbp_vseq done");
+  endtask
+endclass
