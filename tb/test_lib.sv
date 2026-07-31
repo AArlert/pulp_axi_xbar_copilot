@@ -578,3 +578,45 @@ class m4_aw01_awbp_test extends base_test;
     phase.drop_objection(this, "m4_aw01_awbp_vseq done");
   endtask
 endclass
+
+// M4-BP02 demux lock-retry FSM + same-bucket in-flight ceiling under W-open
+// stress (testplan.md M4-BP02, spec §5.4.1/§5.4.2/§5.5.1/§5.5.3/§7.4.5).
+// Baseline config (same as M1-01). Two off-by-default responder knobs, both
+// reused unchanged from earlier scenarios:
+//   - bp_enable on master port 0's responder ONLY (the sole target, M4-AW01's
+//     mechanism) so the demux's already-selected AW repeatedly sits valid-but-
+//     not-ready → lock-retry path;
+//   - resp_hold on the responders (M2-TL01/M3-TL01's mechanism) so B responses
+//     drain slowly enough that the same-(bucket,direction) in-flight count is
+//     genuinely pressed to the §5.4.1 effective ceiling (15) rather than
+//     draining away. The vseq's sliding-window driver (drive_burst_wopen)
+//     keeps >=3 W channels simultaneously open (w_open high) while W keeps
+//     flowing, so the AW ID counter (which pops on B, not W) can still climb to
+//     the ceiling under resp_hold — the three-way structural stack.
+// The judgement is the scoreboard's (route/data/wstrb/wlast/response/
+// completion, spec §1/§3.1/§5.1/§5.2.3), delay-insensitive (spec §7.4.5).
+class m4_bp02_demuxlock_test extends base_test;
+  `uvm_component_utils(m4_bp02_demuxlock_test)
+
+  function new(string name = "m4_bp02_demuxlock_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    // Set before the responders' build_phase (child components build after this
+    // test's build_phase) — byte-identical config path to M4-AW01 / M2-TL01.
+    // resp_hold sized to span the whole AW-injection window so no B drains the
+    // per-bucket count before it reaches the ceiling.
+    uvm_config_db#(bit)::set(this, "env.mst_agent[0].responder", "bp_enable", 1'b1);
+    uvm_config_db#(int)::set(this, "env.mst_agent*", "resp_hold", 150);
+    super.build_phase(phase);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m4_bp02_demuxlock_vseq vseq;
+    phase.raise_objection(this, "m4_bp02_demuxlock_vseq running");
+    vseq = m4_bp02_demuxlock_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m4_bp02_demuxlock_vseq done");
+  endtask
+endclass

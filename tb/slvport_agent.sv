@@ -59,7 +59,10 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
       axi_pair_item  pair;
       axi_burst_item burst;
       seq_item_port.get_next_item(item);
-      if ($cast(burst, item)) drive_burst(burst);
+      if ($cast(burst, item)) begin
+        if (burst.wopen_mode) drive_burst_wopen(burst);
+        else                  drive_burst(burst);
+      end
       else if ($cast(pair, item)) drive_pair(pair);
       else if (item.is_write && item.fallthrough_probe) drive_write_ft(item);
       else if (item.is_write) drive_write(item);
@@ -363,6 +366,60 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
       end else begin
         drive_ar(sub);
       end
+    end
+    wait (done_cnt >= total);
+    disable fork; // reap the background completion counter
+  endtask
+
+  // ---- M4-BP02 demux lock-retry + w_open stress primitive (testplan M4-BP02,
+  // spec §5.4.1/§5.4.2/§5.5.1/§7.4.5). Unlike drive_burst() above — which
+  // drains each sub-item's whole W burst before presenting the next AW, so the
+  // demux never has more than one W channel open at once — this task keeps a
+  // bounded LEAD of accepted AWs ahead of the still-draining W bursts: it opens
+  // AWs (W held) until LEAD of them are outstanding, then drains the oldest
+  // open W burst, refilling as it goes. That sustains LEAD (>=3) simultaneously
+  // open W channels at the demux (w_open high) throughout the batch. LEAD is
+  // held strictly below the mux's AW->W FIFO depth (= MaxSlvTrans, spec §5.4.2,
+  // read from the pinned Cfg — NOT any RTL value): were LEAD >= that depth the
+  // mux would stall AW with its W held and the batch would deadlock, so the
+  // window caps AW-ahead-of-W to keep W always drainable. Because W keeps
+  // flowing (only B is held, by the test's resp_hold), the same-(bucket,
+  // direction) AW ID counter is free to climb to the §5.4.1 effective ceiling
+  // (its counter pops on B, not W) while w_open stays bounded — the two
+  // structural pressures coexist. W bursts drain in AW-acceptance order (spec
+  // §5.5.1, non-interleaved). Writes only (the sequence builds it so). This
+  // task asserts NOTHING about lock-FSM state, the w_open value, or which cycle
+  // the ceiling is reached (spec §7.4.5 red line) — the judgement is the
+  // scoreboard's alone.
+  task automatic drive_burst_wopen(axi_burst_item item);
+    int unsigned done_cnt;
+    int unsigned total;
+    int unsigned aw_idx;
+    int unsigned w_idx;
+    int unsigned lead;
+    total    = item.items.size();
+    done_cnt = 0;
+    aw_idx   = 0;
+    w_idx    = 0;
+    // stay one below the mux AW->W FIFO depth (spec §5.4.2: MaxSlvTrans maps to
+    // axi_mux's MaxWTrans) so W never permanently stalls; still >=3 open.
+    lead     = (xbar_types_pkg::Cfg.MaxSlvTrans > 1)
+                 ? xbar_types_pkg::Cfg.MaxSlvTrans - 1 : 1;
+    fork
+      forever begin
+        @(posedge vif.clk_i);
+        if (vif.b_valid && vif.b_ready) done_cnt++;
+      end
+    join_none
+    while (w_idx < total) begin
+      // open more AWs (W held for them) until LEAD are simultaneously open.
+      while (aw_idx < total && (aw_idx - w_idx) < lead) begin
+        drive_aw(item.items[aw_idx]);
+        aw_idx++;
+      end
+      // drain the oldest still-open W burst (AW-acceptance order, spec §5.5.1).
+      drive_w_burst(item.items[w_idx]);
+      w_idx++;
     end
     wait (done_cnt >= total);
     disable fork; // reap the background completion counter

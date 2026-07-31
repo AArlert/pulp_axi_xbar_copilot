@@ -80,6 +80,15 @@ endclass
 // so no other traffic aliases the count.
 class axi_burst_item extends axi_seq_item;
   axi_seq_item items[$];
+  // M4-BP02 demux lock-retry + w_open stress selector (testplan M4-BP02, spec
+  // §5.4.1/§5.4.2/§7.4.5). When set, the driver (slvport_agent.sv
+  // drive_burst_wopen()) keeps a bounded lead of accepted AWs ahead of the
+  // still-draining W bursts, so the demux holds >=3 W channels simultaneously
+  // open (w_open high) while its per-bucket AW ID counter is pressed to the
+  // §5.4.1 effective ceiling. '0 (unset, the default) keeps the ordinary
+  // drive_burst() AW-then-W-per-item path (M2-TL01/TL02/M3-TL01) byte-for-byte
+  // — no other burst scenario's driving changes.
+  bit wopen_mode;
 
   `uvm_object_utils(axi_burst_item)
 

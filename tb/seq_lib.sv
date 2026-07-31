@@ -1622,6 +1622,82 @@ class m3_tl01_xbucket_vseq extends uvm_sequence #(uvm_sequence_item);
 endclass
 
 // ----------------------------------------------------------------------------
+// M4-BP02 — demux lock-retry FSM + same-bucket in-flight ceiling under W-open
+// stress (testplan.md M4-BP02, spec §5.4.1/§5.4.2/§5.5.1/§5.5.3/§7.4.5, §4
+// clause 7). ONE slave port (port 0) fires NUM_TX = MAX_MST_TRANS_EFF (15)
+// write bursts, ALL targeting ONE master port (tgt 0) and ALL sharing ONE low-
+// AxiIdUsedSlvPorts-bit bucket (bucket 0, spread across its 4 sibling full ids
+// exactly as build_txlimit_burst's spread_bucket=1 — no full id gets anywhere
+// near MaxSlvTrans). The single axi_burst_item carries wopen_mode=1 so the
+// driver (slvport_agent.sv drive_burst_wopen) keeps a bounded LEAD of accepted
+// AWs ahead of the still-draining W bursts: the demux therefore holds >=3 W
+// channels simultaneously open (w_open high) throughout, while — because W
+// keeps flowing (only B is held, by the test's resp_hold) — its per-bucket AW
+// ID counter (which pops on B, not W) is free to climb to the §5.4.1 effective
+// ceiling (15, NOT the literal MaxMstTrans=10 — BUG-0016/REV-007). LEAD stays
+// below the mux AW->W FIFO depth (MaxSlvTrans, spec §5.4.2) so W never
+// permanently stalls (an over-depth lead deadlocks). Every sub-item is a
+// multi-beat (len=1) burst so wstrb/wlast are exercised per beat. The test
+// additionally back-pressures this master port's aw_ready (M4-AW01's
+// bp_enable) so the demux's already-selected AW repeatedly sits valid-but-not-
+// ready, entering the lock-retry path. The JUDGEMENT is the scoreboard's
+// route/data/wstrb/wlast/response/completion correctness under this combined
+// pressure (spec §1/§3.1/§5.1/§5.2.3), zero mismatch, no starvation (§5.5.3);
+// this construction asserts NOTHING about lock-FSM state, the w_open value, or
+// which cycle the ceiling/rejection happens (spec §7.4.5 red line). The
+// per-bucket-ceiling reach is witnessed non-decisionally by cg_tx_limit
+// (at_effective_ceiling) and the lock-retry by cg_aw_retry — both external,
+// no DUT-internal signal read. No unmapped-address ATOP anywhere (spec §4
+// clause 7 env constraint, wide reading, REV-018 — vacuous here: every write
+// hits a rule and aw.atop stays '0 throughout).
+// ----------------------------------------------------------------------------
+class slvport_bp02_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_bp02_seq)
+
+  int unsigned slv_port_idx;
+  int unsigned tgt_mst = 0;
+  // = §5.4.1 effective per-bucket ceiling 2**ceil(log2(MaxMstTrans))-1 = 15
+  // (read from the pinned parameter-definition file, not any RTL value) — the
+  // demux caps this bucket's AW ID counter here, so this is the count needed to
+  // hit cg_tx_limit's at_effective_ceiling bin.
+  int unsigned num_tx = xbar_types_pkg::MAX_MST_TRANS_EFF;
+
+  function new(string name = "slvport_bp02_seq");
+    super.new(name);
+  endfunction
+
+  task body();
+    axi_burst_item wb;
+    // Reuse the M2-TL01 same-bucket builder (spread_bucket=1, bucket 0), then
+    // widen each sub-item to a 2-beat burst so wstrb/wlast are exercised.
+    wb = build_txlimit_burst($sformatf("bp02_w_%0d", slv_port_idx),
+                              1'b1, tgt_mst, num_tx, 32'h0030_0000, 1'b1, 0);
+    foreach (wb.items[i]) begin
+      wb.items[i].len = axi_pkg::len_t'(1); // 2 beats
+      fill_wr_payload(wb.items[i], wb.items[i].len);
+    end
+    wb.wopen_mode = 1'b1;
+    start_item(wb);
+    finish_item(wb);
+  endtask
+endclass
+
+class m4_bp02_demuxlock_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m4_bp02_demuxlock_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m4_bp02_demuxlock_vseq"); super.new(name); endfunction
+  task body();
+    // Single slave port (testplan M4-BP02 "单 slave 端口") — one port's own
+    // demux lock-retry / w_open / per-bucket bookkeeping under backpressure,
+    // not cross-port interaction (same single-port rationale as M3-TL01).
+    slvport_bp02_seq s;
+    s = slvport_bp02_seq::type_id::create("bp02_seq");
+    s.slv_port_idx = 0;
+    s.start(p_sequencer.slv_sqr[0]);
+  endtask
+endclass
+
+// ----------------------------------------------------------------------------
 // M4-OV01 — overlapping-rule tie-break (testplan.md M4-OV01, spec §3.1.3/
 // §3.2.1). Applies xbar_types_pkg::ADDR_MAP_OV1 (one pair of overlapping-
 // region rules, OV1_LOW_RULE/OV1_HIGH_RULE, pointing at different master
