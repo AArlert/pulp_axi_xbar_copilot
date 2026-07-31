@@ -206,6 +206,23 @@ class xbar_functional_coverage extends uvm_component;
       bins cfgB     = {2}; // 6x1 CUT_ALL_PORTS    (M3-CF02)
       bins cfgC     = {3}; // 4x4 UniqueIds        (M3-CF03)
       bins cfgD     = {4}; // 4x4 sparse Conn/ATOPs=0 (M3-CF04)
+      bins cfgE     = {5}; // 6x8 FallThrough=1    (M4-FT01)
+    }
+  endgroup
+
+  // ---- cg_fallthrough (non-decisional, testplan M4-FT01, spec §2.1/§7.3.1)
+  // Whether a slave port's AW and its (first) W beat were EVER accepted on
+  // the same sampled edge (fed by slvport_monitor's own external valid/
+  // ready observation — never a second decode of DUT-internal state). Same
+  // "entered-only" convention as cg_default_port_tracked/cg_xbucket_total
+  // above: sampled only when the situation is observed, so samples=0 means
+  // "never witnessed this run" and is expected/structural for every config
+  // point except cfgE (FallThrough=1'b1). SPEC-7.4.3 red line: this bin
+  // draws no verdict — pass/fail never depends on whether it fires.
+  covergroup cg_fallthrough with function sample(bit same_cycle_aw_w);
+    option.per_instance = 1;
+    cp_same_cycle: coverpoint same_cycle_aw_w {
+      bins hit = {1'b1};
     }
   endgroup
 
@@ -346,6 +363,7 @@ class xbar_functional_coverage extends uvm_component;
   int unsigned n_default_port;
   int unsigned n_live_addr;
   int unsigned n_xbucket_total;
+  int unsigned n_fallthrough;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -362,6 +380,7 @@ class xbar_functional_coverage extends uvm_component;
     cg_default_port_tracked  = new();
     cg_live_addr_map         = new();
     cg_xbucket_total         = new();
+    cg_fallthrough           = new();
     // Publish this single instance for the stall-SVA instrumentation bridge
     // (see m_probe's declaration). One scoreboard builds one fcov, so the last
     // (only) assignment is the live collector.
@@ -447,6 +466,14 @@ class xbar_functional_coverage extends uvm_component;
     n_xbucket_total++;
   endfunction
 
+  // Driven directly by slvport_monitor's own external aw_valid&&aw_ready&&
+  // w_valid&&w_ready fold — testplan M4-FT01, spec §2.1/§7.3.1. Non-
+  // decisional (see cg_fallthrough header above).
+  function void sample_fallthrough(bit same_cycle_aw_w);
+    cg_fallthrough.sample(same_cycle_aw_w);
+    n_fallthrough++;
+  endfunction
+
   // Per-run, log-visible coverage evidence: sample count + instance coverage
   // for every covergroup (the "非空转" proof functional_coverage.md §4 asks
   // for). A zero sample count means the scenario never produced that kind of
@@ -478,6 +505,10 @@ class xbar_functional_coverage extends uvm_component;
                  n_default_port, cg_default_port_tracked.get_inst_coverage(),
                  n_live_addr,    cg_live_addr_map.get_inst_coverage(),
                  n_xbucket_total, cg_xbucket_total.get_inst_coverage()),
+      UVM_LOW)
+    `uvm_info("FCOV_SUMMARY",
+      $sformatf("cg_fallthrough samples=%0d inst_cov=%0.2f%%",
+                 n_fallthrough, cg_fallthrough.get_inst_coverage()),
       UVM_LOW)
     `uvm_info("FCOV_SUMMARY",
       $sformatf("cg_decode_error coverpoints: cp_route=%0.2f%% cp_src_port=%0.2f%% cp_dir=%0.2f%% x_route_src_dir=%0.2f%% | cg_decerr_shape cp_len=%0.2f%% cp_dir=%0.2f%% x_len_dir=%0.2f%% | cg_miss_order cp_miss=%0.2f%% | cg_default_port_tracked cp_entered=%0.2f%% | cg_live_addr_map cp_live_tgt=%0.2f%%",

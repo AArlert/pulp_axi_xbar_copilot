@@ -16,9 +16,18 @@ package xbar_tb_pkg;
   import xbar_types_pkg::*;
 
   `include "axi_txn.sv"
+  // functional_coverage.sv moved ahead of slvport_agent.sv (M4-FT01): the
+  // slvport_monitor now samples cg_fallthrough directly via the static
+  // xbar_functional_coverage::m_probe bridge (same pattern the stall-SVA
+  // module already uses), so the class must be declared before that use
+  // site — SV class references, unlike the tb/sva/*.sv modules that import
+  // this whole package post-compilation, need the class body already seen
+  // within this same package compilation unit. Still "before the
+  // scoreboard, which stores its stall_class_e" (original ordering intent
+  // above) — only its position relative to the two port-agent files moved.
+  `include "functional_coverage.sv"
   `include "slvport_agent.sv"
   `include "mstport_agent.sv"
-  `include "functional_coverage.sv"
   `include "scoreboard_refmodel.sv"
   `include "xbar_env.sv"
   `include "seq_lib.sv"

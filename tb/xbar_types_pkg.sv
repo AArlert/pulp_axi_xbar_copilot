@@ -42,6 +42,7 @@ package xbar_types_pkg;
   localparam bit                     CFG_ATOPS       = 1'b1;
   localparam bit                     CFG_SPARSE_CONN = 1'b0;
   localparam int unsigned            CFG_RULE_MST_MOD= 8;
+  localparam bit                     CFG_FALLTHROUGH = 1'b0;
   localparam int unsigned            CFG_POINT_ID    = 1;
   localparam string                  CFG_NAME        = "cfgA (1x8, NO_LATENCY)";
 `elsif XBAR_CFG_B
@@ -56,6 +57,7 @@ package xbar_types_pkg;
   localparam bit                     CFG_ATOPS       = 1'b1;
   localparam bit                     CFG_SPARSE_CONN = 1'b0;
   localparam int unsigned            CFG_RULE_MST_MOD= 1;
+  localparam bit                     CFG_FALLTHROUGH = 1'b0;
   localparam int unsigned            CFG_POINT_ID    = 2;
   localparam string                  CFG_NAME        = "cfgB (6x1, CUT_ALL_PORTS)";
 `elsif XBAR_CFG_C
@@ -70,6 +72,7 @@ package xbar_types_pkg;
   localparam bit                     CFG_ATOPS       = 1'b1;
   localparam bit                     CFG_SPARSE_CONN = 1'b0;
   localparam int unsigned            CFG_RULE_MST_MOD= 4;
+  localparam bit                     CFG_FALLTHROUGH = 1'b0;
   localparam int unsigned            CFG_POINT_ID    = 3;
   localparam string                  CFG_NAME        = "cfgC (4x4, UniqueIds)";
 `elsif XBAR_CFG_D
@@ -84,8 +87,27 @@ package xbar_types_pkg;
   localparam bit                     CFG_ATOPS       = 1'b0;
   localparam bit                     CFG_SPARSE_CONN = 1'b1;
   localparam int unsigned            CFG_RULE_MST_MOD= 2;
+  localparam bit                     CFG_FALLTHROUGH = 1'b0;
   localparam int unsigned            CFG_POINT_ID    = 4;
   localparam string                  CFG_NAME        = "cfgD (4x4, sparse Conn, ATOPs=0)";
+`elsif XBAR_CFG_E
+  // cfgE (M4-FT01): baseline topology/latency (6×8, CUT_ALL_AX) with
+  // FallThrough=1'b1 as the sole varied dimension (spec §0 row 3/§2.1/
+  // §7.3.1, REV-018) — every other Cfg field and the address-table layout
+  // stay bit-for-bit the baseline pin (testplan M4-FT01 "其余同基线"), so
+  // the judgement gate is literally the baseline's (spec §7.4 latency-
+  // insensitivity: FallThrough only changes W-channel accept timing, never
+  // the functional response).
+  localparam int unsigned            NO_SLV_PORTS    = 6;
+  localparam int unsigned            NO_MST_PORTS    = 8;
+  localparam axi_pkg::xbar_latency_e CFG_LATENCY     = axi_pkg::CUT_ALL_AX;
+  localparam bit                     CFG_UNIQUE_IDS  = 1'b0;
+  localparam bit                     CFG_ATOPS       = 1'b1;
+  localparam bit                     CFG_SPARSE_CONN = 1'b0;
+  localparam int unsigned            CFG_RULE_MST_MOD= 8;
+  localparam bit                     CFG_FALLTHROUGH = 1'b1;
+  localparam int unsigned            CFG_POINT_ID    = 5;
+  localparam string                  CFG_NAME        = "cfgE (6x8, FallThrough=1)";
 `else
   // baseline (M1/M2): spec §0 row 2, values pinned (C5.4 anchor — unchanged).
   localparam int unsigned            NO_SLV_PORTS    = 6;
@@ -95,6 +117,7 @@ package xbar_types_pkg;
   localparam bit                     CFG_ATOPS       = 1'b1;
   localparam bit                     CFG_SPARSE_CONN = 1'b0;
   localparam int unsigned            CFG_RULE_MST_MOD= 8;
+  localparam bit                     CFG_FALLTHROUGH = 1'b0;
   localparam int unsigned            CFG_POINT_ID    = 0;
   localparam string                  CFG_NAME        = "baseline (6x8, CUT_ALL_AX)";
 `endif
@@ -146,7 +169,7 @@ package xbar_types_pkg;
     NoMstPorts:         NO_MST_PORTS,
     MaxMstTrans:        10,
     MaxSlvTrans:        6,
-    FallThrough:        1'b0,
+    FallThrough:        CFG_FALLTHROUGH, // config-point dimension (spec §0 row 3/§2.1, M4-FT01)
     LatencyMode:        CFG_LATENCY, // config-point dimension (spec §0 row 3/§7.2)
     PipelineStages:     1,
     AxiIdWidthSlvPorts: ID_W_SLV,

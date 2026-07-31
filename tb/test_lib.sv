@@ -494,3 +494,23 @@ class m4_ov01_overlap_test extends base_test;
     phase.drop_objection(this, "m4_ov01_overlap_vseq done");
   endtask
 endclass
+
+// M4-FT01 config point E regression (testplan.md M4-FT01, spec §0 row 3/
+// §2.1/§7.3.1). TEST name prefix m4_ft01_ selects the XBAR_CFG_E build in
+// sim/Makefile (cfgE: 6×8, FallThrough=1'b1) — see design-prompt
+// tb_top.md C5.1.
+class m4_ft01_cfge_test extends base_test;
+  `uvm_component_utils(m4_ft01_cfge_test)
+
+  function new(string name = "m4_ft01_cfge_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m4_ft01_cfge_vseq vseq;
+    phase.raise_objection(this, "m4_ft01_cfge_vseq running");
+    vseq = m4_ft01_cfge_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m4_ft01_cfge_vseq done");
+  endtask
+endclass

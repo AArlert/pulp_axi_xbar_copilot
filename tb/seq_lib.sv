@@ -1727,3 +1727,82 @@ class m4_ov01_overlap_vseq extends uvm_sequence #(uvm_sequence_item);
     fanout_per_slv#(slvport_ov01_seq)::run(p_sequencer, "ov01_seq");
   endtask
 endclass
+
+// ---- M4-FT01: FallThrough=1 probe sequence (testplan M4-FT01, spec §2.1/
+// §7.3.1). Per slave port, NUM_PROBE single-outstanding single-beat writes
+// to a hit address, each with fallthrough_probe=1'b1 so the driver
+// (slvport_agent.sv drive_write_ft) presents AW and the burst's one W beat
+// concurrently — the single-beat shape is the sharpest possible AW+W
+// same-cycle opportunity (no multi-beat W tail to obscure it). Purely a
+// witness for the cg_fallthrough non-decisional cover; the functional
+// judgement path for these items is unchanged (same scoreboard/SVA as any
+// other write) — see slvport_ft01_probe_seq's own header for the red-line
+// note (SPEC-7.4.3: never a judgement).
+class slvport_ft01_probe_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_ft01_probe_seq)
+  int unsigned slv_port_idx;
+  int unsigned num_probe = 8;
+  function new(string name = "slvport_ft01_probe_seq"); super.new(name); endfunction
+
+  task body();
+    for (int unsigned k = 0; k < num_probe; k++) begin
+      int unsigned  tgt_mst;
+      xbar_types_pkg::addr_t waddr;
+      axi_seq_item  witem;
+
+      tgt_mst = (slv_port_idx + k) % xbar_types_pkg::NO_MST_PORTS;
+      waddr = xbar_types_pkg::addr_t'(tgt_mst) * xbar_types_pkg::REGION_SIZE
+              + 32'h0002_0000 + xbar_types_pkg::addr_t'(k) * 32'd128;
+
+      witem = axi_seq_item::type_id::create(
+          $sformatf("ft01_probe_%0d_%0d", slv_port_idx, k));
+      start_item(witem);
+      witem.is_write          = 1'b1;
+      witem.addr               = waddr;
+      witem.len                = axi_pkg::len_t'(0); // single beat (sharpest AW+W same-cycle shape)
+      witem.id                 = xbar_types_pkg::id_slv_t'($urandom_range(0, 31));
+      witem.fallthrough_probe  = 1'b1;
+      fill_wr_payload(witem, witem.len);
+      finish_item(witem);
+    end
+  endtask
+endclass
+
+// ---- M4-FT01: config point E regression (cfgE 6×8, FallThrough=1'b1)
+// (testplan M4-FT01, spec §0 row 3/§2.1/§7.3.1/§7.4). cfgE keeps the
+// baseline topology/LatencyMode (only FallThrough differs, REV-018) so the
+// SAME baseline-style traffic is reused verbatim for the judgement gate —
+// hit read/write bursts across every master port (slvport_basic_seq) plus
+// unmapped-address misses (slvport_de01_seq, §4.7 no-ATOP) — expectations
+// are bit-for-bit the baseline's (spec §7.4: FallThrough only changes W-
+// channel accept timing, never the functional response), so no cfgE-
+// specific expected value exists anywhere here. A separate, additional
+// fall-through probe batch (slvport_ft01_probe_seq) is layered onto the
+// same per-port fork purely to give cg_fallthrough a chance to witness an
+// AW+first-W same-cycle accept — it never feeds the judgement above.
+class m4_ft01_cfge_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m4_ft01_cfge_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m4_ft01_cfge_vseq"); super.new(name); endfunction
+  task body();
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork begin
+        slvport_basic_seq      hs;
+        slvport_de01_seq       ms;
+        slvport_ft01_probe_seq fs;
+        hs = slvport_basic_seq::type_id::create($sformatf("ft01_hit_%0d", ii));
+        hs.slv_port_idx = ii;
+        hs.num_iter     = xbar_types_pkg::NO_MST_PORTS; // walk every master port
+        hs.start(p_sequencer.slv_sqr[ii]);
+        ms = slvport_de01_seq::type_id::create($sformatf("ft01_miss_%0d", ii));
+        ms.slv_port_idx = ii;
+        ms.start(p_sequencer.slv_sqr[ii]);
+        fs = slvport_ft01_probe_seq::type_id::create($sformatf("ft01_probe_%0d", ii));
+        fs.slv_port_idx = ii;
+        fs.start(p_sequencer.slv_sqr[ii]);
+      end join_none
+    end
+    wait fork;
+  endtask
+endclass

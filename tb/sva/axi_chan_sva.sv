@@ -210,6 +210,26 @@ module axi_chan_sva #(
   // the exact cycle WLAST/RLAST fires (still counted by the native
   // "-assert verbose" Summary line — svacheck.py layer 2).
   axi_pkg::len_t aw_len_q[$];
+  // BUG-0042 (M4-FT01, TB_BUG): under `FallThrough=1'b1` (cfgE) combined
+  // with the baseline `LatencyMode=CUT_ALL_AX` (`MuxAw`/`DemuxAw` spill
+  // registers present, `MuxW`/`DemuxW` absent — spec §7.2), a W burst can
+  // complete at a MASTER port before its own AW is accepted there — the
+  // spill delays AW by a cycle relative to the un-spilled W combinational
+  // path FallThrough opens up (spec §2.1). `aw_len_q` alone assumed AW
+  // acceptance always precedes its own w_last, so a premature pop (empty
+  // queue at w_last) either raised a false failure or, worse, silently
+  // grabbed an unrelated LATER burst's already-pushed length. `w_actual_q`
+  // below defers the check the other way: it holds completed bursts'
+  // observed beat counts that have NO AW queued yet, consumed by the next
+  // AW that arrives. At most one of {aw_len_q, w_actual_q} is ever
+  // non-empty at a time (they are the two signs of one running AW-vs-W-
+  // completion imbalance that spec §5.5.1/§5.5.2 guarantees stays paired
+  // 1:1 in FIFO order); this is a superset of the old always-AW-first
+  // behaviour (empty w_actual_q, aw_len_q behaves exactly as before) so
+  // FallThrough=1'b0 configs are unaffected. R-side (`r_exp_len_q`) is
+  // untouched: `FallThrough`'s field definition (spec §2.1) names only the
+  // AW/W pair, never AR/R, and no RLAST-side mismatch was ever observed.
+  logic [7:0]    w_actual_q[$];
   // BUG-0034 / REV-015: per-r_id expected R length. Filled from that id's AR
   // handshake, OR — for an atomic load's shadow read, which has NO AR of its
   // own (spec §6.3/§6.5) — from the atomic-load AW's own AxLEN. All per-id
@@ -226,13 +246,27 @@ module axi_chan_sva #(
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
       aw_len_q.delete();
+      w_actual_q.delete(); // BUG-0042
       r_exp_len_q.delete();
       w_beat_idx_r <= '0; w_active <= 1'b0;
       r_beat_idx_by_id.delete();
       r_active_by_id.delete();
     end else begin
       if (aw_valid && aw_ready) begin
-        aw_len_q.push_back(aw_len);
+        // BUG-0042: an already-completed, AW-less W burst takes priority
+        // over pushing a fresh aw_len_q entry — it is the OLDEST unresolved
+        // obligation (FIFO order, spec §5.5.1/§5.5.2), so its check runs now.
+        if (w_actual_q.size() > 0) begin
+          logic [7:0] actual_idx;
+          actual_idx = w_actual_q.pop_front();
+          assert (actual_idx == aw_len) else
+            `uvm_error("SVA_WLAST_LEN",
+              $sformatf("WLAST beat index %0d != AxLEN %0d (spec §1; §4.3 decode-error beat-count as secondary reference)",
+                         actual_idx, aw_len))
+          ;
+        end else begin
+          aw_len_q.push_back(aw_len);
+        end
         // Atomic load owes an R burst with no AR of its own (spec §6.3/§6.5):
         // register its expected R length (the AW's own AxLEN) under the AW id
         // so the shadow read's RLAST checks a real length, not a default 0.
@@ -247,13 +281,21 @@ module axi_chan_sva #(
         w_beat_idx_r <= this_idx;
         w_active     <= !w_last;
         if (w_last) begin
-          axi_pkg::len_t exp_len;
-          exp_len = (aw_len_q.size() > 0) ? aw_len_q.pop_front() : 8'd0;
-          assert (this_idx == exp_len) else
-            `uvm_error("SVA_WLAST_LEN",
-              $sformatf("WLAST beat index %0d != AxLEN %0d (spec §1; §4.3 decode-error beat-count as secondary reference)",
-                         this_idx, exp_len))
-          ;
+          // BUG-0042: no AW queued yet no longer means "assume len 0 and
+          // check now" — it means this burst's own AW hasn't arrived at
+          // this port yet (see w_actual_q's header comment above); park the
+          // observed beat count and let the eventual AW arrival resolve it.
+          if (aw_len_q.size() > 0) begin
+            axi_pkg::len_t exp_len;
+            exp_len = aw_len_q.pop_front();
+            assert (this_idx == exp_len) else
+              `uvm_error("SVA_WLAST_LEN",
+                $sformatf("WLAST beat index %0d != AxLEN %0d (spec §1; §4.3 decode-error beat-count as secondary reference)",
+                           this_idx, exp_len))
+            ;
+          end else begin
+            w_actual_q.push_back(this_idx);
+          end
         end
       end
 

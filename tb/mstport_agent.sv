@@ -52,6 +52,24 @@ class mstport_responder extends uvm_component;
   local req_rec_t ar_pending_q[$];
   local req_rec_t write_todo_q[$];
 
+  // BUG-0042 (M4-FT01, TB_BUG — see mstport_monitor's class-header note
+  // above for the full RCA): under cfgE (`FallThrough=1'b1`) a W burst can
+  // finish at this master port before its own AW has been accepted here
+  // (`CUT_ALL_AX`'s `MuxAw` spill register delays AW, `MuxW` has none).
+  // `w_cur`/`w_cur_has_aw` move from w_collect_loop()-local to class-level
+  // so accept_loop() can retroactively resolve a still-collecting burst;
+  // `orphan_pending_cnt` counts ALREADY-FINISHED W bursts whose AW has not
+  // arrived yet (FIFO — the next AW to arrive always resolves the oldest
+  // one). Before this fix, an AW-less w_last silently reused whatever
+  // stale `cur` a task-local var happened to hold (id 0 on this port's
+  // very first-ever write) and queued a B with the WRONG id — the
+  // driver's `wait (vif.b_id == item.id)` then hung forever waiting for a
+  // B that was already sent under the wrong id, which is what surfaced as
+  // the tb_top watchdog timeout, not a UVM_ERROR.
+  local req_rec_t     w_cur;
+  local bit           w_cur_has_aw;
+  local int unsigned  orphan_pending_cnt;
+
   function new(string name, uvm_component parent);
     super.new(name, parent);
   endfunction
@@ -77,12 +95,27 @@ class mstport_responder extends uvm_component;
   virtual task run_phase(uvm_phase phase);
     drive_idle();
     wait (vif.rst_ni === 1'b1);
+    w_cur_has_aw       = 1'b0;
+    orphan_pending_cnt = 0;
     fork
       accept_loop();
       w_collect_loop();
       b_respond_loop();
       r_respond_loop();
     join
+  endtask
+
+  // BUG-0042: pushes an already-resolved write straight to write_todo_q
+  // (+ ar_pending_q for an atomic load) — shared by the normal AW-then-W
+  // path (w_collect_loop) and an AW arriving late to resolve an
+  // already-finished orphan (accept_loop).
+  task automatic queue_write_done(req_rec_t r);
+    write_todo_q.push_back(r);
+    // Atomic load (spec §6.3, uvm_env.md C3.4): the same request also owes
+    // an R burst — hand it to the read-response loop (shared queue keeps
+    // the R channel single-driver).
+    if (r.atop[axi_pkg::ATOP_R_RESP])
+      ar_pending_q.push_back(r);
   endtask
 
   task automatic accept_loop();
@@ -95,7 +128,19 @@ class mstport_responder extends uvm_component;
         r.id = vif.aw_id; r.addr = vif.aw_addr; r.len = vif.aw_len;
         r.size = vif.aw_size; r.burst = vif.aw_burst;
         r.atop = vif.aw_atop;
-        aw_pending_q.push_back(r);
+        // BUG-0042: resolve the OLDEST unresolved write first — an
+        // already-finished orphan (FIFO priority, spec §5.5.1/§5.5.2),
+        // else the burst currently being collected (if it has no AW yet),
+        // else this is a normal AW-ahead-of-its-W arrival.
+        if (orphan_pending_cnt > 0) begin
+          orphan_pending_cnt--;
+          queue_write_done(r);
+        end else if (w_cur_has_aw == 1'b0 && w_busy_get()) begin
+          w_cur        = r;
+          w_cur_has_aw = 1'b1;
+        end else begin
+          aw_pending_q.push_back(r);
+        end
       end
       if (vif.ar_valid && vif.ar_ready) begin
         req_rec_t r;
@@ -107,29 +152,40 @@ class mstport_responder extends uvm_component;
     end
   endtask
 
+  // BUG-0042: w_busy itself stays w_collect_loop-local (only that task
+  // drives it); accept_loop only needs to know "is a burst mid-collection
+  // right now" to decide whether an AW-less w_cur is waiting to be filled
+  // in. Exposed via this tiny accessor instead of promoting w_busy to a
+  // class field with two writers.
+  local bit w_busy_shadow;
+  function automatic bit w_busy_get(); return w_busy_shadow; endfunction
+
   // Collects one full W burst per accepted AW, FIFO-paired (spec §5.5.1: W
   // burst maintains its AW's order and is not interleaved with another
-  // source's beats — a property this env's own drivers uphold).
+  // source's beats — a property this env's own drivers uphold). BUG-0042:
+  // an empty aw_pending_q at burst-start no longer stalls anything — the
+  // burst simply collects "AW pending" (w_cur_has_aw=0) and gets resolved
+  // retroactively by accept_loop() above, or parked in orphan_pending_cnt
+  // at w_last if the AW still hasn't shown up.
   task automatic w_collect_loop();
-    bit       w_busy;
-    req_rec_t cur;
-    w_busy = 1'b0;
+    w_busy_shadow = 1'b0;
     vif.w_ready <= 1'b1;
     forever begin
       @(posedge vif.clk_i);
       if (vif.w_valid && vif.w_ready) begin
-        if (!w_busy) begin
-          if (aw_pending_q.size() > 0) cur = aw_pending_q.pop_front();
-          w_busy = 1'b1;
+        if (!w_busy_shadow) begin
+          if (aw_pending_q.size() > 0) begin
+            w_cur        = aw_pending_q.pop_front();
+            w_cur_has_aw = 1'b1;
+          end else begin
+            w_cur_has_aw = 1'b0;
+          end
+          w_busy_shadow = 1'b1;
         end
         if (vif.w_last) begin
-          write_todo_q.push_back(cur);
-          // Atomic load (spec §6.3, uvm_env.md C3.4): the same request also
-          // owes an R burst — hand it to the read-response loop (shared
-          // queue keeps the R channel single-driver).
-          if (cur.atop[axi_pkg::ATOP_R_RESP])
-            ar_pending_q.push_back(cur);
-          w_busy = 1'b0;
+          if (w_cur_has_aw) queue_write_done(w_cur);
+          else orphan_pending_cnt++;
+          w_busy_shadow = 1'b0;
         end
       end
     end
@@ -188,6 +244,28 @@ class mstport_monitor extends uvm_monitor;
   // single-slot "capture AW / collect until w_last" scheme mis-paired beats
   // whenever a second AW was accepted before the first burst's W finished,
   // BUG-0009.)
+  //
+  // BUG-0042 (M4-FT01, TB_BUG): the FIFO above assumed an AW is always
+  // accepted no later than its own W burst's first beat. AXI4 does not
+  // guarantee that relative order — the AW and W channels are independent
+  // (spec §5.5 has no clause requiring it; it only constrains W-burst-vs-
+  // W-burst order via AW acceptance order, §5.5.1/§5.5.2). Under cfgE
+  // (`FallThrough=1'b1`) combined with the baseline `LatencyMode=
+  // CUT_ALL_AX` (`MuxAw` spill register present, `MuxW` absent — spec
+  // §7.2), a write's W burst can reach this master port and complete
+  // BEFORE its own AW clears the `MuxAw` spill — a live, reproducible
+  // reordering (`make run TEST=m4_ft01_cfge_test SEED=1` before this fix,
+  // confirmed via a temporary per-cycle valid/ready trace showing
+  // `w_valid&&w_ready` at mst port 5 with `aw_valid==0` one full cycle
+  // before that same write's AW appears). `orphan_w_q` below buffers a
+  // COMPLETED W burst that had no AW queued at its start, so an AW arriving
+  // afterward — for the currently-collecting burst (`w_cur_has_aw`) or a
+  // fully-finished one (`orphan_w_q`) — still gets paired and published
+  // correctly instead of raising the false MON_WNOAW error and orphaning
+  // every later pairing. No published record's content changes (same
+  // id/addr/len/wdata/wstrb/atop fields, same axi_req_obs shape) — only
+  // WHEN the publish happens, and the publish code is now the shared
+  // do_publish() task instead of duplicated inline.
   typedef struct {
     xbar_types_pkg::id_mst_t id;
     xbar_types_pkg::addr_t   addr;
@@ -197,11 +275,18 @@ class mstport_monitor extends uvm_monitor;
     axi_pkg::atop_t          atop; // spec §6.1 — pass-through check input
   } aw_rec_t;
 
+  typedef struct {
+    xbar_types_pkg::data_t wdata[$];
+    xbar_types_pkg::strb_t wstrb[$];
+  } orphan_w_rec_t;
+
   local aw_rec_t                 aw_q[$];
   local bit                      w_busy;
+  local bit                      w_cur_has_aw; // BUG-0042: is w_cur resolved yet?
   local aw_rec_t                 w_cur;
   local xbar_types_pkg::data_t   w_data_q[$];
   local xbar_types_pkg::strb_t   w_strb_q[$];
+  local orphan_w_rec_t           orphan_w_q[$]; // BUG-0042: completed W bursts awaiting their AW
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -216,9 +301,31 @@ class mstport_monitor extends uvm_monitor;
       `uvm_fatal("NOPIDX", "mstport_monitor: port_idx not set")
   endfunction
 
+  // Publishes one completed write's axi_req_obs from an already-resolved
+  // aw_rec_t + its collected wdata/wstrb (BUG-0042: shared by the two
+  // publish sites — normal AW-first completion, and AW arriving late to
+  // resolve an already-finished orphan_w_q entry).
+  task automatic do_publish(aw_rec_t a, xbar_types_pkg::data_t wdata[$],
+                            xbar_types_pkg::strb_t wstrb[$]);
+    axi_req_obs ro = axi_req_obs::type_id::create("mst_wreq_obs");
+    ro.port_idx = port_idx;
+    ro.is_write = 1'b1;
+    ro.id       = a.id;
+    ro.addr     = a.addr;
+    ro.len      = a.len;
+    ro.size     = a.size;
+    ro.burst    = a.burst;
+    ro.wdata    = wdata;
+    ro.wstrb    = wstrb;
+    ro.atop     = a.atop;
+    req_ap.write(ro);
+  endtask
+
   virtual task run_phase(uvm_phase phase);
-    w_busy = 1'b0;
+    w_busy       = 1'b0;
+    w_cur_has_aw = 1'b0;
     aw_q.delete();
+    orphan_w_q.delete();
     forever begin
       @(posedge vif.clk_i);
       if (!vif.rst_ni) continue;
@@ -228,17 +335,37 @@ class mstport_monitor extends uvm_monitor;
         a.id = vif.aw_id; a.addr = vif.aw_addr; a.len = vif.aw_len;
         a.size = vif.aw_size; a.burst = vif.aw_burst;
         a.atop = vif.aw_atop;
-        aw_q.push_back(a);
+        // BUG-0042: this AW may be resolving a write whose W burst already
+        // started (or even finished) before this AW showed up here — check
+        // the oldest unresolved W record FIRST (FIFO order, spec §5.5.1/
+        // §5.5.2: W-burst order follows AW-acceptance order), falling back
+        // to the ordinary "AW arrived ahead of its W" queue.
+        if (orphan_w_q.size() > 0) begin
+          orphan_w_rec_t o;
+          o = orphan_w_q.pop_front();
+          do_publish(a, o.wdata, o.wstrb);
+        end else if (w_busy && !w_cur_has_aw) begin
+          w_cur        = a;
+          w_cur_has_aw = 1'b1;
+        end else begin
+          aw_q.push_back(a);
+        end
       end
       if (vif.w_valid && vif.w_ready) begin
         if (!w_busy) begin
           // Start of a new W burst: pair with the head of the accepted-AW
           // FIFO (W bursts are in AW order, non-interleaved — spec §5.5.2).
-          if (aw_q.size() == 0)
-            `uvm_error("MON_WNOAW",
-              "mst monitor saw a W beat with no accepted AW queued (AW/W pairing violated at master port)")
-          else
-            w_cur = aw_q.pop_front();
+          // BUG-0042: an empty FIFO here no longer means a real pairing
+          // violation — the AW may simply not have arrived at this master
+          // port yet (CUT_ALL_AX `MuxAw` spill vs. no `MuxW` spill under
+          // FallThrough=1, see the class header above) — so this burst
+          // starts "AW pending" instead of erroring.
+          if (aw_q.size() == 0) begin
+            w_cur_has_aw = 1'b0;
+          end else begin
+            w_cur        = aw_q.pop_front();
+            w_cur_has_aw = 1'b1;
+          end
           w_data_q.delete();
           w_strb_q.delete();
           w_busy = 1'b1;
@@ -246,18 +373,16 @@ class mstport_monitor extends uvm_monitor;
         w_data_q.push_back(vif.w_data);
         w_strb_q.push_back(vif.w_strb);
         if (vif.w_last) begin
-          axi_req_obs ro = axi_req_obs::type_id::create("mst_wreq_obs");
-          ro.port_idx = port_idx;
-          ro.is_write = 1'b1;
-          ro.id       = w_cur.id;
-          ro.addr     = w_cur.addr;
-          ro.len      = w_cur.len;
-          ro.size     = w_cur.size;
-          ro.burst    = w_cur.burst;
-          ro.wdata    = w_data_q;
-          ro.wstrb    = w_strb_q;
-          ro.atop     = w_cur.atop;
-          req_ap.write(ro);
+          if (w_cur_has_aw) begin
+            do_publish(w_cur, w_data_q, w_strb_q);
+          end else begin
+            // BUG-0042: burst finished with no AW seen yet — park it;
+            // resolved retroactively when its AW eventually arrives above.
+            orphan_w_rec_t o;
+            o.wdata = w_data_q;
+            o.wstrb = w_strb_q;
+            orphan_w_q.push_back(o);
+          end
           w_busy = 1'b0;
         end
       end

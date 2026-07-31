@@ -26,6 +26,14 @@ class axi_seq_item extends uvm_sequence_item;
   axi_pkg::atop_t         atop;
   xbar_types_pkg::data_t  wdata[$];
   xbar_types_pkg::strb_t  wstrb[$];
+  // M4-FT01 fall-through probe selector (testplan M4-FT01, spec §2.1):
+  // when set on a write item, the driver (slvport_agent.sv drive_write_ft)
+  // presents AW and this burst's FIRST W beat concurrently instead of
+  // waiting out the AW handshake first — the stimulus shape needed to give
+  // FallThrough=1 configurations (cfgE) a chance to accept both on the
+  // same cycle. '0 (unset, the default) for every other item — identical
+  // to plain drive_write() dispatch, no other scenario's driving changes.
+  bit                     fallthrough_probe;
 
   `uvm_object_utils_begin(axi_seq_item)
     `uvm_field_int(is_write, UVM_ALL_ON)

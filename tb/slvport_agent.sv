@@ -61,6 +61,7 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
       seq_item_port.get_next_item(item);
       if ($cast(burst, item)) drive_burst(burst);
       else if ($cast(pair, item)) drive_pair(pair);
+      else if (item.is_write && item.fallthrough_probe) drive_write_ft(item);
       else if (item.is_write) drive_write(item);
       else drive_read(item);
       seq_item_port.item_done();
@@ -101,6 +102,77 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
     // unconstrained (delay-insensitive, spec §7.4 / sva_bind.md C3.5).
     // Both matches are ID-qualified so a concurrent read leg's R (mixed
     // drive_pair, M2-AT01 overlap) is never miscounted as ours.
+    begin
+      bit got_b, got_r;
+      got_b = 1'b0;
+      got_r = !item.atop[axi_pkg::ATOP_R_RESP];
+      do begin
+        @(posedge vif.clk_i);
+        if (vif.b_valid && vif.b_ready && (vif.b_id == item.id))
+          got_b = 1'b1;
+        if (vif.r_valid && vif.r_ready && vif.r_last && (vif.r_id == item.id))
+          got_r = 1'b1;
+      end while (!(got_b && got_r));
+    end
+  endtask
+
+  // ---- M4-FT01 fall-through probe primitive (testplan M4-FT01, spec §2.1/
+  // §7.3.1). Presents AW and the burst's FIRST W beat with valid asserted
+  // CONCURRENTLY from the first cycle — never waiting out the AW handshake
+  // before raising w_valid the way drive_write() above does. That serial
+  // presentation structurally can never let aw_valid and w_valid both be
+  // high on an accept cycle (w_valid is only ever raised after aw_valid has
+  // already been deasserted); this task is the only way stimulus can even
+  // offer the DUT the opportunity to accept an AW and its matching first W
+  // beat on the SAME cycle (spec §2.1: FallThrough lets the AW routing
+  // decision "fall through" onto the W channel). Whether the DUT actually
+  // takes that opportunity is a non-decisional, delay-insensitive runtime
+  // observation (SPEC-7.4.3 red line: this task asserts nothing about the
+  // outcome, it only creates the opportunity) — see functional_coverage.sv
+  // cg_fallthrough / slvport_monitor's sample call below. Any beats after
+  // the first are driven exactly as drive_write()'s W loop; the completion
+  // wait is copied verbatim from drive_write() (no ATOP on probe items).
+  task automatic drive_write_ft(axi_seq_item item);
+    vif.aw_id     <= item.id;
+    vif.aw_addr   <= item.addr;
+    vif.aw_len    <= item.len;
+    vif.aw_size   <= item.size;
+    vif.aw_burst  <= item.burst;
+    vif.aw_lock   <= 1'b0;
+    vif.aw_cache  <= '0;
+    vif.aw_prot   <= '0;
+    vif.aw_qos    <= '0;
+    vif.aw_region <= '0;
+    vif.aw_atop   <= item.atop; // '0 — fall-through probe items never carry ATOP
+    vif.aw_user   <= '0;
+    vif.aw_valid  <= 1'b1;
+
+    vif.w_data  <= item.wdata[0];
+    vif.w_strb  <= item.wstrb[0];
+    vif.w_last  <= (item.len == 0);
+    vif.w_user  <= '0;
+    vif.w_valid <= 1'b1;
+
+    fork
+      begin
+        do @(posedge vif.clk_i); while (!vif.aw_ready);
+        vif.aw_valid <= 1'b0;
+      end
+      begin
+        do @(posedge vif.clk_i); while (!vif.w_ready);
+      end
+    join
+
+    for (int unsigned k = 1; k <= item.len; k++) begin
+      vif.w_data  <= item.wdata[k];
+      vif.w_strb  <= item.wstrb[k];
+      vif.w_last  <= (k == item.len);
+      vif.w_user  <= '0;
+      vif.w_valid <= 1'b1;
+      do @(posedge vif.clk_i); while (!vif.w_ready);
+    end
+    vif.w_valid <= 1'b0;
+
     begin
       bit got_b, got_r;
       got_b = 1'b0;
@@ -389,6 +461,19 @@ class slvport_monitor extends uvm_monitor;
     forever begin
       @(posedge vif.clk_i);
       if (!vif.rst_ni) continue;
+
+      // M4-FT01 non-decisional fall-through witness (testplan M4-FT01, spec
+      // §2.1/§7.3.1): AW and the (first) W beat accepted on the SAME sampled
+      // edge, observed purely from this slave port's own external valid/
+      // ready pair — no DUT-internal signal read (CLAUDE.md input boundary).
+      // Only meaningfully non-zero under FallThrough=1'b1 configs (cfgE);
+      // structurally near-impossible under FallThrough=1'b0 baselines since
+      // there the AW/W channels have no combinational tie (spec §2.1). Never
+      // feeds any judgement (functional_coverage.sv cg_fallthrough, SPEC-
+      // 7.4.3 red line: this is a cover, not an assert).
+      if (vif.aw_valid && vif.aw_ready && vif.w_valid && vif.w_ready
+          && xbar_functional_coverage::m_probe != null)
+        xbar_functional_coverage::m_probe.sample_fallthrough(1'b1);
 
       if (vif.aw_valid && vif.aw_ready) begin
         aw_rec_t a;

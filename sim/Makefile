@@ -63,6 +63,13 @@ ifneq ($(filter m3_cf04_%,$(TEST)),)
 CFG_DEFINE := +define+XBAR_CFG_D
 override OUT := $(OUT)/cfgD
 endif
+# M4-FT01 (testplan.md M4-FT01, spec §0 row 3/§2.1): cfgE, same C5.1/C5.2
+# pattern as cfgA-D above (own build product dir, run log stays at the base
+# out/ path, no other TEST's build touched).
+ifneq ($(filter m4_ft01_%,$(TEST)),)
+CFG_DEFINE := +define+XBAR_CFG_E
+override OUT := $(OUT)/cfgE
+endif
 RUN_LOG := $(BASE_OUT)/$(TEST)_$(SEED).log
 
 # lint 门禁的判定范围与执行证明范围（BUG-0022）：本仓库交付的全部 tb 源文件。
