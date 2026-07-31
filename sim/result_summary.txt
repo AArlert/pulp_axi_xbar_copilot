@@ -1,4 +1,4 @@
-pulp_axi_xbar_copilot regression  date=2026-08-01  passed=27/27
+pulp_axi_xbar_copilot regression  date=2026-08-01  passed=28/28
 PASS   upstream_sanity SEED=1
 PASS   m1_01_smoke_test SEED=1
 PASS   m1_02_id_prefix_test SEED=1

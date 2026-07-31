@@ -1,4 +1,68 @@
 # Work log archive
+## [0.4.15] 2026-08-01 BUG-0047 方法学张力仲裁应用——建 doc/coverage-waivers.md、milestone.md M4 追加 Kind-A/Kind-B 豁免框架，划界远比表面窄
+
+**背景**：用户对 BUG-0047（M4"六类含 Toggle≥90%"vs"M5 前仅定向"的可行性
+张力）给出方向性意见——"定向能做到的都做到，不强制要求全部 90%"。派
+REV-024 独立仲裁，特别要求它自行核实用户意见的适用范围，不得被用来
+夹带真正"没写场景"的缺口。
+
+**Done**
+- **REV-024（L3/opus，独立 rev 实例）**逐条独立划界（核对
+  `M4-coverage-baseline.md` §6 九行 + 亲读 RTL 结构 `axi_xbar.sv:92`/
+  `axi_mux.sv:33/39`）：**BUG-0047 的方法论受限面远比表面窄**——证据
+  里 ~6 类"可达未测"缺口中，**仅宽 W/R.data 载荷位翻转属方法论受限**
+  （当前只有 `axi_mux` Toggle 子集有明确结构依据：承载 64-bit
+  `w_chan_t`/`r_chan_t`）；`addr_decode_dync`（地址/rule 多样性不足，
+  非载荷）、`axi_xbar` 的 `default_mst_port_i`（6×3-bit 窄索引，非
+  载荷）、各 Cond/Branch/Assert、握手背压、实例级颗粒度**均不属，
+  维持需补场景**——这正是防止用户方向性意见被夹带滥用的关键划界。
+  **顺带纠正一处记录失实**：BUG-0047 原表述"位翻转组合数随总线宽度
+  指数增长/组合爆炸"是错误框架——Toggle 覆盖逐位线性（2×width），
+  真正原因是"定向用例只用少数固定取值，多数载荷位未双向翻转"；错误
+  框架会把它推向永久结构豁免，正确框架才支撑"临时、可 M5 解锁"处置。
+  **处置**：不扩展 pinned spec §0 三态（测量规则与豁免种类正交，更
+  外科、免重 pin）；改为 `doc/milestone.md` M4 追加子项 + 新建
+  `doc/coverage-waivers.md`，引入 Kind-A（结构/环境不可达，永久，
+  给可证伪不可达论证）/ Kind-B（方法论受限延后 M5，临时，可证伪解锁=
+  M5 约束随机重测后若仍<90%才议）双类豁免框架。**本裁决不预先授予
+  任何 Kind-B 豁免**——须先有逐信号/逐位 toggle 分解证据；**M4 签核
+  REJECTED 判决因此整体仍然成立**，本裁决只给出合法出口框架、不清空
+  残余。taxonomy 终判 SPEC_CHANGED（治理文档订正，非 pinned-spec 行为
+  条款改动）。
+- **orch 应用裁决**（独立复核）：`doc/milestone.md` M4 节追加 Kind-A/
+  Kind-B 豁免框架子项；新建 `doc/coverage-waivers.md`（CW-001
+  atop_filter FSM 环境约束 + CW-002 test_i scan 两条 Kind-A 已就绪，
+  Kind-B 留模板待逐位分解卡产出证据后填）；`doc/bugs.md` BUG-0047 行
+  `OPEN → SPEC_CHANGED`（**未跑 `docs.py --pin-spec`**——本条不改
+  `doc/spec.md` 正文，重 pin 会是误操作，已用 `git diff doc/spec.md
+  doc/spec.sha256` 确认二者确实未变）；`doc/bugs/BUG-0047.md` 订正
+  `## rca` 里"组合爆炸"表述、新增 `## arbitration` 段、收紧
+  `## regression_guard`（Kind-B 登记前置 = 逐位分解证据，且明确点名
+  哪些条目不得被误记为 Kind-B）。
+- `make check`/`make selftest`（61/61）复跑绿。
+
+**Not done**
+- Kind-B 豁免尚无任何一条正式登记——需要先派一张**逐位 toggle 分解卡**
+  （`axi_mux`/`axi_xbar`/`axi_demux_simple`/`axi_err_slv`），把"宽载荷
+  位"与"定向可达位"分开，才能据此填 `doc/coverage-waivers.md` 的
+  Kind-B 行。
+- "清单 B"（`addr_decode_dync` 等"可达未测"缺口）仍需逐条派 DV 定向
+  覆盖卡，不因本次裁决免除。
+- M4 仍未签核（REJECTED 判决未被本次裁决推翻，只是收窄了残余、给出
+  了框架）。
+
+**Next**
+- 用户已表态优先处理方法学张力，本轮已完成。下一步需用户决定：是先
+  派逐位 toggle 分解卡（Kind-B 路径的前置），还是先铺开"清单 B"的
+  DV 定向覆盖卡，或是先处理其它 Kind-A 候选项（`axi_err_slv` 恒定
+  应答位、`rst_ni`、`spill_register` tie-off）的豁免论证。
+
+**How verified**
+- `make check`：docs-check passed，chain audit 无新增缺口。
+- `make selftest`：61/61 OK。
+- `git diff doc/spec.md doc/spec.sha256`：均无输出，确认未误改/误重 pin。
+- 本周期无仿真运行（纯治理文档订正+登记），无新增 sim evidence。
+
 ## [0.4.14] 2026-08-01 M4 完整签核卡：REJECTED——四条机器门禁全绿不等于签核，覆盖率定义性出口条件未满足；新登记 BUG-0047（判据可行性张力）
 
 **背景**：0.4.9-0.4.13 五个周期把 `make check MILESTONE=4` 的四条机器
