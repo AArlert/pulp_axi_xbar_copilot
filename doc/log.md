@@ -2,6 +2,59 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.27] 2026-08-01 REV-026 加固卡 D-1 落地——M1-01 组收官；DV 卡诚实标出三处结构性摸不到的残余，新登记三张后续卡
+
+**背景**：REV-026 批准清单 D-1（简单 ready 翻转，条件化于 P0 残余）。
+派卡前 orch 用 urg 定位到 axi_demux_simple 的全部 COND 残余集中在一个
+ATOP×ar_id_cnt_full 交叉表达式，怀疑 D-1 原始设想（简单 ready 翻转）
+碰不到它，明确要求 DV 先核实、允许如实报告"此路不通"而非硬凑数字。
+
+**Done**
+- **DV 卡独立核实**：确认 orch 的怀疑成立——axi_demux_simple COND 82.76%
+  的全部 5 个未覆盖 bin 确实 100% 落在同一表达式，D-1 碰不到；但同时发现
+  D-1 确实还有两处真实、可闭合的残余（`axi_mux`/`axi_demux_simple` 的
+  `w_ready`/`r_ready` 从未独立翻转过）——**不是全有全无，落地了能落地的
+  部分，如实标注碰不到的部分**。
+- **`tb/mstport_agent.sv`**：新增独立旋钮 `bp_enable_w`（镜像既有
+  `bp_enable`/`bp_enable_ar`，默认关闭），对 `w_ready` 施加周期性背压。
+  **`tb/slvport_agent.sv`**：新增 `resp_ready_delay` 字段驱动的 `r_ready`
+  有界拖延，**与该笔事务自己的 `r_valid`（ID 限定）同步**而非盲目提前
+  脉冲（说明写得很仔细：流水级会把 AR 接受和 R 到达错开，提前起须的
+  拖延窗口可能在 R 真正出现前就结束）。**`tb/seq_lib.sv`**：新增
+  `slvport_readydelay_seq`，作为 M1-01 第五趟 fanout。
+- **DV 卡的工程纪律亮点**：曾实现写方向 `b_ready` 拖延，urg 核实发现
+  该 bin 已被 M4-EB01 顺带闭合、新代码零新增覆盖，**主动删除死代码**
+  （而非留着凑行数）——同 `slvport_rdata_sat_seq` 当初"读专用、不加写腿"
+  的判断一致。
+- **orch 独立复验**：从 `make clean` 开始独立整跑全量回归确认
+  **29/29 PASS**；独立核对 `axi_mux` Toggle 88.01%→**88.15%**、
+  `axi_demux_simple` Toggle 92.48%→**92.73%**、COND 维持 82.76%（符合
+  预期，本卡不动这个）——与 DV 卡自报数字完全一致。
+- **新登记三张后续任务**（DV 卡诚实标出，非缺陷，均为覆盖率缺口）：
+  (1) `axi_demux_simple` COND 残余——需 C-2（ATOP 命中地址）× BP02/BP03
+  式饱和的交叉构造，现有任何已批准卡范围都不含；(2) `axi_mux` 内部
+  fabric 级 `b_ready`/`r_ready`（`gen_mux.slv_b_readies`/`slv_r_readies`）
+  ——被 demux→mux 间 `axi_multicut` 2 级流水缓冲吸收，M1-01 单笔在飞的
+  构造结构性摸不到，需要"同端口 ≥2 笔响应同时挂起"的持续背压，量级大于
+  D-1；(3) `axi_err_slv` `ar_ready`（Toggle 68.30%，此前未被点名）——
+  需要 M4-EB01 的读方向对偶。
+- Evidence 刷新：`doc/evidence/v0.4.26/M1-01.log`。
+
+**Not done**
+- M1-01 组（A-1/A2/B-1/C-1/D-1）全部完成，**M1-01 组收官**。REV-026
+  剩余四项（B-2/E-1/B-3/C-2/F-1，注：C-2 现与新任务#16 有交叉，落地时
+  一并考虑）+ 新增三项后续任务 + BUG-0048 fixer 卡均未派发。
+
+**Next**
+- 转向 M3-DE01 组：B-2（err_slv 未命中地址多样性）→ E-1（err_slv
+  id[4:0] 多样性）。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对，
+  均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap。
+
 ## [0.4.26] 2026-08-01 REV-026 加固卡 C-1 落地——M1-01 五维 sideband 加宽 + KILL-0005 注伤自证，axi_demux_simple Toggle 转正（≥90%）
 
 **背景**：REV-026 批准清单 C-1（attrs/burst[1]/len/strb/user，(a)→M1-01），
@@ -89,59 +142,6 @@ urg 亲自核实残余现状（不假设 A-1/A2 已顺带解决），发现 A-1/
 **How verified**
 - 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对，
   均未采信 DV 卡自报数字。
-- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
-  gap。
-
-## [0.4.24] 2026-08-01 REV-026 加固卡 A-1+A-2 落地——M1-01 叠加地址镜像饱和读，axi_mux/demux r.data toggle 大幅收敛；顺手登记 BUG-0048（lint 基线过期）
-
-**背景**：REV-026 批准清单 A-1/A-2（r.data 饱和，(a)→M1-01 合并卡）。技术
-依据 M4-toggle-bit-decomposition.md：本环境读数据=地址镜像
-（`predict_beat_data={beat_a,beat_a}`），故 all-0/all-1 饱和读序列即可
-闭合 `axi_mux mst_resp_i.r.data[63:0]`/`axi_demux_simple
-slv_resp_o.r.data[63:0]` 的逐位 toggle 缺口。
-
-**Done**
-- **`tb/seq_lib.sv`**：新增 `slvport_rdata_sat_seq`，在 M1-01 既有激励
-  **之上叠加**（非替换）第二轮 fanout：每 slave 端口对每 master 端口各发
-  低饱和（区间内地址位全 0）→高饱和（全 1）→低饱和的单拍读序列——
-  lo/hi/lo 三段而非单一 lo→hi 对是刻意的：单一对只能证明一个 toggle
-  方向，三段序列自身程序序即可独立完成双向翻转，不依赖其他 slave 端口
-  并发流量的偶然交织。
-- **testplan M1-01 行**按 REV-026 条件 2 显式列出 enrichment 维度文本
-  （不是静默替换）。
-- **orch 独立复验**（不采信 DV 卡自报）：`git diff` 确认改动只加不改
-  （原 `slvport_basic_seq` 那趟 fanout 一字未动）；从 `make clean` 开始
-  独立整跑全量回归确认 **29/29 PASS**；亲自生成 merged urg 报告，独立
-  核对 `axi_mux` Toggle **62.55%→73.49%**、`axi_demux_simple` Toggle
-  **72.56%→77.07%**——均为真实、显著提升，均未到 90%（DV 卡如实报告
-  残余：`axi_mux` 剩 8 位是窄突发字节对齐位（C-1 范围）+ 2 位是仅
-  M3-DE02/M4-RC01 default-port 路由才会翻转的地址位（不同场景范围，
-  按"小闭环不堆 mega-edit"纪律未强行在本卡内解决），不为凑数字勉强）。
-- Evidence 刷新：`doc/evidence/v0.4.23/M1-01.log`。
-- **顺手登记 BUG-0048（TOOL_ENV，OPEN）**：DV 卡按纪律对自己改动的
-  `tb/seq_lib.sv` 跑 `lint-diff` 做尽职检查，发现 `doc/lint-baseline.md`
-  自 BUG-0040 的 2026-07-31 全量重同步后，六次 tb/ 落地（M4-EB01/BP02/
-  BP02-w_open3-fix/BP03/本卡）从未重跑重同步步骤，累积 62-77 个新站点
-  （0 新类别）。`git stash` 隔离确认与本卡自身改动无关、是既存漂移
-  （BUG-0040 自己的 guard 早已预告"未来若不重跑会假绿"，这条正是该预告
-  应验）。**orch 独立复核**：亲跑 `cd sim && make clean && make lint-diff
-  TEST=m1_01_smoke_test`（本卡改动仍在工作区）确认 77 个新站点，数字
-  与登记一致，非虚报。不阻塞 M4 覆盖率工作（lint 不在 `make check`/
-  `make selftest` 门禁内）；已建后续 fixer 卡任务（closer≠fixer，逐站点
-  分诊）。
-
-**Not done**
-- REV-026 剩余九项 (a)/(b) 加固卡（B-1/C-1/D-1/B-2/E-1/B-3/C-2/F-1）+
-  BUG-0048 fixer 卡均未派发。
-
-**Next**
-- 继续 M1-01 组：B-1（地址饱和/rule 多样性）→ C-1（sideband 属性/WRAP/
-  长突发/稀疏 strb，含 KILL 注伤自证）→ D-1（ready-delay 分布，视残余
-  决定是否仍需要）。各自独立小闭环。
-
-**How verified**
-- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对 +
-  BUG-0048 亲自复现，均未采信 DV 卡自报数字。
 - `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
   gap。
 

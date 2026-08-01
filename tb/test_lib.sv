@@ -23,6 +23,19 @@ class m1_01_smoke_test extends base_test;
     super.new(name, parent);
   endfunction
 
+  // REV-026 D-1 enrichment (spec §7.4 items 1/3/5): enables mstport_agent.sv's
+  // bp_enable_w knob on ONE master port's responder for the whole test (same
+  // config_db pattern as M4-AW01's bp_enable / M4-BP03's bp_enable_ar) so
+  // this env's own w_ready toggles low at least once (mst_resp_i.w_ready /
+  // gen_mux.mst_w_ready — never touched by A-1/B-1/C-1's b_ready/r_ready-side
+  // enrichment). Legal, delay-insensitive AXI4 backpressure — no new
+  // judgement dimension, every other test's mstport w_ready stays tied high
+  // (default 0).
+  virtual function void build_phase(uvm_phase phase);
+    uvm_config_db#(bit)::set(this, "env.mst_agent[0].responder", "bp_enable_w", 1'b1);
+    super.build_phase(phase);
+  endfunction
+
   virtual task run_phase(uvm_phase phase);
     m1_01_smoke_vseq vseq;
     phase.raise_objection(this, "m1_01_smoke_vseq running");

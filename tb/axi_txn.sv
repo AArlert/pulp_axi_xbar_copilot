@@ -50,6 +50,20 @@ class axi_seq_item extends uvm_sequence_item;
   // same cycle. '0 (unset, the default) for every other item — identical
   // to plain drive_write() dispatch, no other scenario's driving changes.
   bit                     fallthrough_probe;
+  // REV-026 D-1 enrichment (testplan M1-01, spec §7.4 items 1/3/5): bounded
+  // cycles a READ item's driver task (slvport_agent.sv drive_read) holds its
+  // own r_ready LOW across its own R's actual arrival before accepting it —
+  // a master may deassert its response-channel readiness arbitrarily (legal
+  // AXI4 delay-insensitive backpressure, spec §7.4), so this introduces no
+  // new judgement dimension. Read-only: drive_write() does not consume this
+  // field — axi_demux_simple's write-direction response-ready toggle gap is
+  // already closed by M4-EB01's `b_backpressure` (same physical b_ready
+  // wire, different traffic class), so a write leg here would add code with
+  // no new coverage to close (same "already covered, no write leg added"
+  // reasoning as slvport_rdata_sat_seq's own header comment). 0 (default,
+  // unset) keeps r_ready tied high exactly as drive_idle() left it —
+  // byte-identical stimulus for every other item.
+  int unsigned            resp_ready_delay;
 
   `uvm_object_utils_begin(axi_seq_item)
     `uvm_field_int(is_write, UVM_ALL_ON)
@@ -69,6 +83,7 @@ class axi_seq_item extends uvm_sequence_item;
     region = '0;
     lock   = 1'b0;
     user   = '0;
+    resp_ready_delay = 0;
   endfunction
 endclass
 

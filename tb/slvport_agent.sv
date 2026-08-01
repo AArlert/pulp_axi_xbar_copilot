@@ -210,6 +210,24 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
     do @(posedge vif.clk_i); while (!vif.ar_ready);
     vif.ar_valid <= 1'b0;
 
+    // REV-026 D-1 enrichment (axi_seq_item.resp_ready_delay header comment):
+    // optional bounded hold of THIS item's own r_ready across its own R's
+    // actual arrival — deliberately synchronized to this item's own r_valid
+    // (ID-qualified) rather than a blind pre-emptive pulse right after the
+    // AR handshake: pipeline stages (spill/multicut, spec §7.4) separate AR
+    // acceptance from R's actual arrival, so a fixed hold started too early
+    // could end before R ever appears; waiting for r_valid first guarantees
+    // the low window genuinely overlaps a live valid-but-not-ready
+    // condition end to end. 0 (default) skips this block entirely — r_ready
+    // stays tied high exactly as drive_idle() left it, every other item
+    // unaffected.
+    if (item.resp_ready_delay > 0) begin
+      vif.r_ready <= 1'b0;
+      do @(posedge vif.clk_i); while (!(vif.r_valid && (vif.r_id == item.id)));
+      repeat (item.resp_ready_delay) @(posedge vif.clk_i);
+      vif.r_ready <= 1'b1;
+    end
+
     // ID-qualified: with an atomic load's R possibly in flight on the same
     // port (M2-AT01 mixed pair, spec §6.3), an unqualified r_last wait could
     // unblock on the ATOP's R instead of this read's own.

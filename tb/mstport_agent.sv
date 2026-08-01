@@ -67,6 +67,21 @@ class mstport_responder extends uvm_component;
   bit                    bp_enable_ar = 1'b0;
   local int unsigned     bp_cnt_ar;
 
+  // REV-026 D-1 enrichment (testplan M1-01, spec §7.4 items 1/3/5 — a slave
+  // may deassert its own W-channel readiness arbitrarily, legal AXI4
+  // delay-insensitive backpressure): optional, off-by-default periodic
+  // backpressure on `w_ready` ONLY (`aw_ready`/`ar_ready` untouched, and
+  // unaffected by `bp_enable`/`bp_enable_ar` above — the three knobs are
+  // independent so every other test's w_ready stays tied high exactly as
+  // before). Default 0 keeps w_collect_loop()'s existing single
+  // `vif.w_ready <= 1'b1;` byte-identical; the M1-01 test config_db-sets
+  // this true on ONE master port's responder before build_phase so this
+  // env's own w_ready toggles low at least once (structural motive only —
+  // no new judgement dimension, w_collect_loop()'s existing beat-pairing
+  // logic already gates correctly on `vif.w_valid && vif.w_ready`).
+  bit                    bp_enable_w = 1'b0;
+  local int unsigned     bp_cnt_w;
+
   typedef struct {
     xbar_types_pkg::id_mst_t id;
     xbar_types_pkg::addr_t   addr;
@@ -114,6 +129,8 @@ class mstport_responder extends uvm_component;
     void'(uvm_config_db#(bit)::get(this, "", "bp_enable", bp_enable));
     // Optional: absent config keeps the default 0 (no backpressure, M4-BP03).
     void'(uvm_config_db#(bit)::get(this, "", "bp_enable_ar", bp_enable_ar));
+    // Optional: absent config keeps the default 0 (no backpressure, REV-026 D-1).
+    void'(uvm_config_db#(bit)::get(this, "", "bp_enable_w", bp_enable_w));
   endfunction
 
   task automatic drive_idle();
@@ -221,9 +238,19 @@ class mstport_responder extends uvm_component;
   // at w_last if the AW still hasn't shown up.
   task automatic w_collect_loop();
     w_busy_shadow = 1'b0;
+    bp_cnt_w = 0;
     vif.w_ready <= 1'b1;
     forever begin
       @(posedge vif.clk_i);
+      // REV-026 D-1: when enabled, periodically deny w_ready regardless of
+      // whether a beat is currently offered — a legal, delay-insensitive
+      // backpressure pattern (spec §7.4 items 1/3/5), mirroring bp_enable/
+      // bp_enable_ar above. Every other test (bp_enable_w=0) skips this
+      // block entirely, so w_ready stays tied high exactly as before.
+      if (bp_enable_w) begin
+        vif.w_ready <= (bp_cnt_w == BP_HOLD_CYC) ? 1'b1 : 1'b0;
+        bp_cnt_w = (bp_cnt_w == BP_HOLD_CYC) ? 0 : bp_cnt_w + 1;
+      end
       if (vif.w_valid && vif.w_ready) begin
         if (!w_busy_shadow) begin
           if (aw_pending_q.size() > 0) begin

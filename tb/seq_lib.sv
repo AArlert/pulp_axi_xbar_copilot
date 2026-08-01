@@ -21,7 +21,12 @@
 // B-1 enrichment, see that class' own header comment) — the same
 // low/high saturating address construction mirrored onto writes, closing
 // the write-direction half of the `aw.addr`/`ar.addr` toggle gap that the
-// read-only A-1/A-2 pass left open.
+// read-only A-1/A-2 pass left open. It then runs a fourth fanout pass of
+// slvport_sideband_div_seq (REV-026 C-1 enrichment) and a fifth of
+// slvport_readydelay_seq (REV-026 D-1 enrichment, see that class' own
+// header comment) — a bounded r_ready hold on the requesting side, closing
+// the read-direction response-side-ready toggle gap A-1/B-1/C-1 left open
+// (the write-direction counterpart was already closed by M4-EB01).
 
 // ----------------------------------------------------------------------------
 // Shared stimulus helpers (doc/code-suggestion.md 2.1 / 2.2). Both are pure
@@ -375,6 +380,74 @@ class slvport_sideband_div_seq extends uvm_sequence #(axi_seq_item);
   endtask
 endclass
 
+// slvport_readydelay_seq — M1-01 enrichment (REV-026 批准清单 D-1, "简单
+// ready 翻转", merge-first; technical basis doc/evidence/v0.4.15/
+// M4-toggle-bit-decomposition.md §1 "清单B具体化" D 段). DV 独立复核 merged
+// urg 报告核实到的真实、可被本"简单单笔"构造闭合的残余，只有
+// axi_demux_simple `slv_req_i.r_ready`（demux 自身的外部 slave 端口边界，
+// 无中间 `axi_multicut` 缓冲）——命中地址读流上从来没有任何场景让原始
+// 发起方短暂拉低过自己的 r_ready。**已核实、有意排除**：`aw_id`/`aw.atop`
+// 无关的 `slv_req_i.b_ready`（写方向同构边界）已被 M4-EB01 的
+// `b_backpressure`（同一物理 b_ready 线，不同流量类别）闭合，此处不重复
+// 加写腿（同 slvport_rdata_sat_seq 自身 header 注释 "Read-only ... no write
+// leg is added" 的先例）；axi_mux 内部 `mst_req_o.b_ready`/`r_ready` 与
+// `gen_mux.slv_b_readies[5:0]`/`slv_r_readies[5:0]`——DV 独立用本构造尝试
+// 后核实**不可达**：demux→mux 之间的 `axi_multicut`（`PipelineStages=1`，
+// spec §7.4 items 1/2）是一段真实的 2 级流水缓冲（非 `Bypass`,
+// `SpillB`/`SpillR`=`CUT_ALL_AX` 未覆盖 B/R 通道），M1-01 单笔（非并发）
+// 语义下缓冲永不被打满，故这些 mux 内部信号对"单笔 ready 翻转"结构性
+// 无法触达——需要一个持续压力（多笔并发在飞 + 消费端 backpressure）构造
+// 才能打满该缓冲，超出 D-1 "简单 ready 翻转" 的原始范围，已作为独立后续
+// 发现上报（非本卡范围，见交付报告）。Issues one single-beat read per
+// target master port (mirrors slvport_rdata_sat_seq's per-port fanout
+// shape), each item's own `resp_ready_delay` set to a small bounded value
+// so the *requesting* side holds its own r_ready LOW across its own R's
+// actual arrival before accepting it — legal AXI4 master backpressure (spec
+// §7.4 items 1/3/5: a master may deassert response-channel readiness
+// arbitrarily, no fixed-cycle judgement anywhere). Still decode-table hits
+// (uvm_env.md C2.4), so NO new judgement dimension is introduced
+// (SPEC-1/SPEC-3.1/SPEC-3.2/SPEC-5.1 判据取值域加宽, 期望值不变；xbar 的
+// 功能 checker 本就延迟不敏感, spec §7.4 item 3). `mst_resp_i.w_ready`/
+// `gen_mux.mst_w_ready`（axi_mux 的外部 master 端口边界，同样无中间
+// multicut）closes separately: m1_01_smoke_test's build_phase
+// (test_lib.sv) enables mstport_agent.sv's `bp_enable_w` knob on ONE
+// master port for the whole test — this sequence carries no responsibility
+// for that signal, it only supplies the read-side r_ready half of D-1.
+class slvport_readydelay_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_readydelay_seq)
+
+  int unsigned slv_port_idx;
+  // Bounded, small — enough cycles to guarantee a real 1->0 transition is
+  // sampled distinctly from the 0->1 reset-release transition; no protocol
+  // or judgement meaning beyond "more than zero" (spec §7.4 item 3: no
+  // fixed-cycle count is ever asserted downstream of this).
+  int unsigned ready_delay = 3;
+
+  function new(string name = "slvport_readydelay_seq");
+    super.new(name);
+  endfunction
+
+  task body();
+    for (int unsigned m = 0; m < xbar_types_pkg::NO_MST_PORTS; m++) begin
+      xbar_types_pkg::addr_t base, raddr;
+      axi_seq_item ritem;
+
+      base  = xbar_types_pkg::addr_t'(m) * xbar_types_pkg::REGION_SIZE;
+      raddr = base + 32'h0000_4040;
+
+      ritem = axi_seq_item::type_id::create(
+          $sformatf("rdlysat_r_%0d_%0d", slv_port_idx, m));
+      start_item(ritem);
+      ritem.is_write         = 1'b0;
+      ritem.addr             = raddr;
+      ritem.len              = axi_pkg::len_t'(0);
+      ritem.id               = xbar_types_pkg::id_slv_t'($urandom_range(0, 31));
+      ritem.resp_ready_delay = ready_delay;
+      finish_item(ritem);
+    end
+  endtask
+endclass
+
 class m1_01_smoke_vseq extends uvm_sequence #(uvm_sequence_item);
   `uvm_object_utils(m1_01_smoke_vseq)
   `uvm_declare_p_sequencer(xbar_vseqr)
@@ -388,6 +461,7 @@ class m1_01_smoke_vseq extends uvm_sequence #(uvm_sequence_item);
     fanout_per_slv#(slvport_rdata_sat_seq)::run(p_sequencer, "slv_rdsat_seq");
     fanout_per_slv#(slvport_waddr_sat_seq)::run(p_sequencer, "slv_wasat_seq");
     fanout_per_slv#(slvport_sideband_div_seq)::run(p_sequencer, "slv_sbdiv_seq");
+    fanout_per_slv#(slvport_readydelay_seq)::run(p_sequencer, "slv_rdly_seq");
   endtask
 endclass
 
