@@ -33,3 +33,4 @@ feature → deliverable → testplan scenarios. Delivery/verification are comput
 | F-M4-04 | M4 | W 通道直通模式（FallThrough）：W beat 与对应 AW 同拍被接受，功能等价于非直通模式，延迟不敏感判据、无固定时序断言（SPEC-7.3.1、SPEC-7.4.3） | uvm_env+scoreboard_refmodel | M4-FT01 |
 | F-M4-05 | M4 | err_slv 写响应背压传导与接收侧稳定性：B 响应缓冲堆积至结构容量上界、反压 aw_ready，释放后单拍 B(DECERR) 无丢失重复、响应回送正确（SPEC-4.2/4.3/5.1、BUG-0025 守卫） | uvm_env+scoreboard_refmodel | M4-EB01 |
 | F-M4-06 | M4 | 多层压力叠加：W burst 通道饱和（≥3 个）+ AW 锁定-重试 + 同桶事务上限聚合、路由/数据/wstrb/wlast/响应/完成序全部正确无饿死，结构覆盖动机、无内部 FSM 状态/计数具体值断言（SPEC-5.3/5.4.1/5.5.1/5.5.3、BUG-0016/REV-007 守卫） | uvm_env+scoreboard_refmodel | M4-BP02 |
+| F-M4-07 | M4 | 多层压力叠加：R burst 通道拖延（有界）+ AR 锁定-重试 + 同桶事务上限聚合、路由/数据/响应/完成序全部正确无饿死，结构覆盖动机、延迟不敏感判据、无内部 FSM 状态/计数具体值断言（SPEC-5.3/5.4.1/5.5.3、BUG-0016/REV-007 守卫） | uvm_env+scoreboard_refmodel | M4-BP03 |

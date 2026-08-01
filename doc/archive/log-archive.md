@@ -1,4 +1,40 @@
 # Work log archive
+## [0.4.20] 2026-08-01 feature-matrix 补齐 6 条 M4 行（chain audit gap 清零）+ P0 全量合并重测已在后台起跑
+
+**背景**：用户授权 orch 全权自动推进 M4 到极致，每闭环推送，不中途请示。
+按 REV-026 汇总清单，第一步是全体加固卡的强制前置——P0 merge-remeasure
+（`make regress COV=1` 全量重跑，供后续各条 (a) 加固定精确范围）；与此
+并行，先处理一张互不冲突（纯文档，不碰 tb/、不跑仿真）的 L0 卡，避免
+干等。
+
+**Done**
+- **L0 文档卡（haiku，无 rev）**：`doc/feature-matrix.md` 补齐 F-M4-01~06
+  六行，对应 M4-RC01/AW01/OV01/FT01/EB01/BP02。orch 独立复核：`git diff`
+  确认只改了这一个文件、6 行纯新增；`make check` 复跑确认 chain audit 的
+  "scenarios in no feature-matrix row" gap 由 6→0，无新增 gap 类别。
+- **P0 merge-remeasure 已在后台发起**：`cd sim && make clean && make
+  regress COV=1`（28 个场景，含 0.4.18 新增的 M4-EB01/BP02）。用于给
+  REV-026 批准清单里的 A-1/A-2/B-1/B-2/B-3/C-1/C-2/D-1/E-1/F-1 十项
+  (a) 加固卡定精确残余范围（先合并再定范围，REV-026 §汇总："这是 M4
+  出口的正确下一动作"）。
+
+**Not done**
+- P0 合并重测本轮尚未跑完（后台运行中，跨轮次继续等待，完成后独立核对
+  真实残余数字，非采信任何转述）。
+- REV-026 批准清单里的十项 (a) 加固卡、REV-027 的两张读/写向补场景卡、
+  以及最终 M4 签核卡均未派发——依赖 P0 结果定范围，本轮暂不能派。
+
+**Next**
+- P0 跑完后：逐条核对 v0.4.13 旧 signoff 残余风险表 + M4-toggle-bit-
+  decomposition.md 的六类缺口，在当前（含 EB01/BP02/CW-006/CW-007）
+  基线上哪些已经关闭、哪些仍残留，据此定十项加固卡的精确 scope，逐条
+  派 DV 卡（同一目标 testplan 行的多项加固仍按 REV-026 条件 6 拆成独立
+  小闭环，不堆 mega-edit），每卡独立核实+evidence+closeout+push。
+
+**How verified**
+- feature-matrix 补行：`make check` chain audit 段落亲跑核对（见上）。
+- `make selftest` 本轮收尾前复跑（见下）。
+
 ## [0.4.19] 2026-08-01 REV-027——w_open[3] 覆盖率豁免驳回（非结构不可达，是激励产物），顺带查出 M4-BP02 只闭合 AW 侧、AR 侧对偶缺口仍开
 
 **背景**：0.4.18 遗留的 open risk——DV 卡称 w_open[3]（值≥8）在基线

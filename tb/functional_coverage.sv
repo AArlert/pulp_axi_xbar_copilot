@@ -252,6 +252,22 @@ class xbar_functional_coverage extends uvm_component;
     }
   endgroup
 
+  // ---- cg_ar_retry (non-decisional, testplan M4-BP03, REV-027 §5 hardening
+  // card B, spec §7.4 items 1/5) --------------------------------------------
+  // AR-direction mirror of cg_aw_retry above: was a master port's AR EVER
+  // seen `ar_valid && !ar_ready` on some sampled edge, then LATER
+  // `ar_valid && ar_ready`? Fed by mstport_monitor's own external
+  // valid/ready observation only — no DUT-internal signal (`lock_ar_valid_q`
+  // or similar) is read (CLAUDE.md input boundary). Proves the M4-BP03
+  // backpressure stimulus genuinely produced an AR held past its first
+  // offered cycle; draws no verdict (SPEC-5.5.4/7.4.3 red line).
+  covergroup cg_ar_retry with function sample(bit held_then_accepted);
+    option.per_instance = 1;
+    cp_retry: coverpoint held_then_accepted {
+      bins hit = {1'b1};
+    }
+  endgroup
+
   // ---- cg_errbp (non-decisional, testplan M4-EB01, spec §4.3/§7.4.5) -------
   // Which slave-port request channel was EVER seen held not-ready — the
   // external image of the port's internal err_slv back-pressuring its input
@@ -412,6 +428,7 @@ class xbar_functional_coverage extends uvm_component;
   int unsigned n_xbucket_total;
   int unsigned n_fallthrough;
   int unsigned n_aw_retry;
+  int unsigned n_ar_retry;
   int unsigned n_errbp;
 
   function new(string name, uvm_component parent);
@@ -431,6 +448,7 @@ class xbar_functional_coverage extends uvm_component;
     cg_xbucket_total         = new();
     cg_fallthrough           = new();
     cg_aw_retry              = new();
+    cg_ar_retry              = new();
     cg_errbp                 = new();
     // Publish this single instance for the stall-SVA instrumentation bridge
     // (see m_probe's declaration). One scoreboard builds one fcov, so the last
@@ -534,6 +552,15 @@ class xbar_functional_coverage extends uvm_component;
     n_aw_retry++;
   endfunction
 
+  // Driven directly by mstport_monitor's own external ar_valid/ar_ready fold
+  // (held on a prior sampled edge, accepted on a later one) — testplan
+  // M4-BP03, REV-027 §5 hardening card B, spec §7.4 items 1/5. Non-decisional
+  // (see cg_ar_retry header above).
+  function void sample_ar_retry(bit held_then_accepted);
+    cg_ar_retry.sample(held_then_accepted);
+    n_ar_retry++;
+  endfunction
+
   // Driven directly by slvport_monitor's own external aw_valid/aw_ready and
   // w_valid/w_ready folds — testplan M4-EB01, spec §4.3/§7.4.5. Non-decisional
   // (see cg_errbp header above).
@@ -581,6 +608,10 @@ class xbar_functional_coverage extends uvm_component;
     `uvm_info("FCOV_SUMMARY",
       $sformatf("cg_aw_retry samples=%0d inst_cov=%0.2f%%",
                  n_aw_retry, cg_aw_retry.get_inst_coverage()),
+      UVM_LOW)
+    `uvm_info("FCOV_SUMMARY",
+      $sformatf("cg_ar_retry samples=%0d inst_cov=%0.2f%%",
+                 n_ar_retry, cg_ar_retry.get_inst_coverage()),
       UVM_LOW)
     `uvm_info("FCOV_SUMMARY",
       $sformatf("cg_errbp samples=%0d inst_cov=%0.2f%% cp_chan=%0.2f%%",

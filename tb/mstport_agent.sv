@@ -55,6 +55,18 @@ class mstport_responder extends uvm_component;
   local int unsigned     bp_cnt;
   localparam int unsigned BP_HOLD_CYC = 2; // aw_ready low this many cycles, then 1 cycle high
 
+  // M4-BP03 (testplan M4-BP03, REV-027 §5 hardening card B — the AR-direction
+  // mirror of M4-AW01's bp_enable above): optional, off-by-default periodic
+  // backpressure on `ar_ready` ONLY (`aw_ready` untouched, and unaffected by
+  // `bp_enable` above — the two knobs are independent so M4-AW01/M4-BP02
+  // stay byte-identical). Default 0 keeps every other test's `ar_ready`
+  // tie-high exactly as before; the M4-BP03 test config_db-sets this true on
+  // ONE master port's responder before build_phase, so the demux's
+  // already-selected AR repeatedly sits valid-but-not-ready, entering its
+  // lock-retry path (structural motive only — see accept_loop()).
+  bit                    bp_enable_ar = 1'b0;
+  local int unsigned     bp_cnt_ar;
+
   typedef struct {
     xbar_types_pkg::id_mst_t id;
     xbar_types_pkg::addr_t   addr;
@@ -100,6 +112,8 @@ class mstport_responder extends uvm_component;
     void'(uvm_config_db#(int)::get(this, "", "resp_hold", resp_hold));
     // Optional: absent config keeps the default 0 (no backpressure, M4-AW01).
     void'(uvm_config_db#(bit)::get(this, "", "bp_enable", bp_enable));
+    // Optional: absent config keeps the default 0 (no backpressure, M4-BP03).
+    void'(uvm_config_db#(bit)::get(this, "", "bp_enable_ar", bp_enable_ar));
   endfunction
 
   task automatic drive_idle();
@@ -137,9 +151,10 @@ class mstport_responder extends uvm_component;
   endtask
 
   task automatic accept_loop();
-    bp_cnt = 0;
+    bp_cnt    = 0;
+    bp_cnt_ar = 0;
     vif.aw_ready <= bp_enable ? 1'b0 : 1'b1;
-    vif.ar_ready <= 1'b1;
+    vif.ar_ready <= bp_enable_ar ? 1'b0 : 1'b1;
     forever begin
       @(posedge vif.clk_i);
       // M4-AW01: when enabled, periodically deny aw_ready regardless of
@@ -151,6 +166,14 @@ class mstport_responder extends uvm_component;
       if (bp_enable) begin
         vif.aw_ready <= (bp_cnt == BP_HOLD_CYC) ? 1'b1 : 1'b0;
         bp_cnt = (bp_cnt == BP_HOLD_CYC) ? 0 : bp_cnt + 1;
+      end
+      // M4-BP03: AR-direction mirror of the bp_enable block above (see
+      // bp_enable_ar header comment). Every other test (bp_enable_ar=0)
+      // skips this block entirely, so ar_ready stays tied high exactly as
+      // before.
+      if (bp_enable_ar) begin
+        vif.ar_ready <= (bp_cnt_ar == BP_HOLD_CYC) ? 1'b1 : 1'b0;
+        bp_cnt_ar = (bp_cnt_ar == BP_HOLD_CYC) ? 0 : bp_cnt_ar + 1;
       end
       if (vif.aw_valid && vif.aw_ready) begin
         req_rec_t r;
@@ -317,6 +340,7 @@ class mstport_monitor extends uvm_monitor;
   local xbar_types_pkg::strb_t   w_strb_q[$];
   local orphan_w_rec_t           orphan_w_q[$]; // BUG-0042: completed W bursts awaiting their AW
   local bit                      aw_was_held; // M4-AW01: aw_valid seen with aw_ready low on a prior edge
+  local bit                      ar_was_held; // M4-BP03: ar_valid seen with ar_ready low on a prior edge
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -355,6 +379,7 @@ class mstport_monitor extends uvm_monitor;
     w_busy       = 1'b0;
     w_cur_has_aw = 1'b0;
     aw_was_held  = 1'b0;
+    ar_was_held  = 1'b0;
     aw_q.delete();
     orphan_w_q.delete();
     forever begin
@@ -431,8 +456,20 @@ class mstport_monitor extends uvm_monitor;
         end
       end
 
+      // M4-BP03 non-decisional retry witness (testplan M4-BP03, REV-027 §5
+      // hardening card B — AR-direction mirror of the M4-AW01 block above):
+      // this AR was offered but not ready-accepted on THIS edge — remember
+      // it so a later edge where it IS accepted can be recognized as "held,
+      // then accepted". Purely external valid/ready observation, no
+      // DUT-internal signal (cg_ar_retry header, functional_coverage.sv).
+      // Never feeds a judgement — SPEC-5.5.4/7.4.3 red line.
+      if (vif.ar_valid && !vif.ar_ready) ar_was_held = 1'b1;
+
       if (vif.ar_valid && vif.ar_ready) begin
         axi_req_obs ro = axi_req_obs::type_id::create("mst_rreq_obs");
+        if (ar_was_held && xbar_functional_coverage::m_probe != null)
+          xbar_functional_coverage::m_probe.sample_ar_retry(1'b1);
+        ar_was_held = 1'b0;
         ro.port_idx = port_idx;
         ro.is_write = 1'b0;
         ro.id       = vif.ar_id;

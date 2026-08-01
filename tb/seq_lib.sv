@@ -1700,6 +1700,91 @@ class m4_bp02_demuxlock_vseq extends uvm_sequence #(uvm_sequence_item);
 endclass
 
 // ----------------------------------------------------------------------------
+// M4-BP03 — demux AR lock-retry FSM + same-bucket read in-flight ceiling
+// (testplan.md M4-BP03, spec §5.4.1/§5.4.2/§5.2.3/§5.5.3/§7.4.5, §4 clause 7).
+// Read-direction dual of M4-BP02 (REV-027 §5 "加固卡 B" — see
+// doc/review/REV-027.md §2.5/§5). ONE slave port (port 0) fires
+// NUM_TX = MAX_MST_TRANS_EFF (15) read bursts, ALL targeting ONE master port
+// (tgt 0) and ALL sharing ONE low-AxiIdUsedSlvPorts-bit bucket (bucket 0,
+// spread across its 4 sibling full ids exactly as build_txlimit_burst's
+// spread_bucket=1 — no full id gets anywhere near MaxSlvTrans).
+//
+// Unlike M4-BP02's write direction, no analogous "open window" driver
+// primitive is needed here: a write sub-item is an AW *followed by* a
+// multi-beat W burst that (in the plain drive_burst() path) fully drains
+// before the next item's AW is even presented — drive_burst_wopen() exists
+// precisely to keep several such W windows open at once. A read sub-item's
+// entire request phase IS its single AR handshake; drive_burst()'s existing
+// non-write branch (unchanged since M2-TL01/M3-TL01's read-direction legs)
+// already presents every sub-item's AR back-to-back without waiting for its
+// R completion in between, so multiple ARs are already concurrently in
+// flight — the read-direction mirror of BP02's sustained pressure falls out
+// of the SAME primitive, no new driver task required.
+//
+// The test's resp_hold (mstport_agent.sv, same knob M2-TL01/M3-TL01/M4-BP02
+// use, applied here to the R side) delays each R burst's start so the
+// per-bucket AR ID counter — which pops on R's LAST beat, not on AR
+// acceptance — is free to climb toward the §5.4.1 effective ceiling (15,
+// NOT the literal MaxMstTrans=10 — BUG-0016/REV-007) before any R response
+// drains it. The test additionally back-pressures this master port's
+// ar_ready (mstport_agent.sv's bp_enable_ar, mirroring M4-AW01/M4-BP02's
+// aw_ready bp_enable) so the demux's already-selected AR repeatedly sits
+// valid-but-not-ready, entering the AR lock-retry path.
+//
+// The JUDGEMENT is the scoreboard's route/data/response/completion
+// correctness under this combined pressure (spec §1/§3.1/§5.1/§5.2.3), zero
+// mismatch, no starvation (§5.5.3); this construction asserts NOTHING about
+// lock-FSM state, the AR ID counter value, or which cycle the ceiling/
+// rejection happens (spec §7.4.5 red line). The per-bucket-ceiling reach is
+// witnessed non-decisionally by cg_tx_limit (at_effective_ceiling) and the
+// lock-retry by cg_ar_retry — both external, no DUT-internal signal read. No
+// unmapped-address ATOP anywhere (spec §4 clause 7 env constraint — vacuous
+// here: this is a pure-read scenario, no AW at all).
+// ----------------------------------------------------------------------------
+class slvport_bp03_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_bp03_seq)
+
+  int unsigned slv_port_idx;
+  int unsigned tgt_mst = 0;
+  // = §5.4.1 effective per-bucket ceiling 2**ceil(log2(MaxMstTrans))-1 = 15
+  // (read from the pinned parameter-definition file, not any RTL value) —
+  // same derivation as slvport_bp02_seq.num_tx, mirrored for the read bucket.
+  int unsigned num_tx = xbar_types_pkg::MAX_MST_TRANS_EFF;
+
+  function new(string name = "slvport_bp03_seq");
+    super.new(name);
+  endfunction
+
+  task body();
+    axi_burst_item rb;
+    // Reuse the M2-TL01/M3-TL01/M4-BP02 same-bucket builder (spread_bucket=1,
+    // bucket 0), read direction (is_write=0). drive_burst() (wopen_mode
+    // defaults to 0, unused for reads — see class header above) already
+    // presents every sub-item's AR back-to-back.
+    rb = build_txlimit_burst($sformatf("bp03_r_%0d", slv_port_idx),
+                              1'b0, tgt_mst, num_tx, 32'h0040_0000, 1'b1, 0);
+    start_item(rb);
+    finish_item(rb);
+  endtask
+endclass
+
+class m4_bp03_demuxlock_ar_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m4_bp03_demuxlock_ar_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m4_bp03_demuxlock_ar_vseq"); super.new(name); endfunction
+  task body();
+    // Single slave port (testplan M4-BP03 "单 slave 端口") — mirrors
+    // M4-BP02's single-port rationale for the read direction: one port's own
+    // demux AR lock-retry / per-bucket bookkeeping under backpressure, not
+    // cross-port interaction.
+    slvport_bp03_seq s;
+    s = slvport_bp03_seq::type_id::create("bp03_seq");
+    s.slv_port_idx = 0;
+    s.start(p_sequencer.slv_sqr[0]);
+  endtask
+endclass
+
+// ----------------------------------------------------------------------------
 // M4-OV01 — overlapping-rule tie-break (testplan.md M4-OV01, spec §3.1.3/
 // §3.2.1). Applies xbar_types_pkg::ADDR_MAP_OV1 (one pair of overlapping-
 // region rules, OV1_LOW_RULE/OV1_HIGH_RULE, pointing at different master
