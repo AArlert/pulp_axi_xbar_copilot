@@ -2,6 +2,68 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.33] 2026-08-02 REV-029 裁决——addr_decode_dync Branch 83.33% 登记 Kind-A（CW-008），订正 REV-024 §2.2 行 6
+
+**背景**：任务 #20，REV-028 的姊妹裁决。REV-028 顺带发现
+`addr_decode_dync` 真正的 `<90%` 数字是 Branch 83.33%（唯一残余 =
+`addr_decode_dync.sv:146` IF 语句 else 支，与 `config_ongoing_i` 无关），
+flag 给 orch 另派卡处置，不越界代为登记。orch 只给全新 rev 实例原始
+材料位置（RTL+行号、urg 取数命令、spec、REV-024/REV-028 原文、豁免
+契约+先例），REV-028 的建议**仅作背景路由输入**、不作结论依据。
+
+**Done**
+- **rev 独立复算 else 唯一触达路径**：IF 条件
+  `!$isunknown(addr_map_i) && ~config_ongoing_i`，因
+  `config_ongoing_i≡1'b0`（`addr_decode.sv:106` tie-off）使
+  `~config_ongoing_i` 恒真，else 唯一触达 = `addr_map_i` 取 X。
+- **rev 独立核实 env 构造上从不驱动 addr_map_i 为 X**：亲读
+  `tb/cfg_if.sv:26`→`tb_top.sv:59/142` 初始化路径 +
+  `tb/seq_lib.sv:1323/1779/2478` 运行时重配路径，三处均只赋
+  `xbar_types_pkg.sv` 三个 gen 函数产出的编译期具体 localparam（`idx`/
+  `start_addr`/`end_addr` 全字段具体），全 tb 对 addr_map 检索
+  force/isunknown/'x 路径为空集。spec §3.1/§3.2/§3.4 通篇假定地址表为
+  具体合法值，无未知地址表语义——覆盖此 else 属无 spec 基础的
+  X-theater（同 CW-006 rst_ni 先例的处置逻辑）。
+- **裁决登记 Kind-A（CW-008）**：与 REV-028 对 config_ongoing_i 的"驳回
+  登记"决定性轴不同——那案的残余落在已过 90% 门的 Toggle 类里，本案的
+  IF-146 else 恰是 Branch **`<90%` 门的唯一致因**，门真失败，落
+  `doc/coverage-waivers.md` 明文登记面（"有 bin、`<90%`"），须有书面
+  可证伪豁免承接，否则即静默放水。`doc/coverage-waivers.md` 新增
+  CW-008 一行（格式对齐既有 CW-001~007），解锁条件写两条具体可证伪
+  事实：(i) `config_ongoing_i` tie-off 被推翻，(ii) 纳入地址表 X 测试
+  **且先补齐 spec 未知地址表语义条款**（对齐 CW-006"解锁须先补 spec"
+  先例，防止解锁沦为"造个 X 就算测过"）。**独立复核 REV-028 §4 建议并
+  同意其 Kind-A 性质判断（自行从 RTL/TB/spec 重走一遍，非照抄），落地
+  登记并对解锁条件做一处收紧精化**。
+- **订正 REV-024 §2.2 行 6**：在 `doc/review/REV-024.md` 表后追加订正
+  批注（原表格行一字未改），指明该行对 Branch 83.33% 的"地址多样性→
+  补场景"归因失实——"更多样的已知地址仍使 addr_map 恒 known → else
+  永不取"，处方不能闭合此 Branch；订正仅针对 Branch，行 6 对 Toggle
+  53-57%（`addr_i[2:0]` bins）的结论不受影响、仍成立。
+- **orch 独立复验**：`git diff` 逐行审读 `doc/coverage-waivers.md`
+  （仅新增 CW-008 行 + "注"计数更新）与 `doc/review/REV-024.md`
+  （仅追加订正段、原表格行零改动）；独立重新 grep 确认
+  `tb/cfg_if.sv:26`/`tb_top.sv:59/142`/`tb/seq_lib.sv:1323/1779/2478`/
+  `tb/xbar_types_pkg.sv` 三 gen 函数的内容与 rev 卡引用逐字一致，
+  且 tb 对 addr_map 的 force/isunknown/'x 检索确认为空集；REV-028 会话
+  中已亲自核对过 urg mod20.html 的 Branch 明细表（`IF 146`=1/2 covered、
+  `MISSING_ELSE`），数据未变。
+- `doc/review/REV-029.md` 已写入磁盘。
+
+**Not done**
+- 任务 #16-18（三张新加固卡，主攻 `axi_err_slv` 69.78% 与
+  `axi_demux_simple` COND 残余）、#15、#14（最终 M4 签核卡）均未派发。
+
+**Next**
+- #16（`axi_demux_simple` COND 残余：ATOP×`ar_id_cnt_full` 交叉）。
+
+**How verified**
+- 见上"orch 独立复验"段——git diff 逐行审读 + RTL/TB 引用逐字核对 +
+  urg Branch 明细表复用 REV-028 会话内已验证数据，均未采信 rev 卡自报
+  内容。
+- `make check`（docs-check + chain audit 无新增 gap）本轮复跑绿；本卡
+  未改 RTL/TB，无需重跑回归。
+
 ## [0.4.32] 2026-08-02 REV-028 裁决——config_ongoing_i 覆盖率缺口候选驳回登记，订正 REV-024 一处 Branch 误归因
 
 **背景**：任务 #19。B-3 加固卡（0.4.30）观察到 `addr_decode_dync` 的
@@ -121,58 +183,4 @@ atomic-load 编码子集内、残余引用该既有登记、不重复登记新 S
   模块 toggle 表 Python 直接解析，非人工估读），均未采信 DV 卡自报数字。
 - `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
   gap（仅既有已知缺口）。
-
-## [0.4.30] 2026-08-01 REV-026 加固卡 B-3 落地——addr_decode_dync Toggle 转正，副作用顺带闭合 F-1 目标；发现一个真 Kind-A 候选
-
-**背景**：REV-026 批准清单 B-3（rule 边界重配，(a)→M2-CFG01/M3-CFG02）。
-DV 卡先用 urg 核实：`addr_decode_dync` Toggle 89.00%（近阈值）/
-Branch 83.33%（未到阈值）。判断"rule 边界重配多样性"实际该做的是
-default-master-port 索引的双向翻转（`default_idx_i` 此前只单向从复位 0
-抬升到 V1 值，从未下降），而非地址表本身。
-
-**Done**
-- **选择更安全的落地路径**：M3-CFG02 有 BUG-0031 guard 记录的脆弱三要素
-  构造（重配后 + 同桶异完整 ID 兄弟 + 目标跨端口），DV 卡主动避开，只在
-  M2-CFG01 上加。**`tb/xbar_types_pkg.sv`**：新增 `DEFAULT_MST_V2 =
-  ~DEFAULT_MST_V1`（按位取反，`MST_PORT_IDX_W=3` 位恰好铺满
-  `NoMstPorts=8`，取反结果必然仍是合法索引）。**`tb/seq_lib.sv`**：
-  `m2_cfg01_reconfig_vseq` 追加 `do_reconfig_v2()`/`do_reconfig_v3()`
-  （同既有 `do_reconfig()` 一样的全端口空闲窗口纪律）+
-  `slvport_cfg01_defaultdiv_seq`——V1→V2（取反）验证一轮，V2→V3（复原
-  为 V1，round-trip）再验证一轮，两步合起来补齐 V1 单向抬升遗留的
-  每端口每一位缺口。
-- **orch 独立复验**：diff 审读确认 M3-CFG02 相关文件（
-  `tb/sva/axi_xbar_stall_sva.sv`/`tb/sva_bind.sv`/
-  `slvport_cfg02_seq`）一行未动；亲跑
-  `TEST=m3_cfg02_reconfig_test` 确认 BUG-0031 guard 的四类 cover 命中数
-  （`c_sib_diff_aw/ar`、`c_bug31_livev1_aw/ar`）逐端口"1 match"与既有
-  基线完全一致、无回归；从 `make clean` 开始独立整跑全量回归确认
-  **29/29 PASS**；独立核对 `addr_decode_dync` Toggle **89.00%→92.00%
-  （转正 ≥90%）**，Branch 维持 83.33%（符合预期，见下）。
-- **发现一个真 Kind-A 候选**：Branch 83.33% 唯一残余（`addr_decode_dync.
-  sv:146` 的 `if (!$isunknown(addr_map_i) && ~config_ongoing_i)` false
-  分支）与部分 Toggle 残余同根——`config_ongoing_i` 在
-  `addr_decode.sv:106` 每个例化点都硬接 `1'b0`，是 RTL 内部线网、非顶层
-  可控端口，任何激励都摸不到。orch 独立核实成立。**已登记后续 rev 卡**
-  （DV 无权自行登记 `doc/coverage-waivers.md`）。
-- **顺手核实：F-1（default_mst_port_i 双向翻转）目标已被本卡副作用完整
-  闭合**——orch 独立核对 `axi_xbar` 的 `default_mst_port_i[5:0][2:0]`
-  现已 **Yes/Yes/Yes（全闭合）**，模块级 Toggle 由 P0 基线 40.74% 升至
-  **94.44%**。F-1 无需再派独立 DV 卡，任务标记完成。
-- Evidence 刷新：`doc/evidence/v0.4.29/M2-CFG01.log`。
-
-**Not done**
-- REV-026 最后一项 C-2（M2-AT01 ATOP 命中地址扩展）+ 三张新任务
-  （#16-18）+ Kind-A 豁免 rev 卡（#19）+ BUG-0048 fixer 卡 + 最终 M4
-  签核卡未派发。
-
-**Next**
-- C-2（M2-AT01 aw.atop[5:0] 命中地址扩展，REV-026 十项加固卡的最后
-  一项，附 SPEC_ISSUE 残余上报纪律）。
-
-**How verified**
-- 见上"orch 独立复验"段——diff 审读 + M3-CFG02 guard 数字核对 + 从零
-  全量回归 + urg 逐字节核对（含顺手核实 F-1），均未采信 DV 卡自报数字。
-- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
-  gap。
 

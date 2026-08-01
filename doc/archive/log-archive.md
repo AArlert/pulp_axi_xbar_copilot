@@ -1,4 +1,58 @@
 # Work log archive
+## [0.4.30] 2026-08-01 REV-026 加固卡 B-3 落地——addr_decode_dync Toggle 转正，副作用顺带闭合 F-1 目标；发现一个真 Kind-A 候选
+
+**背景**：REV-026 批准清单 B-3（rule 边界重配，(a)→M2-CFG01/M3-CFG02）。
+DV 卡先用 urg 核实：`addr_decode_dync` Toggle 89.00%（近阈值）/
+Branch 83.33%（未到阈值）。判断"rule 边界重配多样性"实际该做的是
+default-master-port 索引的双向翻转（`default_idx_i` 此前只单向从复位 0
+抬升到 V1 值，从未下降），而非地址表本身。
+
+**Done**
+- **选择更安全的落地路径**：M3-CFG02 有 BUG-0031 guard 记录的脆弱三要素
+  构造（重配后 + 同桶异完整 ID 兄弟 + 目标跨端口），DV 卡主动避开，只在
+  M2-CFG01 上加。**`tb/xbar_types_pkg.sv`**：新增 `DEFAULT_MST_V2 =
+  ~DEFAULT_MST_V1`（按位取反，`MST_PORT_IDX_W=3` 位恰好铺满
+  `NoMstPorts=8`，取反结果必然仍是合法索引）。**`tb/seq_lib.sv`**：
+  `m2_cfg01_reconfig_vseq` 追加 `do_reconfig_v2()`/`do_reconfig_v3()`
+  （同既有 `do_reconfig()` 一样的全端口空闲窗口纪律）+
+  `slvport_cfg01_defaultdiv_seq`——V1→V2（取反）验证一轮，V2→V3（复原
+  为 V1，round-trip）再验证一轮，两步合起来补齐 V1 单向抬升遗留的
+  每端口每一位缺口。
+- **orch 独立复验**：diff 审读确认 M3-CFG02 相关文件（
+  `tb/sva/axi_xbar_stall_sva.sv`/`tb/sva_bind.sv`/
+  `slvport_cfg02_seq`）一行未动；亲跑
+  `TEST=m3_cfg02_reconfig_test` 确认 BUG-0031 guard 的四类 cover 命中数
+  （`c_sib_diff_aw/ar`、`c_bug31_livev1_aw/ar`）逐端口"1 match"与既有
+  基线完全一致、无回归；从 `make clean` 开始独立整跑全量回归确认
+  **29/29 PASS**；独立核对 `addr_decode_dync` Toggle **89.00%→92.00%
+  （转正 ≥90%）**，Branch 维持 83.33%（符合预期，见下）。
+- **发现一个真 Kind-A 候选**：Branch 83.33% 唯一残余（`addr_decode_dync.
+  sv:146` 的 `if (!$isunknown(addr_map_i) && ~config_ongoing_i)` false
+  分支）与部分 Toggle 残余同根——`config_ongoing_i` 在
+  `addr_decode.sv:106` 每个例化点都硬接 `1'b0`，是 RTL 内部线网、非顶层
+  可控端口，任何激励都摸不到。orch 独立核实成立。**已登记后续 rev 卡**
+  （DV 无权自行登记 `doc/coverage-waivers.md`）。
+- **顺手核实：F-1（default_mst_port_i 双向翻转）目标已被本卡副作用完整
+  闭合**——orch 独立核对 `axi_xbar` 的 `default_mst_port_i[5:0][2:0]`
+  现已 **Yes/Yes/Yes（全闭合）**，模块级 Toggle 由 P0 基线 40.74% 升至
+  **94.44%**。F-1 无需再派独立 DV 卡，任务标记完成。
+- Evidence 刷新：`doc/evidence/v0.4.29/M2-CFG01.log`。
+
+**Not done**
+- REV-026 最后一项 C-2（M2-AT01 ATOP 命中地址扩展）+ 三张新任务
+  （#16-18）+ Kind-A 豁免 rev 卡（#19）+ BUG-0048 fixer 卡 + 最终 M4
+  签核卡未派发。
+
+**Next**
+- C-2（M2-AT01 aw.atop[5:0] 命中地址扩展，REV-026 十项加固卡的最后
+  一项，附 SPEC_ISSUE 残余上报纪律）。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + M3-CFG02 guard 数字核对 + 从零
+  全量回归 + urg 逐字节核对（含顺手核实 F-1），均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap。
+
 ## [0.4.29] 2026-08-01 REV-026 加固卡 E-1 落地——M3-DE01 组收官，err_slv ID toggle 全闭合
 
 **背景**：REV-026 批准清单 E-1（err_slv id[4:0]，(a)→M3-DE01），M3-DE01
