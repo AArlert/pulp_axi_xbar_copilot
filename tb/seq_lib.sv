@@ -1630,13 +1630,15 @@ endclass
 // exactly as build_txlimit_burst's spread_bucket=1 — no full id gets anywhere
 // near MaxSlvTrans). The single axi_burst_item carries wopen_mode=1 so the
 // driver (slvport_agent.sv drive_burst_wopen) keeps a bounded LEAD of accepted
-// AWs ahead of the still-draining W bursts: the demux therefore holds >=3 W
-// channels simultaneously open (w_open high) throughout, while — because W
+// AWs ahead of the still-draining W bursts: the demux therefore holds several
+// W channels simultaneously open (w_open high) throughout, while — because W
 // keeps flowing (only B is held, by the test's resp_hold) — its per-bucket AW
 // ID counter (which pops on B, not W) is free to climb to the §5.4.1 effective
-// ceiling (15, NOT the literal MaxMstTrans=10 — BUG-0016/REV-007). LEAD stays
-// below the mux AW->W FIFO depth (MaxSlvTrans, spec §5.4.2) so W never
-// permanently stalls (an over-depth lead deadlocks). Every sub-item is a
+// ceiling (15, NOT the literal MaxMstTrans=10 — BUG-0016/REV-007). LEAD (see
+// drive_burst_wopen's derivation, REV-027 §5 hardening card A) stays under an
+// empirically-probed self-deadlock threshold of this single-threaded driver
+// task so W never permanently stalls (an over-depth LEAD deadlocks the task
+// itself, not the DUT). Every sub-item is a
 // multi-beat (len=1) burst so wstrb/wlast are exercised per beat. The test
 // additionally back-pressures this master port's aw_ready (M4-AW01's
 // bp_enable) so the demux's already-selected AW repeatedly sits valid-but-not-

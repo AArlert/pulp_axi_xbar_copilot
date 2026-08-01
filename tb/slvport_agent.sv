@@ -412,13 +412,9 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
   // demux never has more than one W channel open at once — this task keeps a
   // bounded LEAD of accepted AWs ahead of the still-draining W bursts: it opens
   // AWs (W held) until LEAD of them are outstanding, then drains the oldest
-  // open W burst, refilling as it goes. That sustains LEAD (>=3) simultaneously
-  // open W channels at the demux (w_open high) throughout the batch. LEAD is
-  // held strictly below the mux's AW->W FIFO depth (= MaxSlvTrans, spec §5.4.2,
-  // read from the pinned Cfg — NOT any RTL value): were LEAD >= that depth the
-  // mux would stall AW with its W held and the batch would deadlock, so the
-  // window caps AW-ahead-of-W to keep W always drainable. Because W keeps
-  // flowing (only B is held, by the test's resp_hold), the same-(bucket,
+  // open W burst, refilling as it goes. That sustains LEAD simultaneously open
+  // W channels at the demux (w_open high) throughout the batch. Because W
+  // keeps flowing (only B is held, by the test's resp_hold), the same-(bucket,
   // direction) AW ID counter is free to climb to the §5.4.1 effective ceiling
   // (its counter pops on B, not W) while w_open stays bounded — the two
   // structural pressures coexist. W bursts drain in AW-acceptance order (spec
@@ -426,6 +422,26 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
   // task asserts NOTHING about lock-FSM state, the w_open value, or which cycle
   // the ceiling is reached (spec §7.4.5 red line) — the judgement is the
   // scoreboard's alone.
+  //
+  // REV-027 §5 hardening card A: LEAD = MaxSlvTrans-1 (5 at baseline) was a
+  // conservative guess — treating the mux's own AW->W FIFO depth (MaxSlvTrans,
+  // spec §5.4.2) as this task's self-deadlock threshold — that left the
+  // w_open>=8 coverage bin (bit 3 of the counter, whose legal range runs to
+  // the §5.4.1 ceiling 15, not MaxSlvTrans) permanently untouched. This task's
+  // actual self-deadlock risk is different from that FIFO depth: because it
+  // opens all LEAD AWs before draining any W, an over-deep LEAD blocks its own
+  // drive_aw call forever once the full AW->W chain (mux FIFO + the pipeline
+  // buffering between demux and mux, spec §2.1's PipelineStages) has no more
+  // room and nothing else in this single-threaded task is draining W to free
+  // it — a driver-side stall, not a DUT deadlock. LEAD below derives from the
+  // pinned Cfg parameters (MaxSlvTrans, PipelineStages) and was then walked up
+  // empirically against that boundary (each step run under `timeout`,
+  // TEST=m4_bp02_demuxlock_test): LEAD=6..10 all complete cleanly and
+  // deterministically (identical sim-time completion across SEED=1/2/3/42);
+  // LEAD=11 self-deadlocks this task and is caught by tb_top's watchdog
+  // (UVM_FATAL, not a real hang). The formula below lands on 9 at baseline —
+  // one full transaction of margin under the tested-safe ceiling (10) and two
+  // under the first failure (11) — comfortably clearing the >=8 target.
   task automatic drive_burst_wopen(axi_burst_item item);
     int unsigned done_cnt;
     int unsigned total;
@@ -436,10 +452,11 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
     done_cnt = 0;
     aw_idx   = 0;
     w_idx    = 0;
-    // stay one below the mux AW->W FIFO depth (spec §5.4.2: MaxSlvTrans maps to
-    // axi_mux's MaxWTrans) so W never permanently stalls; still >=3 open.
-    lead     = (xbar_types_pkg::Cfg.MaxSlvTrans > 1)
-                 ? xbar_types_pkg::Cfg.MaxSlvTrans - 1 : 1;
+    // = MaxSlvTrans + 2*PipelineStages + 1 (9 at baseline: 6 + 2*1 + 1) — see
+    // the empirically-validated derivation above; read only from the pinned
+    // Cfg, not any RTL value.
+    lead     = xbar_types_pkg::Cfg.MaxSlvTrans
+                 + 2 * xbar_types_pkg::Cfg.PipelineStages + 1;
     fork
       forever begin
         @(posedge vif.clk_i);
