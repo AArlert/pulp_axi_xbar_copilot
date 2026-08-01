@@ -1,3 +1,4 @@
+{"date": "2026-08-02", "version": "0.4.36", "summary": "卡A全闭包覆盖率复测（REV-024两悬案自然消解：xbar Toggle 94.44/unmuxed Assert 100均PASS）+REV-031分诊9个UNOWNED格：登记CW-010~013（零Kind-B），路由DV-F/G，CW-001订正、REV-024行9勘误。M4残余首次每格有归属。下一步arch里程碑重构提案卡B（M5+M6，M6承接≥90%门）"}
 {"date": "2026-08-02", "version": "0.4.35", "summary": "REV-030 DV-D落地：M4-EB02（err_slv读方向背压，M4-EB01对偶）转绿，ar_ready Yes/Yes/Yes全闭合，err_slv Toggle 69.78%→70.22%（独立复核）。用户叫停：M4六类硬90%出口条件与结构性可达低性价比残余矛盾，暂停派卡等裁定"}
 {"date": "2026-08-02", "version": "0.4.34", "summary": "REV-030三模块残余全面分诊：登记CW-009（demux Cond w_open==15结构不可达，独立核实w_fifo深度6+LEAD边界经验证据）。#16(demux atop-under-full)终判可构造非SPEC_ISSUE。五张DV构造指引卡待派（DV-A~E，含#16-18）"}
 {"date": "2026-08-02", "version": "0.4.33", "summary": "REV-029裁决：addr_decode_dync Branch 83.33%（IF-146 else，唯一致因）登记Kind-A CW-008——与REV-028对config_ongoing_i的驳回决定性轴不同（此处门真失败）。订正REV-024行6的Branch误归因（Toggle结论不变）。下一步#16（demux COND残余）"}
@@ -5,4 +6,3 @@
 {"date": "2026-08-02", "version": "0.4.31", "summary": "REV-026加固卡C-2落地：M2-AT01 ATOP[3:0]编码多样性遍历atomic-load子集16值，三模块aw.atop[3:0]转Yes/Yes/Yes全闭合（独立urg核对），残余归属既有BUG-0044不重复登记。REV-026十项加固卡清单全部收官。下一步Kind-A豁免rev卡#19+新加固卡#16-18"}
 {"date": "2026-08-01", "version": "0.4.30", "summary": "REV-026加固卡B-3落地：M2-CFG01新增default-port双向重配，addr_decode_dync Toggle转正92%。副作用顺带闭合F-1目标（axi_xbar default_mst_port_i全闭合）。发现真Kind-A候选（config_ongoing_i硬接0），登记rev卡。仅剩C-2待派"}
 {"date": "2026-08-01", "version": "0.4.29", "summary": "REV-026加固卡E-1落地，M3-DE01组收官。err_slv b.id[4:0]/r.id[4:0]全闭合（Yes/Yes/Yes，独立复核）。axi_err_slv Toggle 68.59%→69.19%。下一步B-3（M2-CFG01/M3-CFG02 rule边界重配）"}
-{"date": "2026-08-01", "version": "0.4.28", "summary": "REV-026加固卡B-2落地：M3-DE01新增独立地址多样性fanout（不改共享类，零连带影响）。DV诚实报告地址维度落地前已被M1-01副作用覆盖，仍落地消除对无关场景的脆弱依赖。axi_err_slv Toggle 68.30%→68.59%。下一步E-1"}

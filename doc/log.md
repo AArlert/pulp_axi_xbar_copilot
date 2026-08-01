@@ -2,6 +2,66 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.36] 2026-08-02 卡A 覆盖率全景复测 + REV-031 UNOWNED 分诊——M4 残余首次达成"每格有归属"，CW-010~013 登记
+
+**背景**：用户裁定 M4"六类硬 ≥90%"出口与定向激励约束的张力走 BUG-0047
+终判选项 (ii)（重议判据口径），路线 = 里程碑重构（M4 出口改"测量+分诊
+完成"、新增 M6 承接 ≥90% 数字门、M5 保持纯方法论）。重构提案（arch 卡）
+动笔前，先以一张 DV 测量卡（卡A）取权威数字、一张 rev 卡（REV-031）关掉
+无归属缺口——backlog 表须基于实测，不抄旧表。
+
+**Done**
+- **卡A（DV·L1）**：`doc/evidence/v0.4.35/M4-coverage-final-sweep.md`。
+  merged vdb 完整性核验（24 基线场景，cfgE 经亲测 UCAPI-INSTANCEMISMATCH
+  证实结构不可并入，非构建隔离习惯）；六类全闭包三态扫描（22 DUT 模块，
+  22+13=35 与 modlist 逐位对账）；<90% 格逐一归属标注。三大发现：
+  (i) REV-024 两悬案自然消解——`axi_xbar` Toggle 40.74→94.44 PASS、
+  `axi_xbar_unmuxed` Assert 53.85→100 PASS（历史加固卡副作用关闭，无人
+  回测过）；(ii) 9 个 UNOWNED (模块,类型) 格子（8 个首次按模块页测量的
+  闭包内 common_cells 模块）；(iii) CW-001 对 `r_state_q.R_HOLD` 论证
+  失实（普通读背压可达、已 Covered、与 ATOP 无关）。
+- **REV-031（rev·L3）**：9 格逐格独立裁决（测量卡建议仅作路由输入）。
+  新登记 **CW-010~013** 四条 Kind-A（flush_i 全例化点 tie-0 根因一行承接
+  多格 bin-scoped 分量 / lzc 常量 LUT+非 2 幂 padding / axi_id_prepend
+  pre_id_i generate 常量 / counter-delta_counter tie-off 位），各附可证伪
+  解锁；**零 Kind-B**（BUG-0047 guard 合规）。混合格拆分：结构位入豁免、
+  定向位路由 DV——新增 **DV-F**（rr_arb_tree 仲裁竞争多样性）、**DV-G**
+  （id_counters push+inject 同拍同 index，DV-E 家族）两张待派卡；薄壳
+  Toggle（89.22/88.51）判 DV-A/B 阴影不新开卡。CW-001 措辞订正（R_HOLD
+  除外标注，豁免主体维持）；REV-024 §2.2 行 9 表后追加勘误批注（
+  multicut/cut 结构无 Cond bin，"55-65%"应属 spill_register_flushable，
+  原表格行一字未改）；"待建档项" spill bypass 经 urg 反证（Bypass=0/1
+  两参数均例化）撤项。
+- **orch 独立复验**：卡A——git status 单文件、modlist/modinfo 抽查
+  spill_flushable 82.49/lzc 42.59/id_counters 73.91/xbar 94.44/unmuxed
+  Assert 100/ar_ready Yes×3/R_HOLD Covered 全对上、格式对齐 v0.4.0 先例。
+  REV-031——编辑面精确 3 文件、REV-024 批注纯追加（diff 全 + 行）、
+  flush 六处 tie-off/pre_id_i/lzc LUT/counter 三 tie-off/down_i(1'b1)
+  逐一亲验 RTL 对上。counter 实例数分歧（卡A 108 vs REV-031 12，实为
+  delta_counter 之数）不影响任何百分比与处置，已记 REV-031 §6。
+- **M4 残余状态**：至此全部 <90% 格子首次达成"每格有归属"——CW-001~013 /
+  BUG-0044 / DV-A~G 待派清单 / 已吸收，UNOWNED = 空集。
+
+**Not done**
+- 里程碑重构提案（arch 卡B：spec §0#4 修订 + milestone M4/M5/M6 + backlog
+  表）及其 rev 门禁（卡C）未派——本闭环只做了它的数据前置。
+- DV-A/B/C/E/F/G 六张定向卡均未派（重构落地后按 M6 backlog 处置）。
+- BUG-0048（lint 基线漂移）未修——已决策：机制修（lint-diff 挂进门禁），
+  排在 M4 签核后以保住 merged vdb 供签核 rev 独立复算。
+
+**Next**
+- 卡B：arch 里程碑重构提案（M4 出口改"测量+分诊完成、无 silent gap"，
+  新增 M6 承接六类 ≥90%，M5 纯方法论；backlog 表数据源 = 本闭环
+  final-sweep + REV-030 DV-A~E + REV-031 DV-F/G）→ 卡C rev 门禁 →
+  orch 应用重 pin → M4 签核重开。
+
+**How verified**
+- 见上"orch 独立复验"段——两卡数字均未采信自报，urg text 报告与 RTL
+  例化点逐项亲验。
+- `make check` 本轮复跑绿（docs-check passed；chain audit 仅既有已知
+  形状，"仅锚父节"14 处与 0.4.35 记录一致，无新增 gap）。本闭环零
+  RTL/TB 改动，无需重跑回归。
+
 ## [0.4.35] 2026-08-02 REV-030 DV-D（#18）落地——M4-EB02 err_slv 读方向背压，M4-EB01 读向对偶；随后暂停派卡，等用户裁定 M4 出口条件
 
 **背景**：REV-030 §3 DV-D 构造指引，五张 DV 卡中估级最低（L1，机制
@@ -117,68 +177,6 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 **How verified**
 - 见上"orch 独立复验"段——git diff 审读 + 全部 RTL 行号引用逐条重新
   grep 核对 + `cf_math_pkg::idx_width` 函数体亲读，均未采信 rev 卡自报
-  内容。
-- `make check`（docs-check + chain audit 无新增 gap）本轮复跑绿；本卡
-  未改 RTL/TB，无需重跑回归。
-
-## [0.4.33] 2026-08-02 REV-029 裁决——addr_decode_dync Branch 83.33% 登记 Kind-A（CW-008），订正 REV-024 §2.2 行 6
-
-**背景**：任务 #20，REV-028 的姊妹裁决。REV-028 顺带发现
-`addr_decode_dync` 真正的 `<90%` 数字是 Branch 83.33%（唯一残余 =
-`addr_decode_dync.sv:146` IF 语句 else 支，与 `config_ongoing_i` 无关），
-flag 给 orch 另派卡处置，不越界代为登记。orch 只给全新 rev 实例原始
-材料位置（RTL+行号、urg 取数命令、spec、REV-024/REV-028 原文、豁免
-契约+先例），REV-028 的建议**仅作背景路由输入**、不作结论依据。
-
-**Done**
-- **rev 独立复算 else 唯一触达路径**：IF 条件
-  `!$isunknown(addr_map_i) && ~config_ongoing_i`，因
-  `config_ongoing_i≡1'b0`（`addr_decode.sv:106` tie-off）使
-  `~config_ongoing_i` 恒真，else 唯一触达 = `addr_map_i` 取 X。
-- **rev 独立核实 env 构造上从不驱动 addr_map_i 为 X**：亲读
-  `tb/cfg_if.sv:26`→`tb_top.sv:59/142` 初始化路径 +
-  `tb/seq_lib.sv:1323/1779/2478` 运行时重配路径，三处均只赋
-  `xbar_types_pkg.sv` 三个 gen 函数产出的编译期具体 localparam（`idx`/
-  `start_addr`/`end_addr` 全字段具体），全 tb 对 addr_map 检索
-  force/isunknown/'x 路径为空集。spec §3.1/§3.2/§3.4 通篇假定地址表为
-  具体合法值，无未知地址表语义——覆盖此 else 属无 spec 基础的
-  X-theater（同 CW-006 rst_ni 先例的处置逻辑）。
-- **裁决登记 Kind-A（CW-008）**：与 REV-028 对 config_ongoing_i 的"驳回
-  登记"决定性轴不同——那案的残余落在已过 90% 门的 Toggle 类里，本案的
-  IF-146 else 恰是 Branch **`<90%` 门的唯一致因**，门真失败，落
-  `doc/coverage-waivers.md` 明文登记面（"有 bin、`<90%`"），须有书面
-  可证伪豁免承接，否则即静默放水。`doc/coverage-waivers.md` 新增
-  CW-008 一行（格式对齐既有 CW-001~007），解锁条件写两条具体可证伪
-  事实：(i) `config_ongoing_i` tie-off 被推翻，(ii) 纳入地址表 X 测试
-  **且先补齐 spec 未知地址表语义条款**（对齐 CW-006"解锁须先补 spec"
-  先例，防止解锁沦为"造个 X 就算测过"）。**独立复核 REV-028 §4 建议并
-  同意其 Kind-A 性质判断（自行从 RTL/TB/spec 重走一遍，非照抄），落地
-  登记并对解锁条件做一处收紧精化**。
-- **订正 REV-024 §2.2 行 6**：在 `doc/review/REV-024.md` 表后追加订正
-  批注（原表格行一字未改），指明该行对 Branch 83.33% 的"地址多样性→
-  补场景"归因失实——"更多样的已知地址仍使 addr_map 恒 known → else
-  永不取"，处方不能闭合此 Branch；订正仅针对 Branch，行 6 对 Toggle
-  53-57%（`addr_i[2:0]` bins）的结论不受影响、仍成立。
-- **orch 独立复验**：`git diff` 逐行审读 `doc/coverage-waivers.md`
-  （仅新增 CW-008 行 + "注"计数更新）与 `doc/review/REV-024.md`
-  （仅追加订正段、原表格行零改动）；独立重新 grep 确认
-  `tb/cfg_if.sv:26`/`tb_top.sv:59/142`/`tb/seq_lib.sv:1323/1779/2478`/
-  `tb/xbar_types_pkg.sv` 三 gen 函数的内容与 rev 卡引用逐字一致，
-  且 tb 对 addr_map 的 force/isunknown/'x 检索确认为空集；REV-028 会话
-  中已亲自核对过 urg mod20.html 的 Branch 明细表（`IF 146`=1/2 covered、
-  `MISSING_ELSE`），数据未变。
-- `doc/review/REV-029.md` 已写入磁盘。
-
-**Not done**
-- 任务 #16-18（三张新加固卡，主攻 `axi_err_slv` 69.78% 与
-  `axi_demux_simple` COND 残余）、#15、#14（最终 M4 签核卡）均未派发。
-
-**Next**
-- #16（`axi_demux_simple` COND 残余：ATOP×`ar_id_cnt_full` 交叉）。
-
-**How verified**
-- 见上"orch 独立复验"段——git diff 逐行审读 + RTL/TB 引用逐字核对 +
-  urg Branch 明细表复用 REV-028 会话内已验证数据，均未采信 rev 卡自报
   内容。
 - `make check`（docs-check + chain audit 无新增 gap）本轮复跑绿；本卡
   未改 RTL/TB，无需重跑回归。
