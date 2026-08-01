@@ -2,6 +2,46 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.21] 2026-08-01 P0 全量合并重测完成，精确核出十项加固卡当前真实残余（doc/evidence/v0.4.20/M4-P0-remeasure.md）
+
+**背景**：REV-026 强制要求全体 (a) 加固卡派发前先做一次全量 COV=1 合并
+重测，用当前（含 M4-EB01/BP02/CW-006/007 落地后）真实数字定各卡精确
+scope，而非沿用 v0.4.13 旧 signoff 的过时残余风险表。
+
+**Done**
+- `cd sim && make clean && make regress COV=1`：**28/28 PASS**（含全部
+  M0-M4 场景）。baseline 拓扑合并报告（22 场景）+ cfgD 独立报告，逐模块
+  对照旧 v0.4.13 残余风险表，写入
+  `doc/evidence/v0.4.20/M4-P0-remeasure.md`（纯记账，不含处置判断）。
+- **确认已完全闭合、无需再派卡的三项**：`axi_xbar_unmuxed` Assert
+  53.85%→**100%**（M4-AW01/BP02 的下游背压顺带闭合）；`axi_demux_simple`
+  Line 83.72%→**91.86%**；`axi_err_slv` Cond 83.33%→**100%**。
+- **确认 REV-026 批准的十项 (a) 加固全部仍有真实残留**，无一项因合并后
+  自然闭合而作废——各卡按原批准范围继续派发（P0 本身即 REV-026 条件 1
+  的兑现证据）。
+- **精确定位 axi_demux_simple 14 条 Assert 中 4 条 0-real-success 的
+  逐条性质**：`NoAtopAllowed` 在 baseline（ATOPs=1）结构性不可达属正常，
+  已在 cfgD（ATOPs=0，M3-CF04）独立报告中 real-succeeded 24 次，**非
+  缺口**；`ar_valid_stable`/`slv_ar_chan_stable`/`slv_ar_select_stable`
+  （AW 侧三条稳定性断言的 AR 镜像）**真实未闭合**——与 REV-027 §2.5 核实
+  的 `lock_ar_valid_q/_d`/`ar_id_cnt_full` 同根，同一个 AR 侧持续背压
+  构造应一并闭合这 5 项（3 Assert + 2 Toggle）。已更新任务清单：
+  REV-027 加固卡 B 的验收判据据此加精。
+
+**Not done**
+- 十项 (a) 加固卡 + REV-027 两张加固卡均未派发——本轮只完成 P0 记账。
+
+**Next**
+- 开始逐条派发：优先 REV-027 加固卡 A（w_open[3] LEAD 加深，M4-BP02 上
+  改动）与加固卡 B（AR 侧对偶，五件套一次闭合），再回到 A-F 十项，逐条
+  小闭环、独立核实、evidence、closeout、push。
+
+**How verified**
+- `make regress COV=1` 亲跑 28/28 PASS；`make cov` 分别生成 baseline 与
+  cfgD 报告，urg HTML 逐模块/逐断言亲读取数（非采信任何转述），取数命令
+  见 `doc/evidence/v0.4.20/M4-P0-remeasure.md` 首行。
+- `make check`/`make selftest` 本轮收尾前复跑（见下）。
+
 ## [0.4.20] 2026-08-01 feature-matrix 补齐 6 条 M4 行（chain audit gap 清零）+ P0 全量合并重测已在后台起跑
 
 **背景**：用户授权 orch 全权自动推进 M4 到极致，每闭环推送，不中途请示。
@@ -112,69 +152,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - orch 独立复核：确认 doc/review/REV-027.md 已完整落盘（六问结构齐备、
   Overall verdict 明确），未采信失败的 StructuredOutput 回传碎片。
 - `make check`/`make selftest` 本轮收尾前复跑（见下）。
-
-## [0.4.18] 2026-08-01 M4-EB01/M4-BP02 落地转绿——两张 DV 卡并行 worktree 实现，独立复验+合并冲突手工消解
-
-**背景**：清单 B 批准清单里的两条新场景（err_slv B 通道背压 / demux 锁定
-FSM+ID 计数饱和叠加压力）互相独立、非 merge-gated，用两个并行 worktree
-隔离的 DV 卡实现，避免同时编辑共享 tb/ 文件互相踩踏。
-
-**Done**
-- **M4-EB01（独立 worktree，DV 卡）**：新增 `slvport_eb01_seq`/
-  `m4_eb01_errbp_vseq`/`m4_eb01_errbp_test`，`axi_burst_item` 加
-  `b_backpressure` 字段，`slvport_driver`/`slvport_monitor` 实现 B 通道
-  持续背压 + `cg_errbp` 非空转见证。判决门复用 M3-DE01 的
-  `SB_DECERR_*` 判据族（不新发明期望值）。**orch 独立复验**：亲跑
-  `make run TEST=m4_eb01_errbp_test SEED=1` 确认 `UVM_ERROR:0`、
-  svacheck CLEAN、`resp match=60 mismatch=0`、`cg_errbp samples=564
-  inst_cov=100%`（背压确实被激励到，非空转）；检查 diff 干净、无越权
-  改动。DV 卡如实指出卡片指示的文件名有误（`mstport_agent.sv`应为
-  `slvport_agent.sv`——err_slv 挂在 slave 侧非 master 侧），已自行纠正，
-  未盲从。
-- **M4-BP02（独立 worktree，DV 卡）**：新增 `slvport_bp02_seq`/
-  `m4_bp02_demuxlock_vseq`/`m4_bp02_demuxlock_test`，`axi_burst_item` 加
-  `wopen_mode` 字段 + 滑动窗口驱动 `drive_burst_wopen`（保持 ≥3 个 W
-  burst 同时打开）+ 复用 M4-AW01 的 `aw_ready` 背压机制 + 复用
-  M2-TL01/M3-TL01 的 `resp_hold` 机制把同桶在飞数压至 §5.4.1 有效上限
-  15。**orch 独立复验**：亲跑确认 `UVM_ERROR:0`、CLEAN、
-  `route/resp/worder match=15 mismatch=0`、`cg_tx_limit inst_cov=100%`
-  （含 `at_effective_ceiling=15` bin）、`cg_aw_retry samples=15
-  inst_cov=100%`。DV 卡顺手报告了内部 RTL 事实（xdebug，仅供参考非判决
-  依据）：`w_open` 峰值 5、`lock_aw_valid_q` 22 次翻转、
-  `aw_id_cnt_full` 曾置位——证明结构覆盖非空转。**Open risk**（DV 卡
-  如实标注，非隐瞒）：`w_open[3]`（≥8）在基线 `MaxSlvTrans=6` 下结构性
-  不可达（mux AW→W FIFO 封顶），是覆盖率豁免候选而非"需要更强激励"。
-- **两个 worktree 独立编写、独立通过后，orch 合并回 master**：
-  `doc/testplan.md`/`sim/regress/regress.list`/`sim/result_summary.txt`/
-  `tb/test_lib.sv` 四处产生真实文本冲突（两卡各自新增行相邻/两卡各自
-  新增 test class 相邻），手工消解——保留两条新增内容而非二选一（doc/
-  testplan.md 两行都转 ✅ 各自 evidence 路径；regress.list/
-  result_summary.txt 两个 TEST 都保留；test_lib.sv 两个 class 都保留）；
-  `tb/axi_txn.sv`/`tb/seq_lib.sv`/`tb/slvport_agent.sv` 三个文件 git
-  自动三路合并成功（无冲突，两卡分别新增的字段/函数/类互不重叠）。
-  **合并后 orch 在主目录里重新独立验证**：单跑 M4-EB01/M4-BP02 各自仍
-  CLEAN，全量回归 `make regress` **28/28 PASS**（较之前 26/26 净增两条，
-  证明两个 worktree 的改动合并后确实互不干扰）。
-- `make check`/`make selftest`（61/61）复跑绿。
-
-**Not done**
-- `w_open[3]`（M4-BP02 open risk）尚未走 rev 裁决——是否登记为
-  `doc/coverage-waivers.md` 的又一条 Kind-A（结构性不可达，`MaxSlvTrans`
-  封顶导致），还是先按下不表，留给后续覆盖率复核时处理。
-- 清单 B 剩余的 (a) 类加固（A-1/A-2/B-1/B-2/B-3/C-1/C-2/D-1/E-1/F-1）
-  仍未动手——这些都会触及 M1-01/M2-AT01/M3-DE01/M2-CFG01 等既有场景的
-  共享激励代码，按 REV-026 条件 6 的"小闭环、非并行"要求排队处理。
-
-**Next**
-- 用户表态继续多 subagent 开工；下一批可考虑：(1) 派 rev 卡处置
-  `w_open[3]` 覆盖率豁免；(2) 开始清单 B 的 (a) 类加固——因需触及共享
-  激励文件，建议串行（pipeline）而非 worktree 并行处理，逐条走"小闭环
-  即停"。
-
-**How verified**
-- `make check`：docs-check passed，chain audit 无新增缺口类别。
-- `make selftest`：61/61 OK。
-- 两张 DV 卡各自独立 worktree 内均已验证转绿（orch 亲跑，非采信自报）；
-  合并后主目录里对两个场景分别单跑复核仍 CLEAN；全量回归 28/28（含
-  M4-EB01/M4-BP02），交叉核对 `sim/result_summary.txt`。
 
