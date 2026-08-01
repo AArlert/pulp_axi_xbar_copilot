@@ -1,4 +1,55 @@
 # Work log archive
+## [0.4.23] 2026-08-01 REV-027 加固卡 B 落地——新场景 M4-BP03（AR 侧对偶），五件套一次性转正
+
+**背景**：REV-027 §5「加固卡 B」+ M4-P0-remeasure.md §3 精确定位：
+M4-BP02 是纯写场景，AR 侧对偶（`lock_ar`/`ar_id_cnt_full` 及其伴随的 3
+条 valid-but-not-ready 断言）在全部既有场景里从未触达。派 L1 DV 卡落地。
+
+**Done**
+- **新 testplan 行 M4-BP03**（`doc/testplan.md`）：M4-BP02 的读方向对偶。
+  单 slave 端口并发多笔读 burst（同桶）+ AR 持续背压（新增独立旋钮
+  `bp_enable_ar`，`tb/mstport_agent.sv`，镜像 M4-AW01 的 `bp_enable`、
+  默认关闭不影响任何既有场景）+ `resp_hold` 作用于 R 通道令同桶在飞读
+  数压至 §5.4.1 有效上限。**无需新写驱动任务**——DV 卡指出一个干净的
+  不对称性：写方向需要 `drive_burst_wopen` 是因为一个写子项的 W burst
+  会在下一个 AW 出现前排空完，而读子项的整个请求阶段就是它的 AR 握手
+  本身，既有 `drive_burst()` 非写分支早已背靠背连续发出 AR，读方向的
+  持续压力从既有原语里自然落出，不必比照写向再造一个。
+  `tb/functional_coverage.sv` 新增 `cg_ar_retry`（外部 valid/ready 观测，
+  非判决，镜像 `cg_aw_retry`）。
+- **orch 独立复验**（不采信 DV 卡自报）：`git diff` 逐文件读过，确认改动
+  精确镜像既有 M4-AW01/BP02 模式、无越权；**从 `make clean` 开始独立
+  整跑一次全量回归**确认 **29/29 PASS**；亲自生成 merged urg 报告，
+  独立核对 5 项目标 gate 全部转正——`lock_ar_valid_q/_d`/`ar_id_cnt_full`
+  在 `gen_slv_port_demux[0]` 实例转 Yes（确认是被本场景施压的那个实例，
+  非巧合）；`ar_valid_stable`/`slv_ar_chan_stable`/`slv_ar_select_stable`
+  三条 Assert 由 0 real-succeeded 转为各 22 次、0 failure。`axi_demux_simple`
+  模块级聚合：LINE 91.86%→**100%**、BRANCH 88.89%→**100%**、
+  ASSERT 71.43%→**92.86%**（=13/14，恰好符合预期——14 条中只剩
+  `NoAtopAllowed` 在 baseline 下结构性 N/A，已在 cfgD 报告独立闭合，
+  非缺口）、COND 79.31%→82.76%、TOGGLE 71.18%→72.56%。
+- Evidence：`doc/evidence/v0.4.22/M4-BP03.log`（机械生成），
+  `sim/regress/regress.list` 补行。
+- **顺手补 feature-matrix**（L0 haiku 卡，独立复核）：新场景导致 chain
+  audit 新增 1 个 gap（M4-BP03 无 feature-matrix 行），当场派卡补
+  F-M4-07（镜像 F-M4-06 的读方向表述），`make check` 复核 gap 归零。
+
+**Not done**
+- REV-026 十项 (a) 加固卡均未派发——两张 REV-027 加固卡已全部落地，
+  下一步转向 A-F 队列。
+
+**Next**
+- 开始 REV-026 十项 (a) 加固卡：优先处理全部合并进 M1-01 的一组
+  （A-1+A-2/B-1/C-1/D-1，各自独立小闭环、不堆 mega-edit），再到
+  M3-DE01（B-2/E-1）、M2-CFG01/M3-CFG02（B-3）、M2-AT01（C-2）、
+  M3-DE02/M2-CFG01（F-1）。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对
+  三重独立复核，均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无残留
+  gap（含新场景的 feature-matrix 行已补齐）。
+
 ## [0.4.22] 2026-08-01 REV-027 加固卡 A 落地——M4-BP02 写向 w_open[3] 转正，LEAD 深度经验安全上探
 
 **背景**：REV-027 驳回 w_open[3] 豁免、判定其是驱动 LEAD 窗口过保守的产物

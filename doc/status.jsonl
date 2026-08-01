@@ -1,3 +1,4 @@
+{"date": "2026-08-01", "version": "0.4.26", "summary": "REV-026加固卡C-1落地：M1-01五维sideband加宽+KILL-0005注伤自证（orch亲自重现红/绿）。axi_demux_simple Toggle转正≥90%（92.48%），axi_mux Toggle 88.01%。M1-01组仅剩D-1待评估"}
 {"date": "2026-08-01", "version": "0.4.25", "summary": "REV-026加固卡B-1落地：M1-01叠加写向地址饱和序列，axi_mux Toggle 73.49%→76.93%、axi_demux_simple 77.07%→80.45%（独立复核）。残余如实归属C-1/B-3范围。M1-01组A-1/A2/B-1全部完成，下一步C-1"}
 {"date": "2026-08-01", "version": "0.4.24", "summary": "REV-026加固卡A-1+A-2落地：M1-01叠加地址镜像饱和读，axi_mux Toggle 62.55%→73.49%、axi_demux_simple 72.56%→77.07%（独立复核确认）。顺手登记BUG-0048（lint基线过期，不阻塞）。剩余9项(a)加固卡待派"}
 {"date": "2026-08-01", "version": "0.4.23", "summary": "REV-027加固卡B落地：新场景M4-BP03（AR侧对偶），5项目标gate一次性转正（lock_ar/ar_id_cnt_full+3条Assert）。axi_demux_simple LINE/BRANCH转100%，ASSERT转92.86%。三重独立复核+feature-matrix补F-M4-07"}
@@ -5,4 +6,3 @@
 {"date": "2026-08-01", "version": "0.4.21", "summary": "P0全量COV=1合并重测（28/28 PASS），精确核出十项(a)加固卡真实残余。确认3项已自然闭合；AR侧valid-but-not-ready断言+lock_ar+ar_id_cnt_full五件套仍全开，并入REV-027加固卡B。详见M4-P0-remeasure.md"}
 {"date": "2026-08-01", "version": "0.4.20", "summary": "feature-matrix补齐F-M4-01~06（chain audit gap 6→0）。P0全量COV=1合并重测已后台起跑，供REV-026十项(a)加固卡定精确残余范围。用户已授权全自动推进M4"}
 {"date": "2026-08-01", "version": "0.4.19", "summary": "REV-027裁决w_open[3]覆盖率豁免请求：驳回（非结构不可达，是驱动LEAD窗口产物，Kind-A举证未尽、Kind-B被BUG-0047/REV-024§4双重禁止）。顺带查出M4-BP02只闭合AW侧，AR侧(lock_ar/ar_id_cnt_full)仍开。排两张需补场景DV卡（写向LEAD加深/读向对偶）待派发"}
-{"date": "2026-08-01", "version": "0.4.18", "summary": "M4-EB01(err_slv B通道背压)/M4-BP02(demux锁定FSM+ID计数饱和)并行worktree落地+独立复验，手工消解4处合并冲突，全量回归28/28。清单B剩余(a)类加固待串行处理"}

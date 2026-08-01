@@ -26,6 +26,22 @@ class axi_seq_item extends uvm_sequence_item;
   axi_pkg::atop_t         atop;
   xbar_types_pkg::data_t  wdata[$];
   xbar_types_pkg::strb_t  wstrb[$];
+  // AXI4 sideband attributes (spec §1 "完整 AXI4"): the crossbar does not
+  // interpret cache/prot/qos/region/lock/user — routing is by addr only and
+  // ordering by ID only (REV-026 C-1 分类 (a)), so these carry NO new
+  // judgement dimension; they exist purely so a sequence can drive non-default
+  // values through to the master port for toggle-coverage diversity
+  // (M1-01 enrichment, REV-026 批准清单 C-1). Every field defaults to '0 in
+  // new(), so every pre-existing item drives them exactly as the old
+  // hard-coded '0 in slvport_agent.sv — byte-for-byte identical stimulus for
+  // all other scenarios. `user` feeds aw_user/ar_user AND w_user (spec §1:
+  // AWUSER/ARUSER/WUSER are independent passthrough sidebands).
+  axi_pkg::cache_t        cache;
+  axi_pkg::prot_t         prot;
+  axi_pkg::qos_t          qos;
+  axi_pkg::region_t       region;
+  logic                   lock;
+  xbar_types_pkg::user_t  user;
   // M4-FT01 fall-through probe selector (testplan M4-FT01, spec §2.1):
   // when set on a write item, the driver (slvport_agent.sv drive_write_ft)
   // presents AW and this burst's FIRST W beat concurrently instead of
@@ -44,9 +60,15 @@ class axi_seq_item extends uvm_sequence_item;
 
   function new(string name = "axi_seq_item");
     super.new(name);
-    size  = xbar_types_pkg::BEAT_SIZE;
-    burst = axi_pkg::BURST_INCR;
-    atop  = '0;
+    size   = xbar_types_pkg::BEAT_SIZE;
+    burst  = axi_pkg::BURST_INCR;
+    atop   = '0;
+    cache  = '0;
+    prot   = '0;
+    qos    = '0;
+    region = '0;
+    lock   = 1'b0;
+    user   = '0;
   endfunction
 endclass
 

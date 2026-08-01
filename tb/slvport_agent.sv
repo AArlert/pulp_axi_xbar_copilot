@@ -77,13 +77,15 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
     vif.aw_len    <= item.len;
     vif.aw_size   <= item.size;
     vif.aw_burst  <= item.burst;
-    vif.aw_lock   <= 1'b0;
-    vif.aw_cache  <= '0;
-    vif.aw_prot   <= '0;
-    vif.aw_qos    <= '0;
-    vif.aw_region <= '0;
+    // sideband attributes carried from the item (default '0 ⇒ identical to the
+    // previous hard-coded '0 for every non-enriched scenario), spec §1 passthrough.
+    vif.aw_lock   <= item.lock;
+    vif.aw_cache  <= item.cache;
+    vif.aw_prot   <= item.prot;
+    vif.aw_qos    <= item.qos;
+    vif.aw_region <= item.region;
     vif.aw_atop   <= item.atop; // '0 for ordinary writes; ATOP_ATOMICLOAD for M2-AT01 (spec §6.1, uvm_env.md C2.4/C5.5)
-    vif.aw_user   <= '0;
+    vif.aw_user   <= item.user;
     vif.aw_valid  <= 1'b1;
     do @(posedge vif.clk_i); while (!vif.aw_ready);
     vif.aw_valid <= 1'b0;
@@ -92,7 +94,7 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
       vif.w_data  <= item.wdata[k];
       vif.w_strb  <= item.wstrb[k];
       vif.w_last  <= (k == item.len);
-      vif.w_user  <= '0;
+      vif.w_user  <= item.user;
       vif.w_valid <= 1'b1;
       do @(posedge vif.clk_i); while (!vif.w_ready);
     end
@@ -196,12 +198,14 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
     vif.ar_len    <= item.len;
     vif.ar_size   <= item.size;
     vif.ar_burst  <= item.burst;
-    vif.ar_lock   <= 1'b0;
-    vif.ar_cache  <= '0;
-    vif.ar_prot   <= '0;
-    vif.ar_qos    <= '0;
-    vif.ar_region <= '0;
-    vif.ar_user   <= '0;
+    // sideband attributes carried from the item (default '0 ⇒ identical to the
+    // previous hard-coded '0 for every non-enriched scenario), spec §1 passthrough.
+    vif.ar_lock   <= item.lock;
+    vif.ar_cache  <= item.cache;
+    vif.ar_prot   <= item.prot;
+    vif.ar_qos    <= item.qos;
+    vif.ar_region <= item.region;
+    vif.ar_user   <= item.user;
     vif.ar_valid  <= 1'b1;
     do @(posedge vif.clk_i); while (!vif.ar_ready);
     vif.ar_valid <= 1'b0;

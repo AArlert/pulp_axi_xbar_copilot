@@ -2,6 +2,56 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.26] 2026-08-01 REV-026 加固卡 C-1 落地——M1-01 五维 sideband 加宽 + KILL-0005 注伤自证，axi_demux_simple Toggle 转正（≥90%）
+
+**背景**：REV-026 批准清单 C-1（attrs/burst[1]/len/strb/user，(a)→M1-01），
+附两条硬条件：(i) 预测器扩展须做 KILL 注伤自证、期望锚 AXI4 非 RTL；
+(ii) enrichment 须显式列入 testplan 行文本。本卡是 M1-01 组里最复杂的一张，
+按 L2（触及 scoreboard_refmodel.sv 判决逻辑）派 opus。
+
+**Done**
+- **DV 卡独立技术核实**（orch 只给了初步印象，明确要求 DV 自己验证）：
+  WRAP 读回卷与稀疏 wstrb 写完整性**均非新 checker 代码路径**——
+  `predict_beat_data` 早已委托 vendor 通用 `axi_pkg::beat_addr`（AXI4
+  A3-51 回卷语义）、写完整性本是全字 data+strb 透传比较对任意 strb 取值
+  天然成立；真正的缺口是纯激励从未驱动过这些取值。属性字段
+  （cache/prot/qos/region/lock/user）则是真实缺失环节——`axi_seq_item`
+  原无这些字段，driver 硬编码 `'0`。
+- **`tb/axi_txn.sv`**：`axi_seq_item` 新增 6 个 sideband 字段，`new()` 全
+  默认 `'0`（既有全部激励逐字节不变）。**`tb/slvport_agent.sv`**：driver
+  由硬编码 `'0` 改读 `item.*`（默认值下行为不变）。**`tb/seq_lib.sv`**：
+  新增 `slvport_sideband_div_seq`，作为 M1-01 第四趟 fanout 叠加，逐条
+  覆盖 WRAP/长突发(16 拍)/稀疏 strb(8 种轮换)/属性高低饱和对/user=1。
+- **KILL-0005**（`doc/bugs.md`）：对 WRAP 回卷比较（`SB_RDATA`）与稀疏
+  strb 写完整性比较（`SB_WDATA`）两条真实吃到的判决路径分别注伤——把
+  `scoreboard_refmodel.sv:1053` 的 `ro.burst` 改常量 `BURST_INCR` →
+  48 处 mismatch 见红；把 `:737` 期望 strb 异或扰动 → 234 处见红；均
+  复原后归零。**orch 独立复现 KILL-A**（不只读文字记录）：亲自注入同一
+  处改动重跑，得到与登记逐字节一致的错误信息（`slv port 4 id 'h1b R
+  beat 1 mismatch: got data='h0 ... expected data='h1000000010`）；复原
+  后 `git diff tb/scoreboard_refmodel.sv` 为 0 行、`UVM_ERROR:0`——KILL
+  记录真实、非虚报。
+- **orch 独立复验**：从 `make clean` 开始独立整跑全量回归确认
+  **29/29 PASS**；独立生成 merged urg 报告核对 `axi_mux` Toggle
+  **76.93%→88.01%**、`axi_demux_simple` Toggle **80.45%→92.48%**——
+  **`axi_demux_simple` Toggle 首次转正（≥90%）**，与 DV 卡自报数字完全
+  一致。
+- Evidence 刷新：`doc/evidence/v0.4.25/M1-01.log`。
+
+**Not done**
+- M1-01 组的 D-1（条件性，视残余决定是否仍需要）+ 队列剩余六项
+  （B-2/E-1/B-3/C-2/F-1）+ BUG-0048 fixer 卡未派发。
+
+**Next**
+- 评估 D-1（ready-delay 分布）是否仍有必要——`axi_mux`/`axi_demux_simple`
+  当前 Cond/Branch 残余是否需要它，还是转向 M3-DE01 组（B-2/E-1）更值得。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对 +
+  **亲自重现 KILL-A 注伤全过程**（红→复原→绿），均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap。
+
 ## [0.4.25] 2026-08-01 REV-026 加固卡 B-1 落地——M1-01 叠加写向地址饱和序列，axi_mux/demux addr toggle 进一步收敛
 
 **背景**：REV-026 批准清单 B-1（addr 饱和，(a)→M1-01）。DV 卡落地前先用
@@ -94,55 +144,4 @@ slv_resp_o.r.data[63:0]` 的逐位 toggle 缺口。
   BUG-0048 亲自复现，均未采信 DV 卡自报数字。
 - `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
   gap。
-
-## [0.4.23] 2026-08-01 REV-027 加固卡 B 落地——新场景 M4-BP03（AR 侧对偶），五件套一次性转正
-
-**背景**：REV-027 §5「加固卡 B」+ M4-P0-remeasure.md §3 精确定位：
-M4-BP02 是纯写场景，AR 侧对偶（`lock_ar`/`ar_id_cnt_full` 及其伴随的 3
-条 valid-but-not-ready 断言）在全部既有场景里从未触达。派 L1 DV 卡落地。
-
-**Done**
-- **新 testplan 行 M4-BP03**（`doc/testplan.md`）：M4-BP02 的读方向对偶。
-  单 slave 端口并发多笔读 burst（同桶）+ AR 持续背压（新增独立旋钮
-  `bp_enable_ar`，`tb/mstport_agent.sv`，镜像 M4-AW01 的 `bp_enable`、
-  默认关闭不影响任何既有场景）+ `resp_hold` 作用于 R 通道令同桶在飞读
-  数压至 §5.4.1 有效上限。**无需新写驱动任务**——DV 卡指出一个干净的
-  不对称性：写方向需要 `drive_burst_wopen` 是因为一个写子项的 W burst
-  会在下一个 AW 出现前排空完，而读子项的整个请求阶段就是它的 AR 握手
-  本身，既有 `drive_burst()` 非写分支早已背靠背连续发出 AR，读方向的
-  持续压力从既有原语里自然落出，不必比照写向再造一个。
-  `tb/functional_coverage.sv` 新增 `cg_ar_retry`（外部 valid/ready 观测，
-  非判决，镜像 `cg_aw_retry`）。
-- **orch 独立复验**（不采信 DV 卡自报）：`git diff` 逐文件读过，确认改动
-  精确镜像既有 M4-AW01/BP02 模式、无越权；**从 `make clean` 开始独立
-  整跑一次全量回归**确认 **29/29 PASS**；亲自生成 merged urg 报告，
-  独立核对 5 项目标 gate 全部转正——`lock_ar_valid_q/_d`/`ar_id_cnt_full`
-  在 `gen_slv_port_demux[0]` 实例转 Yes（确认是被本场景施压的那个实例，
-  非巧合）；`ar_valid_stable`/`slv_ar_chan_stable`/`slv_ar_select_stable`
-  三条 Assert 由 0 real-succeeded 转为各 22 次、0 failure。`axi_demux_simple`
-  模块级聚合：LINE 91.86%→**100%**、BRANCH 88.89%→**100%**、
-  ASSERT 71.43%→**92.86%**（=13/14，恰好符合预期——14 条中只剩
-  `NoAtopAllowed` 在 baseline 下结构性 N/A，已在 cfgD 报告独立闭合，
-  非缺口）、COND 79.31%→82.76%、TOGGLE 71.18%→72.56%。
-- Evidence：`doc/evidence/v0.4.22/M4-BP03.log`（机械生成），
-  `sim/regress/regress.list` 补行。
-- **顺手补 feature-matrix**（L0 haiku 卡，独立复核）：新场景导致 chain
-  audit 新增 1 个 gap（M4-BP03 无 feature-matrix 行），当场派卡补
-  F-M4-07（镜像 F-M4-06 的读方向表述），`make check` 复核 gap 归零。
-
-**Not done**
-- REV-026 十项 (a) 加固卡均未派发——两张 REV-027 加固卡已全部落地，
-  下一步转向 A-F 队列。
-
-**Next**
-- 开始 REV-026 十项 (a) 加固卡：优先处理全部合并进 M1-01 的一组
-  （A-1+A-2/B-1/C-1/D-1，各自独立小闭环、不堆 mega-edit），再到
-  M3-DE01（B-2/E-1）、M2-CFG01/M3-CFG02（B-3）、M2-AT01（C-2）、
-  M3-DE02/M2-CFG01（F-1）。
-
-**How verified**
-- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对
-  三重独立复核，均未采信 DV 卡自报数字。
-- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无残留
-  gap（含新场景的 feature-matrix 行已补齐）。
 

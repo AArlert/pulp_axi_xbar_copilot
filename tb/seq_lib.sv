@@ -237,6 +237,144 @@ class slvport_waddr_sat_seq extends uvm_sequence #(axi_seq_item);
   endtask
 endclass
 
+// slvport_sideband_div_seq — M1-01 enrichment (REV-026 批准清单 C-1; technical
+// basis doc/evidence/v0.4.15/M4-toggle-bit-decomposition.md §1 C 段: demux 侧
+// 主导缺口的属性控制位). Drives the five AXI4 sideband-diversity dimensions
+// REV-026 C-1 names, on top of (never replacing) the existing M1-01 traffic:
+//   (1) WRAP burst (aw/ar burst[1]);
+//   (2) long burst (AxLEN=15 / 16 beats > M1-01 的既有 ≤7 拍);
+//   (3) sparse wstrb (non-all-ones per-beat strobe);
+//   (4) attribute rotation (aw/ar cache/prot/qos/region/lock 取非默认值);
+//   (5) user=1 (aw/ar/w user 非零).
+// Every item still hits the decode table and keeps aw.atop≡'0 (承 M1-01
+// happy-path 判据, uvm_env.md C2.4), so NO new judgement dimension is
+// introduced — the crossbar does not interpret these sidebands, routing is by
+// addr only and ordering by ID only (REV-026 分类 (a), SPEC-1/SPEC-3.1/
+// SPEC-3.2/SPEC-5.1 判据取值域加宽, 期望值不变). WRAP per-beat addresses are
+// computed by the SAME shared predictor xbar_types_pkg::predict_beat_data →
+// axi_pkg::beat_addr(...,axburst,...) that both the mstport responder and the
+// scoreboard consume (AXI4 A3-51 通用回卷语义, spec §1; 非 DUT 专用公式), so
+// the WRAP wrap-around read-data compare (scoreboard SB_RDATA) is genuinely
+// exercised by this sequence — the KILL self-cert (doc/bugs.md KILL-0005)
+// perturbs exactly that path. Sparse wstrb rides the existing full-word
+// data+strb pass-through compare (SB_WDATA); the crossbar forwards payload
+// unaltered, so full-word equality holds for any strobe value — no new checker
+// code, only a new stimulus value域. All items are single-outstanding
+// (start_item/finish_item blocks each to its own B/R), so no §5.2 same-ID
+// cross-target stall is ever created.
+class slvport_sideband_div_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_sideband_div_seq)
+
+  int unsigned slv_port_idx;
+
+  function new(string name = "slvport_sideband_div_seq");
+    super.new(name);
+  endfunction
+
+  // A sparse (never all-ones) per-beat strobe rotation — several byte lanes
+  // toggle 0<->1 across a burst; a value may be all-zero (a legal AXI4 no-op W
+  // beat, spec §1) to reach the low saturation of every lane. STRB_W=8 lanes.
+  function automatic xbar_types_pkg::strb_t sparse_strb(input int unsigned s);
+    case (s % 8)
+      0:       return xbar_types_pkg::strb_t'(8'h55);
+      1:       return xbar_types_pkg::strb_t'(8'hAA);
+      2:       return xbar_types_pkg::strb_t'(8'h0F);
+      3:       return xbar_types_pkg::strb_t'(8'hF0);
+      4:       return xbar_types_pkg::strb_t'(8'h81);
+      5:       return xbar_types_pkg::strb_t'(8'h01);
+      6:       return xbar_types_pkg::strb_t'(8'h80);
+      default: return xbar_types_pkg::strb_t'(8'h00);
+    endcase
+  endfunction
+
+  task automatic send_read(input xbar_types_pkg::addr_t addr,
+                            input axi_pkg::len_t len, input axi_pkg::burst_t burst,
+                            input axi_pkg::cache_t cache, input axi_pkg::prot_t prot,
+                            input axi_pkg::qos_t qos, input axi_pkg::region_t region,
+                            input logic lock, input xbar_types_pkg::user_t user,
+                            input string tag);
+    axi_seq_item it;
+    it = axi_seq_item::type_id::create(
+        $sformatf("sbdiv_r_%s_%0d", tag, slv_port_idx));
+    start_item(it);
+    it.is_write = 1'b0;
+    it.addr = addr; it.len = len; it.burst = burst;
+    it.cache = cache; it.prot = prot; it.qos = qos; it.region = region;
+    it.lock = lock;  it.user = user;
+    it.id   = xbar_types_pkg::id_slv_t'($urandom_range(0, 31));
+    finish_item(it);
+  endtask
+
+  task automatic send_write(input xbar_types_pkg::addr_t addr,
+                             input axi_pkg::len_t len, input axi_pkg::burst_t burst,
+                             input axi_pkg::cache_t cache, input axi_pkg::prot_t prot,
+                             input axi_pkg::qos_t qos, input axi_pkg::region_t region,
+                             input logic lock, input xbar_types_pkg::user_t user,
+                             input bit sparse, input string tag);
+    axi_seq_item it;
+    it = axi_seq_item::type_id::create(
+        $sformatf("sbdiv_w_%s_%0d", tag, slv_port_idx));
+    start_item(it);
+    it.is_write = 1'b1;
+    it.addr = addr; it.len = len; it.burst = burst;
+    it.cache = cache; it.prot = prot; it.qos = qos; it.region = region;
+    it.lock = lock;  it.user = user;
+    it.id   = xbar_types_pkg::id_slv_t'($urandom_range(0, 31));
+    it.wdata.delete();
+    it.wstrb.delete();
+    for (int unsigned b = 0; b <= len; b++) begin
+      it.wdata.push_back({$urandom(), $urandom()});
+      it.wstrb.push_back(sparse ? sparse_strb(b + slv_port_idx)
+                                : xbar_types_pkg::strb_t'('1));
+    end
+    finish_item(it);
+  endtask
+
+  task body();
+    int unsigned tgt;
+    xbar_types_pkg::addr_t tbase;
+
+    // (1)(2 short)(3) per target master port: a WRAP read + a WRAP sparse
+    // write. WRAP len ∈ {1,3,7} (2/4/8 beats); start addr = base + len*STRB_W
+    // puts the start at the last slot before the wrap boundary so the NEXT
+    // beat wraps — exercising the回卷 branch of axi_pkg::beat_addr.
+    for (int unsigned m = 0; m < xbar_types_pkg::NO_MST_PORTS; m++) begin
+      axi_pkg::len_t         wlen;
+      xbar_types_pkg::addr_t base, waddr;
+      base  = xbar_types_pkg::addr_t'(m) * xbar_types_pkg::REGION_SIZE;
+      wlen  = axi_pkg::len_t'((2 << (m % 3)) - 1); // 1,3,7
+      waddr = base + xbar_types_pkg::addr_t'(wlen) * xbar_types_pkg::STRB_W;
+      send_read(waddr, wlen, axi_pkg::BURST_WRAP,
+                '0, '0, '0, '0, 1'b0, '0, $sformatf("wrap_%0d", m));
+      send_write(waddr, wlen, axi_pkg::BURST_WRAP,
+                 '0, '0, '0, '0, 1'b0, '0, 1'b1, $sformatf("wrap_%0d", m));
+    end
+
+    // (2 long) long INCR bursts (AxLEN=15, 16 beats) — read predicts 16 beats
+    // of per-beat INCR address, write is sparse+long (SPEC-1 数据完整性判据的
+    // beat 数与稀疏 strb 取值域同时加宽).
+    tgt   = slv_port_idx % xbar_types_pkg::NO_MST_PORTS;
+    tbase = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE;
+    send_read(tbase + 32'h0000_1000, axi_pkg::len_t'(15), axi_pkg::BURST_INCR,
+              '0, '0, '0, '0, 1'b0, '0, "long");
+    send_write(tbase + 32'h0000_2000, axi_pkg::len_t'(15), axi_pkg::BURST_INCR,
+               '0, '0, '0, '0, 1'b0, '0, 1'b1, "long");
+
+    // (4)(5) attribute rotation + user=1: a high-saturation pair (every
+    // sideband bit 1, user=1) then a low pair (all 0) so BOTH toggle
+    // directions are self-contained in this sequence's own program order
+    // (same lo/hi rationale as slvport_rdata_sat_seq). Single-beat INCR.
+    send_write(tbase + 32'h0000_3000, axi_pkg::len_t'(0), axi_pkg::BURST_INCR,
+               '1, '1, '1, '1, 1'b1, '1, 1'b0, "attr_hi");
+    send_read (tbase + 32'h0000_3040, axi_pkg::len_t'(0), axi_pkg::BURST_INCR,
+               '1, '1, '1, '1, 1'b1, '1, "attr_hi");
+    send_write(tbase + 32'h0000_3080, axi_pkg::len_t'(0), axi_pkg::BURST_INCR,
+               '0, '0, '0, '0, 1'b0, '0, 1'b0, "attr_lo");
+    send_read (tbase + 32'h0000_30c0, axi_pkg::len_t'(0), axi_pkg::BURST_INCR,
+               '0, '0, '0, '0, 1'b0, '0, "attr_lo");
+  endtask
+endclass
+
 class m1_01_smoke_vseq extends uvm_sequence #(uvm_sequence_item);
   `uvm_object_utils(m1_01_smoke_vseq)
   `uvm_declare_p_sequencer(xbar_vseqr)
@@ -249,6 +387,7 @@ class m1_01_smoke_vseq extends uvm_sequence #(uvm_sequence_item);
     fanout_per_slv#(slvport_basic_seq)::run(p_sequencer, "slv_seq");
     fanout_per_slv#(slvport_rdata_sat_seq)::run(p_sequencer, "slv_rdsat_seq");
     fanout_per_slv#(slvport_waddr_sat_seq)::run(p_sequencer, "slv_wasat_seq");
+    fanout_per_slv#(slvport_sideband_div_seq)::run(p_sequencer, "slv_sbdiv_seq");
   endtask
 endclass
 
