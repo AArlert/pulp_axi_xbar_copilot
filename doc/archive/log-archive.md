@@ -1,4 +1,54 @@
 # Work log archive
+## [0.4.26] 2026-08-01 REV-026 加固卡 C-1 落地——M1-01 五维 sideband 加宽 + KILL-0005 注伤自证，axi_demux_simple Toggle 转正（≥90%）
+
+**背景**：REV-026 批准清单 C-1（attrs/burst[1]/len/strb/user，(a)→M1-01），
+附两条硬条件：(i) 预测器扩展须做 KILL 注伤自证、期望锚 AXI4 非 RTL；
+(ii) enrichment 须显式列入 testplan 行文本。本卡是 M1-01 组里最复杂的一张，
+按 L2（触及 scoreboard_refmodel.sv 判决逻辑）派 opus。
+
+**Done**
+- **DV 卡独立技术核实**（orch 只给了初步印象，明确要求 DV 自己验证）：
+  WRAP 读回卷与稀疏 wstrb 写完整性**均非新 checker 代码路径**——
+  `predict_beat_data` 早已委托 vendor 通用 `axi_pkg::beat_addr`（AXI4
+  A3-51 回卷语义）、写完整性本是全字 data+strb 透传比较对任意 strb 取值
+  天然成立；真正的缺口是纯激励从未驱动过这些取值。属性字段
+  （cache/prot/qos/region/lock/user）则是真实缺失环节——`axi_seq_item`
+  原无这些字段，driver 硬编码 `'0`。
+- **`tb/axi_txn.sv`**：`axi_seq_item` 新增 6 个 sideband 字段，`new()` 全
+  默认 `'0`（既有全部激励逐字节不变）。**`tb/slvport_agent.sv`**：driver
+  由硬编码 `'0` 改读 `item.*`（默认值下行为不变）。**`tb/seq_lib.sv`**：
+  新增 `slvport_sideband_div_seq`，作为 M1-01 第四趟 fanout 叠加，逐条
+  覆盖 WRAP/长突发(16 拍)/稀疏 strb(8 种轮换)/属性高低饱和对/user=1。
+- **KILL-0005**（`doc/bugs.md`）：对 WRAP 回卷比较（`SB_RDATA`）与稀疏
+  strb 写完整性比较（`SB_WDATA`）两条真实吃到的判决路径分别注伤——把
+  `scoreboard_refmodel.sv:1053` 的 `ro.burst` 改常量 `BURST_INCR` →
+  48 处 mismatch 见红；把 `:737` 期望 strb 异或扰动 → 234 处见红；均
+  复原后归零。**orch 独立复现 KILL-A**（不只读文字记录）：亲自注入同一
+  处改动重跑，得到与登记逐字节一致的错误信息（`slv port 4 id 'h1b R
+  beat 1 mismatch: got data='h0 ... expected data='h1000000010`）；复原
+  后 `git diff tb/scoreboard_refmodel.sv` 为 0 行、`UVM_ERROR:0`——KILL
+  记录真实、非虚报。
+- **orch 独立复验**：从 `make clean` 开始独立整跑全量回归确认
+  **29/29 PASS**；独立生成 merged urg 报告核对 `axi_mux` Toggle
+  **76.93%→88.01%**、`axi_demux_simple` Toggle **80.45%→92.48%**——
+  **`axi_demux_simple` Toggle 首次转正（≥90%）**，与 DV 卡自报数字完全
+  一致。
+- Evidence 刷新：`doc/evidence/v0.4.25/M1-01.log`。
+
+**Not done**
+- M1-01 组的 D-1（条件性，视残余决定是否仍需要）+ 队列剩余六项
+  （B-2/E-1/B-3/C-2/F-1）+ BUG-0048 fixer 卡未派发。
+
+**Next**
+- 评估 D-1（ready-delay 分布）是否仍有必要——`axi_mux`/`axi_demux_simple`
+  当前 Cond/Branch 残余是否需要它，还是转向 M3-DE01 组（B-2/E-1）更值得。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对 +
+  **亲自重现 KILL-A 注伤全过程**（红→复原→绿），均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap。
+
 ## [0.4.25] 2026-08-01 REV-026 加固卡 B-1 落地——M1-01 叠加写向地址饱和序列，axi_mux/demux addr toggle 进一步收敛
 
 **背景**：REV-026 批准清单 B-1（addr 饱和，(a)→M1-01）。DV 卡落地前先用
