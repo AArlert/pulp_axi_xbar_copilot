@@ -1,3 +1,4 @@
+{"date": "2026-08-01", "version": "0.4.28", "summary": "REV-026加固卡B-2落地：M3-DE01新增独立地址多样性fanout（不改共享类，零连带影响）。DV诚实报告地址维度落地前已被M1-01副作用覆盖，仍落地消除对无关场景的脆弱依赖。axi_err_slv Toggle 68.30%→68.59%。下一步E-1"}
 {"date": "2026-08-01", "version": "0.4.27", "summary": "REV-026加固卡D-1落地，M1-01组（A1/A2/B1/C1/D1）收官。DV诚实标出3处结构性摸不到的残余（COND的ATOP交叉/mux fabric ready/err_slv ar_ready），新登记3张后续任务。axi_mux Toggle 88.15%、demux 92.73%。下一步M3-DE01组"}
 {"date": "2026-08-01", "version": "0.4.26", "summary": "REV-026加固卡C-1落地：M1-01五维sideband加宽+KILL-0005注伤自证（orch亲自重现红/绿）。axi_demux_simple Toggle转正≥90%（92.48%），axi_mux Toggle 88.01%。M1-01组仅剩D-1待评估"}
 {"date": "2026-08-01", "version": "0.4.25", "summary": "REV-026加固卡B-1落地：M1-01叠加写向地址饱和序列，axi_mux Toggle 73.49%→76.93%、axi_demux_simple 77.07%→80.45%（独立复核）。残余如实归属C-1/B-3范围。M1-01组A-1/A2/B-1全部完成，下一步C-1"}
@@ -5,4 +6,3 @@
 {"date": "2026-08-01", "version": "0.4.23", "summary": "REV-027加固卡B落地：新场景M4-BP03（AR侧对偶），5项目标gate一次性转正（lock_ar/ar_id_cnt_full+3条Assert）。axi_demux_simple LINE/BRANCH转100%，ASSERT转92.86%。三重独立复核+feature-matrix补F-M4-07"}
 {"date": "2026-08-01", "version": "0.4.22", "summary": "REV-027加固卡A落地：M4-BP02写向w_open[3]转正，LEAD由MaxSlvTrans-1经验安全上探至MaxSlvTrans+2*PipelineStages+1=9。三重独立复核（单跑/从零全量回归/urg逐字节核对）。下一步加固卡B（AR侧对偶五件套）"}
 {"date": "2026-08-01", "version": "0.4.21", "summary": "P0全量COV=1合并重测（28/28 PASS），精确核出十项(a)加固卡真实残余。确认3项已自然闭合；AR侧valid-but-not-ready断言+lock_ar+ar_id_cnt_full五件套仍全开，并入REV-027加固卡B。详见M4-P0-remeasure.md"}
-{"date": "2026-08-01", "version": "0.4.20", "summary": "feature-matrix补齐F-M4-01~06（chain audit gap 6→0）。P0全量COV=1合并重测已后台起跑，供REV-026十项(a)加固卡定精确残余范围。用户已授权全自动推进M4"}

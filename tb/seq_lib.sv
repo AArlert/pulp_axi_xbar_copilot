@@ -1317,12 +1317,71 @@ class slvport_de01_seq extends uvm_sequence #(axi_seq_item);
   endtask
 endclass
 
+// slvport_de01_addrdiv_seq — M3-DE01 enrichment (REV-026 批准清单 B-2, 技术
+// 依据 doc/evidence/v0.4.15/M4-toggle-bit-decomposition.md §1"清单B具体化"B
+// 段"err_slv 侧额外覆盖多样 miss 地址"). Adds a second wave alongside
+// slvport_de01_seq (not a replacement) that spans wider decode-miss address
+// values instead of the narrow M3_UNMAPPED_BASE+offset band: the boundary
+// address immediately past the last rule's end_addr (spec §3.2 "含起址、不
+// 含终址" edge — NoAddrRules(8) * REGION_SIZE = 32'h8000_0000, xbar_types_pkg
+// L135/238/244f — the first address no rule can ever claim), the top-of-space
+// saturation address, and two alternating-bit-pattern addresses. All four
+// have bit31=1 by construction, which alone places them past every rule in
+// ADDR_MAP/ADDR_MAP_V1/ADDR_MAP_OV1 (none of xbar_types_pkg.sv's three table
+// generators ever extend start/end past 32'h8000_0000 — gen_addr_map/
+// gen_addr_map_v1/gen_addr_map_ov1 only reassign `idx` or move a rule's
+// range onto another rule already inside [0, 32'h8000_0000), L240-324),
+// hence unconditionally a decode miss regardless of which table/config point
+// is live. IDs and beat lengths deliberately mirror slvport_de01_seq's own
+// per-direction id/len mapping (idx/idx+4 writes, idx+8/idx+12 reads; len 0
+// and >0) — no new ID values are introduced (ID diversity is REV-026 E-1's
+// separate, not-yet-dispatched scope). No ATOP (spec §4.7 env constraint,
+// same as slvport_de01_seq); addresses stay 8-byte aligned (BEAT_SIZE, spec
+// §4.7 note in xbar_types_pkg.sv L138 "full-width beats only" — byte-level
+// sub-word alignment is REV-026 C-1's territory, not this card's).
+class slvport_de01_addrdiv_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_de01_addrdiv_seq)
+  int unsigned slv_port_idx;
+  function new(string name = "slvport_de01_addrdiv_seq"); super.new(name); endfunction
+
+  task automatic send(input bit is_write, input xbar_types_pkg::addr_t addr,
+                      input xbar_types_pkg::id_slv_t id, input axi_pkg::len_t len);
+    axi_seq_item it;
+    it = axi_seq_item::type_id::create(
+        $sformatf("de01ad_%0d_%s_%0h", slv_port_idx, is_write ? "w" : "r", addr));
+    start_item(it);
+    it.is_write = is_write; it.addr = addr; it.len = len; it.id = id;
+    it.atop = '0; // spec §4.7: never ATOP to an unmapped address
+    if (is_write) fill_wr_payload(it, len);
+    finish_item(it);
+  endtask
+
+  task body();
+    xbar_types_pkg::addr_t boundary, top, alt_a, alt_b;
+    // Just past the last rule's end_addr (spec §3.2 boundary), distinct per
+    // port so the 6 err_slv instances don't collide.
+    boundary = 32'h8000_0000 + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+    // Top-of-space saturation, distinct per port, leaves headroom below
+    // 32'hFFFF_FFFF for AxLEN=3's 4 beats (8-byte aligned).
+    top      = 32'hFFFF_FF00 - xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+    // Two alternating-bit patterns (bit31 forced 1 -> past every rule table),
+    // distinct per port, 8-byte aligned.
+    alt_a    = (32'hA5A5_A500 | 32'h8000_0000) + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+    alt_b    = (32'h5A5A_5A00 | 32'h8000_0000) + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+    send(1'b1, boundary, xbar_types_pkg::id_slv_t'(slv_port_idx),      axi_pkg::len_t'(0));
+    send(1'b1, top,      xbar_types_pkg::id_slv_t'(slv_port_idx + 4),  axi_pkg::len_t'(3));
+    send(1'b0, alt_a,    xbar_types_pkg::id_slv_t'(slv_port_idx + 8),  axi_pkg::len_t'(0));
+    send(1'b0, alt_b,    xbar_types_pkg::id_slv_t'(slv_port_idx + 12), axi_pkg::len_t'(3));
+  endtask
+endclass
+
 class m3_de01_decerr_vseq extends uvm_sequence #(uvm_sequence_item);
   `uvm_object_utils(m3_de01_decerr_vseq)
   `uvm_declare_p_sequencer(xbar_vseqr)
   function new(string name = "m3_de01_decerr_vseq"); super.new(name); endfunction
   task body();
     fanout_per_slv#(slvport_de01_seq)::run(p_sequencer, "de01_seq");
+    fanout_per_slv#(slvport_de01_addrdiv_seq)::run(p_sequencer, "de01_addrdiv_seq");
   endtask
 endclass
 

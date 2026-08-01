@@ -1,4 +1,44 @@
 # Work log archive
+## [0.4.25] 2026-08-01 REV-026 加固卡 B-1 落地——M1-01 叠加写向地址饱和序列，axi_mux/demux addr toggle 进一步收敛
+
+**背景**：REV-026 批准清单 B-1（addr 饱和，(a)→M1-01）。DV 卡落地前先用
+urg 亲自核实残余现状（不假设 A-1/A2 已顺带解决），发现 A-1/A2 是纯读，
+`aw.addr` 在同样的位位置仍全 No——B-1 的真实缺口是"写方向从未独立加宽过
+地址取值"。
+
+**Done**
+- **`tb/seq_lib.sv`**：新增 `slvport_waddr_sat_seq`，与已落地的
+  `slvport_rdata_sat_seq`（A-1/A2）逐字节镜像，只是作用于 `aw`/`w` 而非
+  `ar`——同一 lo/hi/lo 饱和地址构造搬到写方向，同样作为 M1-01 的第三趟
+  fanout 叠加（不替换前两趟）。
+- **testplan M1-01 行**在 A-1/A2 的 enrichment 句之后追加 B-1 的
+  enrichment 句（未覆盖前者）。
+- **orch 独立复验**（不采信 DV 卡自报）：`git diff` 确认改动只加不改；
+  从 `make clean` 开始独立整跑全量回归确认 **29/29 PASS**；亲自生成
+  merged urg 报告，独立核对 `axi_mux` Toggle **73.49%→76.93%**、
+  `axi_demux_simple` Toggle **77.07%→80.45%**——与 DV 卡自报数字完全
+  一致。DV 卡如实标注残余归属：字节对齐位 `addr[2:0]`（C-1 范围，非本卡）
+  + 部分 `addr[28:31]` 区域窗口位（仅重配 rule 表或未命中/default-port
+  路由才会翻转，属 B-3/M3-DE02/M4-RC01 范围）——未为凑数字越界处理。
+- Evidence 刷新：`doc/evidence/v0.4.24/M1-01.log`。
+- Taxonomy 自查：`make lint-diff` 前后站点数一致（77 个，行号偏移但
+  站点集合逐点比对为空差集），确认未引入新 lint 类别，不重复登记
+  BUG-0048。
+
+**Not done**
+- REV-026 剩余七项加固卡（C-1/D-1/B-2/E-1/B-3/C-2/F-1）+ BUG-0048
+  fixer 卡未派发。M1-01 组的 A-1/A2/B-1 三项均已落地。
+
+**Next**
+- C-1（M1-01 sideband 属性/WRAP/长突发/稀疏 strb，含 KILL 注伤自证，
+  REV-026 附两条硬条件）。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对，
+  均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap。
+
 ## [0.4.24] 2026-08-01 REV-026 加固卡 A-1+A-2 落地——M1-01 叠加地址镜像饱和读，axi_mux/demux r.data toggle 大幅收敛；顺手登记 BUG-0048（lint 基线过期）
 
 **背景**：REV-026 批准清单 A-1/A-2（r.data 饱和，(a)→M1-01 合并卡）。技术

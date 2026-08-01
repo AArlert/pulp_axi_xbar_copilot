@@ -2,6 +2,47 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.28] 2026-08-01 REV-026 加固卡 B-2 落地——M3-DE01 err_slv 地址多样性自给自足
+
+**背景**：REV-026 批准清单 B-2（err_slv 未命中 addr，(a)→M3-DE01）。DV 卡
+落地前先用 urg 核实残余，发现一个值得记录的事实：**地址维度在本卡落地前
+已经 100% 覆盖**——不是本场景自己做到的，而是 M1-01 的 A-1/A2/B-1/C-1
+四张加固卡的地址多样化激励，作为副作用顺带翻转了 err_slv 入侧的地址位
+（demux 的译码错误输出结构上总是把完整 aw/ar 字段送进 err_slv，只是
+valid 按实际选中的目标门控——即使那笔事务本该命中别处，字段仍然"路过"
+了 err_slv 的输入端口）。
+
+**Done**
+- **DV 卡诚实报告**：B-2 字面的数字目标在落地前已经满足，如实说明而非
+  编造"大幅收敛"的叙事。
+- **仍判断值得落地**：M3-DE01 目前的地址覆盖完全依赖一个**无关场景**
+  的副作用，不是设计上的保证、脆弱。新增 `slvport_de01_addrdiv_seq`
+  （独立类，不改共享的 `slvport_de01_seq`——零连带影响 M4-RC01/M4-EB01/
+  M3-CF01/M3-CF02/M3-OR04，这些场景都复用后者），覆盖 rule 表边界外
+  第一个地址、地址空间顶部饱和、两种交替位模式，四个地址构造上均
+  `bit31=1`（读三份地址表生成器 `gen_addr_map`/`_v1`/`_ov1` 确认，
+  任何配置下均落在 rule 表覆盖不到的区间），ID/len 复用既有映射不引入
+  新 ID 取值（E-1 的范围）。
+- **orch 独立复验**：diff 审读确认只加不改；从 `make clean` 开始独立
+  整跑全量回归确认 **29/29 PASS**；独立核对 `axi_err_slv` Toggle
+  **68.30%→68.59%**（小幅提升，符合预期——地址维度本就已满，这次
+  提升实为重复相同 ID 映射时意外闭合的 `r.id[4]` 1→0 方向，DV 卡如实
+  归因非编造）。
+- Evidence 刷新：`doc/evidence/v0.4.27/M3-DE01.log`。
+
+**Not done**
+- E-1（err_slv id[4:0] 多样性）+ 队列剩余三项（B-3/C-2/F-1）+ 三张新
+  任务（#16-18）+ BUG-0048 fixer 卡未派发。
+
+**Next**
+- E-1（err_slv id[4:0] 多样性，M3-DE01 组第二张）。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对，
+  均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap。
+
 ## [0.4.27] 2026-08-01 REV-026 加固卡 D-1 落地——M1-01 组收官；DV 卡诚实标出三处结构性摸不到的残余，新登记三张后续卡
 
 **背景**：REV-026 批准清单 D-1（简单 ready 翻转，条件化于 P0 残余）。
@@ -102,46 +143,6 @@ ATOP×ar_id_cnt_full 交叉表达式，怀疑 D-1 原始设想（简单 ready �
 **How verified**
 - 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对 +
   **亲自重现 KILL-A 注伤全过程**（红→复原→绿），均未采信 DV 卡自报数字。
-- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
-  gap。
-
-## [0.4.25] 2026-08-01 REV-026 加固卡 B-1 落地——M1-01 叠加写向地址饱和序列，axi_mux/demux addr toggle 进一步收敛
-
-**背景**：REV-026 批准清单 B-1（addr 饱和，(a)→M1-01）。DV 卡落地前先用
-urg 亲自核实残余现状（不假设 A-1/A2 已顺带解决），发现 A-1/A2 是纯读，
-`aw.addr` 在同样的位位置仍全 No——B-1 的真实缺口是"写方向从未独立加宽过
-地址取值"。
-
-**Done**
-- **`tb/seq_lib.sv`**：新增 `slvport_waddr_sat_seq`，与已落地的
-  `slvport_rdata_sat_seq`（A-1/A2）逐字节镜像，只是作用于 `aw`/`w` 而非
-  `ar`——同一 lo/hi/lo 饱和地址构造搬到写方向，同样作为 M1-01 的第三趟
-  fanout 叠加（不替换前两趟）。
-- **testplan M1-01 行**在 A-1/A2 的 enrichment 句之后追加 B-1 的
-  enrichment 句（未覆盖前者）。
-- **orch 独立复验**（不采信 DV 卡自报）：`git diff` 确认改动只加不改；
-  从 `make clean` 开始独立整跑全量回归确认 **29/29 PASS**；亲自生成
-  merged urg 报告，独立核对 `axi_mux` Toggle **73.49%→76.93%**、
-  `axi_demux_simple` Toggle **77.07%→80.45%**——与 DV 卡自报数字完全
-  一致。DV 卡如实标注残余归属：字节对齐位 `addr[2:0]`（C-1 范围，非本卡）
-  + 部分 `addr[28:31]` 区域窗口位（仅重配 rule 表或未命中/default-port
-  路由才会翻转，属 B-3/M3-DE02/M4-RC01 范围）——未为凑数字越界处理。
-- Evidence 刷新：`doc/evidence/v0.4.24/M1-01.log`。
-- Taxonomy 自查：`make lint-diff` 前后站点数一致（77 个，行号偏移但
-  站点集合逐点比对为空差集），确认未引入新 lint 类别，不重复登记
-  BUG-0048。
-
-**Not done**
-- REV-026 剩余七项加固卡（C-1/D-1/B-2/E-1/B-3/C-2/F-1）+ BUG-0048
-  fixer 卡未派发。M1-01 组的 A-1/A2/B-1 三项均已落地。
-
-**Next**
-- C-1（M1-01 sideband 属性/WRAP/长突发/稀疏 strb，含 KILL 注伤自证，
-  REV-026 附两条硬条件）。
-
-**How verified**
-- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对，
-  均未采信 DV 卡自报数字。
 - `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
   gap。
 
