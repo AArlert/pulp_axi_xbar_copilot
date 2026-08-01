@@ -2,6 +2,69 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.34] 2026-08-02 REV-030 三模块残余全面分诊——登记 Kind-A CW-009，五张 DV 构造指引卡（含 #16/#17/#18 终判）
+
+**背景**：任务 #21。orch 用 urg 对 `axi_mux`/`axi_demux_simple`/
+`axi_err_slv` 三模块做了一次全量快照，发现残余清单比原始 #16/#17/#18
+三条更宽（`len[7:4]`/`addr[2:0]`/`size[1:0]` 单向等多个未登记位），派发
+一张范围更宽的 rev 分诊卡，仅把三条原始任务作为背景线索、不作结论。
+
+**Done**
+- **rev 独立重生三模块 urg + 逐条对照既有 CW-001~008**：三模块大宗残余
+  （err_slv 恒定输出/四模块 rst_ni/scan/size[2]/atop 非-load 子类型）
+  均已被既有豁免或 BUG-0044 承接，pass、不重复登记；各 `≥90%` 类死位
+  依 REV-028 先例由余量吸收，不登记。
+- **登记 CW-009（Kind-A）**：`axi_demux_simple` Cond 82.76% 五个未覆盖
+  bin 中，`w_open==15`（`axi_demux_simple.sv:168` 主表达式 term2）一 bin
+  结构不可达——`IdCounterWidth=idx_width(MaxMstTrans=10)=4` 全一=15，但
+  下游 `axi_mux i_w_fifo` 深度由 `axi_xbar.sv:141` 硬wire为
+  `Cfg.MaxSlvTrans=6`，加 `PipelineStages=1` 缓冲，结构封顶远低于
+  15——**orch 独立核实全部引用行号（`axi_demux_simple.sv:69`
+  `idx_width`、`axi_mux.sv:319/46` `i_w_fifo` DEPTH、`axi_xbar.sv:141`
+  MaxWTrans wiring）与 `cf_math_pkg::idx_width` 函数实现，逐字符合**；
+  经验佐证（`slvport_agent.sv:448-466` `drive_burst_wopen` 注释）
+  **orch 独立核对确认**：LEAD=6..10 全部干净完成、LEAD=11 触发
+  watchdog 自死锁（driver 侧 AW→W 链无空间，非 DUT 死锁）。
+- **其余 4 bin（`ar_id_cnt_full && atop[ATOP_R_RESP]` 双 1 交叉，即 #16）
+  驳回登记豁免，判定可构造**：rev 逐层核实 `ar_id_cnt_full`（全桶 OR，
+  L557/615）与 `atop[R_RESP]` 各自已被现有场景单独触达，唯缺同拍共存；
+  填桶用从机侧 `resp_hold` 时间驱动自动释放，无死锁；stall 是 RTL 合法
+  防溢出行为——**终判非 SPEC_ISSUE、非 TB_BUG，是普通定向可达
+  planning-gap**。
+- **五张 DV 构造指引**（rev 只给方向性技术要求，不写代码）：DV-A（请求
+  属性取值域：窄传输/字节非对齐/长突发，err_slv 轨 L1 + mux 轨 L2，
+  mux 轨须扩 `predict_beat_data` 并做 KILL）、DV-B（从机 resp/user 多样化，
+  L1/L2）、DV-C=#17（mux `b_ready` 写背压，须新增背压驱动能力，L2）、
+  DV-D=#18（err_slv `ar_ready` 读向背压，M4-EB01 直接镜像，机制全现成，
+  L1）、DV-E=#16（demux atop-under-AR-full 混向构造，L2）。
+- **发现一处交付缺口 flag（非新 bug）**：`addr[2:0]` 字节级非对齐被
+  M3-DE01/M2-CFG01 反复标注"REV-026 C-1 territory"，但 C-1 实际交付
+  （`slvport_sideband_div_seq`）从未驱动 `addr[2:0]≠0`——孤儿残余，归
+  BUG-0047 伞下，orch 派 DV-A 时须明确其归属。
+- **orch 独立复验**：`git diff` 逐行审读 CW-009 新增行；独立重跑 RTL 读取
+  验证 `IdCounterWidth`/`idx_width` 函数实现/`i_w_fifo` DEPTH 绑定/
+  `MaxSlvTrans=6`/`PipelineStages=1`/LEAD 边界经验注释，逐条与 rev 卡
+  引用行号内容一致；独立核对 `axi_err_slv.sv` `ar_ready=~r_fifo_full`、
+  `i_r_fifo` DEPTH 绑定 `MaxTrans`、`axi_xbar_unmuxed.sv:201`
+  `.MaxTrans(4)`（当前 >1 slave 端口配置对应实例）。
+- `doc/review/REV-030.md` 已写入磁盘。
+
+**Not done**
+- 五张 DV 卡（DV-A~E）均未派发，是本轮 M4 收尾工作的下一批主力。#14/#15
+  仍未派发。
+
+**Next**
+- 依次派发 DV-D（#18，L1，机制全现成，最省力）→ DV-A err_slv 轨（L1）→
+  DV-B/DV-C（L1/L2）→ DV-A mux 轨（L2，须扩预测器+KILL）→ DV-E（#16，
+  L2，新混向 primitive）。
+
+**How verified**
+- 见上"orch 独立复验"段——git diff 审读 + 全部 RTL 行号引用逐条重新
+  grep 核对 + `cf_math_pkg::idx_width` 函数体亲读，均未采信 rev 卡自报
+  内容。
+- `make check`（docs-check + chain audit 无新增 gap）本轮复跑绿；本卡
+  未改 RTL/TB，无需重跑回归。
+
 ## [0.4.33] 2026-08-02 REV-029 裁决——addr_decode_dync Branch 83.33% 登记 Kind-A（CW-008），订正 REV-024 §2.2 行 6
 
 **背景**：任务 #20，REV-028 的姊妹裁决。REV-028 顺带发现
@@ -122,65 +185,4 @@ urg 取数命令、spec、REV-024 §2.2、`doc/coverage-waivers.md` 全文），
   数字。
 - `make check`（docs-check + chain audit 无新增 gap）本轮复跑绿；本卡
   未改 RTL/TB，无需重跑回归。
-
-## [0.4.31] 2026-08-02 REV-026 加固卡 C-2 落地——M2-AT01 ATOP 编码多样性转正，REV-026 十项加固卡清单收官
-
-**背景**：REV-026 批准清单 C-2（aw.atop[5:0] 命中地址扩，(a)→M2-AT01，
-附残余上报纪律）。这是 REV-026 十项 (a)-class 加固卡的**最后一项**——十项
-至此全部落地。DV 卡先读 `doc/bugs.md` BUG-0044（ACCEPTED@M5：spec §6
-只规定 ATOP atomic-load 的应答义务 B+R，atomicstore/atomicswap/
-atomiccompare 三个子类型的应答义务全节未列），确认本卡构造边界须锁死在
-atomic-load 编码子集内、残余引用该既有登记、不重复登记新 SPEC_ISSUE。
-
-**Done**
-- **`tb/seq_lib.sv`**：`slvport_at01_atop_seq` 唯一改动类（M3-AT02 的独立
-  `ATOP_LOAD_ADD` 不动）。原固定单一编码
-  `{ATOMICLOAD, LITTLE_END, ADD}` 改为 `load_encoding(idx4) =
-  {ATOP_ATOMICLOAD, idx4}`，在 `ATOP[5:4]=ATOP_ATOMICLOAD` 子集内按端口
-  索引确定性遍历 `ATOP[3:0]`（endianness×opcode）全部 16 种取值：Phase A
-  每端口两笔（`(slv_port_idx*2+k)%16` 铺 0..11）+ Phase B 每端口一笔
-  （`PHASE_B_IDX4='{12,13,1,14,3,15}`，非线性偏移表，专门让 `atop[2]`/
-  `atop[3]` 在同一端口自身序列内既有上升又有下降拍，因 VCS toggle bin 需
-  同 run 内的翻转、跨端口对比不算）。判决门不变，仍是既有 SPEC-6.3 B+R
-  应答判据，opcode/endianness 加宽取值域不引入新判决维度。
-- **testplan M2-AT01 行**追加 enrichment 说明句，如实注明"本卡只在
-  atomic-load 编码子集内闭合，atomicstore/atomicswap/atomiccompare 未覆盖
-  ，残余归属既有 BUG-0044（ACCEPTED@M5），不重复登记"。
-- **orch 独立复验**：diff 审读确认只加一个类、testplan 只改一行，未越界；
-  从 `make clean` 开始独立整跑全量回归确认 **29/29 PASS**；独立重跑
-  `make cov TEST=m1_01_smoke_test` 生成 urg 合并报告，Python 直接解析
-  `mod19.html`(axi_mux)/`mod12.html`(axi_demux_simple)/`mod32.html`
-  (axi_err_slv) 的 toggle 表，**逐位核对与 DV 自报完全一致**：
-  `aw.atop[3:0]`（合并视图）三模块均 No/No/No→**Yes/Yes/Yes**（双向全
-  闭合）；`atop[4]` 三模块均维持 No/No/No（结构性摸不到——仅
-  ATOMICSTORE/SWAP/CMP 才会置位，BUG-0044 边界，非本卡遗漏）；`atop[5]`
-  三模块均维持 No/No/Yes（0→1 单向——1→0 同样需要非 atomic-load 类型才能
-  摸到，同一边界）；`axi_err_slv` 的 `err_req.aw.atop[5:0]` 全部 7 组
-  （6 实例+合并）维持 No/No/No，符合 BUG-0032 既有环境约束（未命中地址
-  从未派发 ATOP，本卡命中地址构造未触碰该约束）。模块级 Toggle 现读数：
-  `axi_mux` 89.34%、`axi_demux_simple` 93.73%（≥90%）、`axi_err_slv`
-  69.78%（未达阈值，归入既有任务 #16-18 后续加固范围，非本卡目标）。
-- Evidence 刷新：`doc/evidence/v0.4.30/M2-AT01.log`。
-- 未新增 bug：确认本卡残余精确落在 BUG-0044 既有登记范围内，仅引用、不
-  重复登记（orch 复核 `doc/bugs.md`/`doc/bugs/BUG-0044.md` 内容与本卡
-  边界描述一致）。
-
-**Not done**
-- **REV-026 十项加固卡清单至此全部收官**。剩余：#14（M4 完整签核卡）、
-  #15（BUG-0048 lint-baseline fixer）、#16-18（三张新发现的残余加固卡：
-  demux COND ATOP×ar_id_cnt_full 交叉、mux fabric 级 ready 多笔背压、
-  err_slv ar_ready 读方向背压）、#19（config_ongoing_i Kind-A 豁免 rev
-  卡）均未派发。
-
-**Next**
-- 按队列继续：#19（Kind-A 豁免 rev 卡，DV 无权自行登记
-  `doc/coverage-waivers.md`）优先，随后 #16-18 三张新加固卡，最后 #15
-  （不阻塞门禁，视精力）与 #14（M4 最终签核，需等前述残余工作收敛后
-  再评估是否需要更多卡或已可签核）。
-
-**How verified**
-- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐位核对（三
-  模块 toggle 表 Python 直接解析，非人工估读），均未采信 DV 卡自报数字。
-- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
-  gap（仅既有已知缺口）。
 

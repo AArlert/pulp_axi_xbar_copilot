@@ -1,4 +1,65 @@
 # Work log archive
+## [0.4.31] 2026-08-02 REV-026 加固卡 C-2 落地——M2-AT01 ATOP 编码多样性转正，REV-026 十项加固卡清单收官
+
+**背景**：REV-026 批准清单 C-2（aw.atop[5:0] 命中地址扩，(a)→M2-AT01，
+附残余上报纪律）。这是 REV-026 十项 (a)-class 加固卡的**最后一项**——十项
+至此全部落地。DV 卡先读 `doc/bugs.md` BUG-0044（ACCEPTED@M5：spec §6
+只规定 ATOP atomic-load 的应答义务 B+R，atomicstore/atomicswap/
+atomiccompare 三个子类型的应答义务全节未列），确认本卡构造边界须锁死在
+atomic-load 编码子集内、残余引用该既有登记、不重复登记新 SPEC_ISSUE。
+
+**Done**
+- **`tb/seq_lib.sv`**：`slvport_at01_atop_seq` 唯一改动类（M3-AT02 的独立
+  `ATOP_LOAD_ADD` 不动）。原固定单一编码
+  `{ATOMICLOAD, LITTLE_END, ADD}` 改为 `load_encoding(idx4) =
+  {ATOP_ATOMICLOAD, idx4}`，在 `ATOP[5:4]=ATOP_ATOMICLOAD` 子集内按端口
+  索引确定性遍历 `ATOP[3:0]`（endianness×opcode）全部 16 种取值：Phase A
+  每端口两笔（`(slv_port_idx*2+k)%16` 铺 0..11）+ Phase B 每端口一笔
+  （`PHASE_B_IDX4='{12,13,1,14,3,15}`，非线性偏移表，专门让 `atop[2]`/
+  `atop[3]` 在同一端口自身序列内既有上升又有下降拍，因 VCS toggle bin 需
+  同 run 内的翻转、跨端口对比不算）。判决门不变，仍是既有 SPEC-6.3 B+R
+  应答判据，opcode/endianness 加宽取值域不引入新判决维度。
+- **testplan M2-AT01 行**追加 enrichment 说明句，如实注明"本卡只在
+  atomic-load 编码子集内闭合，atomicstore/atomicswap/atomiccompare 未覆盖
+  ，残余归属既有 BUG-0044（ACCEPTED@M5），不重复登记"。
+- **orch 独立复验**：diff 审读确认只加一个类、testplan 只改一行，未越界；
+  从 `make clean` 开始独立整跑全量回归确认 **29/29 PASS**；独立重跑
+  `make cov TEST=m1_01_smoke_test` 生成 urg 合并报告，Python 直接解析
+  `mod19.html`(axi_mux)/`mod12.html`(axi_demux_simple)/`mod32.html`
+  (axi_err_slv) 的 toggle 表，**逐位核对与 DV 自报完全一致**：
+  `aw.atop[3:0]`（合并视图）三模块均 No/No/No→**Yes/Yes/Yes**（双向全
+  闭合）；`atop[4]` 三模块均维持 No/No/No（结构性摸不到——仅
+  ATOMICSTORE/SWAP/CMP 才会置位，BUG-0044 边界，非本卡遗漏）；`atop[5]`
+  三模块均维持 No/No/Yes（0→1 单向——1→0 同样需要非 atomic-load 类型才能
+  摸到，同一边界）；`axi_err_slv` 的 `err_req.aw.atop[5:0]` 全部 7 组
+  （6 实例+合并）维持 No/No/No，符合 BUG-0032 既有环境约束（未命中地址
+  从未派发 ATOP，本卡命中地址构造未触碰该约束）。模块级 Toggle 现读数：
+  `axi_mux` 89.34%、`axi_demux_simple` 93.73%（≥90%）、`axi_err_slv`
+  69.78%（未达阈值，归入既有任务 #16-18 后续加固范围，非本卡目标）。
+- Evidence 刷新：`doc/evidence/v0.4.30/M2-AT01.log`。
+- 未新增 bug：确认本卡残余精确落在 BUG-0044 既有登记范围内，仅引用、不
+  重复登记（orch 复核 `doc/bugs.md`/`doc/bugs/BUG-0044.md` 内容与本卡
+  边界描述一致）。
+
+**Not done**
+- **REV-026 十项加固卡清单至此全部收官**。剩余：#14（M4 完整签核卡）、
+  #15（BUG-0048 lint-baseline fixer）、#16-18（三张新发现的残余加固卡：
+  demux COND ATOP×ar_id_cnt_full 交叉、mux fabric 级 ready 多笔背压、
+  err_slv ar_ready 读方向背压）、#19（config_ongoing_i Kind-A 豁免 rev
+  卡）均未派发。
+
+**Next**
+- 按队列继续：#19（Kind-A 豁免 rev 卡，DV 无权自行登记
+  `doc/coverage-waivers.md`）优先，随后 #16-18 三张新加固卡，最后 #15
+  （不阻塞门禁，视精力）与 #14（M4 最终签核，需等前述残余工作收敛后
+  再评估是否需要更多卡或已可签核）。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐位核对（三
+  模块 toggle 表 Python 直接解析，非人工估读），均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap（仅既有已知缺口）。
+
 ## [0.4.30] 2026-08-01 REV-026 加固卡 B-3 落地——addr_decode_dync Toggle 转正，副作用顺带闭合 F-1 目标；发现一个真 Kind-A 候选
 
 **背景**：REV-026 批准清单 B-3（rule 边界重配，(a)→M2-CFG01/M3-CFG02）。
