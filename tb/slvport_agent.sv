@@ -370,6 +370,13 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
   // is NOT a judgement anchor: nothing asserts which cycle aw_ready drops or
   // the b_fifo fills (spec §7.4.5 red line).
   localparam int unsigned BP_B_HOLD_CYC = 50;
+  // M4-EB02 read-direction mirror (testplan M4-EB02, spec §4.3/§7.4.5,
+  // doc/review/REV-030.md §3 DV-D): cycles this port's r_ready is held LOW
+  // before release, so the internal err_slv R-response fifo (structural
+  // capacity MaxTrans) fills and its input ar_ready is driven low. Same
+  // non-judgement-anchor discipline as BP_B_HOLD_CYC above (spec §7.4.5 red
+  // line — nothing asserts which cycle ar_ready drops or the r_fifo fills).
+  localparam int unsigned BP_R_HOLD_CYC = 50;
 
   task automatic drive_burst(axi_burst_item item);
     int unsigned done_cnt;
@@ -381,6 +388,9 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
     // M4-EB01: drop b_ready so the port's internal err_slv B-response fifo fills
     // (its consumer, b_ready, is now starved) — see axi_burst_item.b_backpressure.
     if (item.b_backpressure) vif.b_ready <= 1'b0;
+    // M4-EB02: drop r_ready so the port's internal err_slv R-response fifo fills
+    // (its consumer, r_ready, is now starved) — see axi_burst_item.r_backpressure.
+    if (item.r_backpressure) vif.r_ready <= 1'b0;
     fork
       forever begin
         @(posedge vif.clk_i);
@@ -396,6 +406,16 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
       if (item.b_backpressure) begin
         repeat (BP_B_HOLD_CYC) @(posedge vif.clk_i);
         vif.b_ready <= 1'b1;
+      end
+      // M4-EB02: bounded r_ready hold, then release — read-direction mirror.
+      // Runs concurrently with the AR presentation below, which (for a read
+      // burst) already presents every sub-item's AR back-to-back without
+      // waiting for its own R (unchanged M2-TL01/TL02 shape), so err_slv's
+      // r_fifo genuinely accumulates multiple accepted-but-undrained AR
+      // entries while r_ready is low.
+      if (item.r_backpressure) begin
+        repeat (BP_R_HOLD_CYC) @(posedge vif.clk_i);
+        vif.r_ready <= 1'b1;
       end
     join_none
     if (item.b_backpressure && is_w) begin
@@ -617,6 +637,11 @@ class slvport_monitor extends uvm_monitor;
       // Purely external valid/ready (CLAUDE.md input boundary); draws no verdict
       // (spec §7.4.5 red line — neither the b_fifo depth nor the exact cycle
       // aw_ready drops is ever asserted).
+      // M4-EB02 read-direction mirror (testplan M4-EB02, spec §4.3/§7.4.5,
+      // doc/review/REV-030.md §3 DV-D): this slave port's AR was offered but
+      // not ready-accepted — the external image of err_slv's R-fifo filling
+      // (r_ready starved) and back-pressuring its input ar_ready. Same
+      // entered-only, non-decisional convention as the AW/W bins above.
       if (xbar_functional_coverage::m_probe != null) begin
         if (vif.aw_valid && !vif.aw_ready)
           xbar_functional_coverage::m_probe.sample_errbp(
@@ -624,6 +649,9 @@ class slvport_monitor extends uvm_monitor;
         if (vif.w_valid && !vif.w_ready)
           xbar_functional_coverage::m_probe.sample_errbp(
             xbar_functional_coverage::EB_W_HELD);
+        if (vif.ar_valid && !vif.ar_ready)
+          xbar_functional_coverage::m_probe.sample_errbp(
+            xbar_functional_coverage::EB_AR_HELD);
       end
 
       if (vif.aw_valid && vif.aw_ready) begin

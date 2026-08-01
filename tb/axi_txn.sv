@@ -140,6 +140,22 @@ class axi_burst_item extends axi_seq_item;
   // may delay b_ready arbitrarily, legal AXI4, spec §1).
   bit b_backpressure;
 
+  // M4-EB02 response-side backpressure selector (testplan M4-EB02, spec
+  // §4.3/§7.4.5, doc/review/REV-030.md §3 DV-D) — read-direction mirror of
+  // `b_backpressure` above. When set on a READ burst, the driver
+  // (slvport_agent.sv drive_burst) holds this slave port's r_ready LOW for a
+  // bounded window; the read leg of drive_burst's item-presentation loop
+  // already presents every sub-item's AR back-to-back without waiting for its
+  // own R (the same M2-TL01/TL02 sustained-pressure shape, unchanged), so no
+  // extra decoupling is needed the way b_backpressure needs for AW-vs-W. With
+  // r_ready held low the port's internal err_slv fills its R-response fifo,
+  // driving its input-side ar_ready low (the structural coverage motive).
+  // '0 (default) for every other axi_burst_item, whose r_ready stays tied
+  // high exactly as before. Pure stimulus timing on the response side — never
+  // changes any payload/id/completion order (a master may delay r_ready
+  // arbitrarily, legal AXI4, spec §1).
+  bit r_backpressure;
+
   `uvm_object_utils(axi_burst_item)
 
   function new(string name = "axi_burst_item");

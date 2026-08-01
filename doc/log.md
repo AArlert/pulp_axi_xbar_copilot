@@ -2,6 +2,62 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.35] 2026-08-02 REV-030 DV-D（#18）落地——M4-EB02 err_slv 读方向背压，M4-EB01 读向对偶；随后暂停派卡，等用户裁定 M4 出口条件
+
+**背景**：REV-030 §3 DV-D 构造指引，五张 DV 卡中估级最低（L1，机制
+全部现成）的一张，优先派发。**本卡收尾后，用户叫停——M4 六类硬 90%
+出口条件与"结构性可达但性价比低"这类残余（DV-A~E 这一批）持续矛盾，
+需要先裁定 milestone 出口条件本身，暂停继续派发 DV-A/B/C/E 与 #14/#15，
+等用户决策。**
+
+**Done**
+- **`tb/axi_txn.sv`**：新增 `r_backpressure` 字段（镜像既有
+  `b_backpressure`）。**`tb/slvport_agent.sv`**：`drive_burst` 新增
+  `BP_R_HOLD_CYC=50` 有界 `r_ready` 保持窗口（镜像 `BP_B_HOLD_CYC`）；
+  monitor 新增 `EB_AR_HELD` 覆盖点采样（`ar_valid && !ar_ready`，纯外部
+  握手观测，非判决）。**`tb/seq_lib.sv`**：新增 `slvport_eb02_seq`
+  （`num_rd=10 > err_slv r_fifo 深度 4`，单拍读、未命中地址、`atop='0`）
+  + `m4_eb02_errbp_vseq`。**`tb/test_lib.sv`**：新增
+  `m4_eb02_errbp_test`（镜像 `m4_eb01_errbp_test`）。**testplan 新行
+  M4-EB02**（M4-EB01 读向对偶）+ **feature-matrix F-M4-08**。判决门
+  **原样复用** `scoreboard_refmodel.sv` 既有 `SB_DECERR_*` 判据族——
+  **零改动 scoreboard 任何一行**（orch `git diff --stat` 确认）。
+- **未做 KILL 注伤自证，理由经查证成立**：零新增期望值推导路径。orch
+  独立核实 M4-EB01 自己当初落地（0.4.18 版本块，见 `doc/archive/
+  log-archive.md`）同样"判决门复用 M3-DE01 的 SB_DECERR_* 判据族（不新
+  发明期望值）"、同样未做 KILL——本卡与该先例判断口径一致，非临时找
+  借口。
+- **orch 独立复验**：diff 审读确认全部改动为纯加型（新字段/新
+  localparam/新覆盖点/新 seq/新 test 类），`scoreboard_refmodel.sv`
+  确认零改动；从 `make clean` 开始独立整跑全量回归确认 **30/30 PASS**
+  （含新场景 `m4_eb02_errbp_test`）；独立重新生成 urg 合并报告，直接
+  解析 `axi_err_slv`（mod32.html）模块级汇总：**SCORE 94.04/LINE
+  100/COND 100/TOGGLE 69.78%→70.22%/BRANCH 100/ASSERT 100**，
+  `slv_resp_o.ar_ready` 由 No/No/No 转 **Yes/Yes/Yes（全部 6 实例+合并
+  视图，双向翻转）**，与 DV 卡自报数字完全一致。
+- Evidence 刷新：`doc/evidence/v0.4.34/M4-EB02.log`。
+- DV 卡如实登记一处流程偏差（非 taxonomy 五类）：受"先建后测"实际执行
+  顺序影响，未在动手前单独重跑一次排除本场景的基线核实 REV-030 引用的
+  69.78%/No,No,No，改用落地后交叉核验弥补（单跑新场景确认非判决 cover
+  `cp_chan` 精确只命中 `ar_held`，证明改动范围精确）。orch 认为该弥补
+  手法可接受，不影响本卡收版。
+
+**Not done**
+- **暂停**：DV-A/B/C/E 四张卡、#14（M4 签核卡）、#15（BUG-0048 fixer）
+  均未派发，等待用户对 M4 出口条件的裁定后再定后续动作。
+
+**Next**
+- 视用户裁定结果而定——可能是新增处置类别（如"定向可达但性价比劣于
+  M5 约束随机"的第三类豁免）、可能是重写 M4 出口条件本身（六类硬 90%
+  →更灵活的判据），也可能是维持现状继续按 REV-030 五张卡推进。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + scoreboard 零改动确认 + 从零全量
+  回归 + urg 逐字段核对 + M4-EB01 KILL 先例交叉核实，均未采信 DV 卡
+  自报数字。
+- `make check`（chain audit 无新增异常 gap，只是"仅锚父节"计数从 13→14
+  的已知形状增量）/`make selftest`（61/61）本轮复跑绿。
+
 ## [0.4.34] 2026-08-02 REV-030 三模块残余全面分诊——登记 Kind-A CW-009，五张 DV 构造指引卡（含 #16/#17/#18 终判）
 
 **背景**：任务 #21。orch 用 urg 对 `axi_mux`/`axi_demux_simple`/
@@ -124,65 +180,6 @@ flag 给 orch 另派卡处置，不越界代为登记。orch 只给全新 rev �
 - 见上"orch 独立复验"段——git diff 逐行审读 + RTL/TB 引用逐字核对 +
   urg Branch 明细表复用 REV-028 会话内已验证数据，均未采信 rev 卡自报
   内容。
-- `make check`（docs-check + chain audit 无新增 gap）本轮复跑绿；本卡
-  未改 RTL/TB，无需重跑回归。
-
-## [0.4.32] 2026-08-02 REV-028 裁决——config_ongoing_i 覆盖率缺口候选驳回登记，订正 REV-024 一处 Branch 误归因
-
-**背景**：任务 #19。B-3 加固卡（0.4.30）观察到 `addr_decode_dync` 的
-`config_ongoing_i` 端口在 `addr_decode.sv:106` 被硬接 `1'b0`，疑似
-Kind-A 覆盖率豁免候选。orch 只给 rev 卡原始材料位置（RTL 文件+行号、
-urg 取数命令、spec、REV-024 §2.2、`doc/coverage-waivers.md` 全文），
-不传递任何一方结论，由全新 rev 实例独立判断。
-
-**Done**
-- **rev 独立核实可达性成立**：`axi_xbar_unmuxed.sv:101/116` 例化的是
-  `addr_decode`（非 napot、非直接 dync），其端口列表根本不含
-  `config_ongoing_i`；`addr_decode.sv:106` 唯一驱动源为字面常量
-  `1'b0`。结构不可达，Kind-A 之"质"成立。
-- **但 rev 独立发现该缺口不构成需登记的"门失败"**：重生 urg 报告显示
-  `(addr_decode_dync, Toggle)` 合并值 = **92.00% ≥ 90%**，已过门；
-  `config_ongoing_i` 的 2 个死 bin 在分母内如实计入、非 silent
-  exclude，被 8% 余量吸收。`doc/coverage-waivers.md` 抬头明文限定登记
-  面为"有 bin、<90%"——此门不满足，登记反而是无失败 gate 却补一行的
-  思辨性制品（`workflow/discipline.md` rule 2）。**裁决：驳回登记，
-  不改 `doc/coverage-waivers.md`。**
-- **rev 顺带独立发现该模块真正的 <90% 数字另有其人**：Branch 83.33% 唯一
-  残余是 `addr_decode_dync.sv:146` 的 `IF` 语句 else 分支（urg Branch 表
-  `IF 146` = 1/2 covered，`MISSING_ELSE`），条件为
-  `!$isunknown(addr_map_i) && ~config_ongoing_i`——因
-  `config_ongoing_i≡0` 恒不致 false，else 分支唯一触达路径是
-  `addr_map_i` 出现 X，与 `config_ongoing_i` 无关。**REV-024 §2.2 行 6**
-  把这条 Branch 残余笼统归为"地址/rule 多样性→补场景"，orch 独立核对
-  REV-024 原文确认该行**从未提及** `config_ongoing_i`，且该 83.33% 数字
-  自 REV-024 基线（M4 大量地址/rule 多样性加固卡落地后的今天）**分毫未
-  变**——独立证实"更多样地址补场景"这条处方对这个 Branch 分支从未起过、
-  也不可能起作用（X 注入无功能语义，rev 称为 toggle/branch-theater）。
-  这是对 REV-024 一处历史误归因的订正，rev **未越界代为处置**，只 flag
-  给 orch 另派卡。
-- **orch 独立复验**：`doc/coverage-waivers.md` 确认零改动（`git status`
-  无该文件变更）；亲自重新解析 `sim/out/urgReport/mod20.html`——
-  头部汇总 `LINE 100.00/COND 100.00/TOGGLE 92.00/BRANCH 83.33/ASSERT
-  100.00` 与 rev 卡自报逐字一致；Branch 明细表 `TERNARY 105`=2/2、
-  `TERNARY 106`=2/2、`IF 146`=1/2（`MISSING_ELSE`），5/6=83.33% 精确
-  对账；亲读 `doc/review/REV-024.md:126` 确认该行文本原文确实通篇只谈
-  `addr_i`/rule 表 start/end、无 `config_ongoing_i` 字样。
-- `doc/review/REV-028.md` 已写入磁盘（完整推导过程+裁决+分流建议）。
-
-**Not done**
-- IF-146 Branch else 残余（`addr_decode_dync` 真正的 <90% 数字）需独立
-  另派 rev/DV 卡裁决（rev 建议候选 Kind-A：仿真专用 X-sanity 断言守卫、
-  仅 X 注入可达、无功能覆盖意义），本卡不越界代为处置。任务 #16-18、
-  #14、#15 仍未派发。
-
-**Next**
-- 新任务：IF-146 Branch else 独立裁决卡（订正 REV-024 §2.2 行 6 的
-  Branch 归因，评估 Kind-A 登记）。随后继续 #16-18。
-
-**How verified**
-- 见上"orch 独立复验"段——urg HTML 逐字节解析比对 + REV-024 原文亲读 +
-  `git status` 确认 coverage-waivers.md 零改动，均未采信 rev 卡自报
-  数字。
 - `make check`（docs-check + chain audit 无新增 gap）本轮复跑绿；本卡
   未改 RTL/TB，无需重跑回归。
 

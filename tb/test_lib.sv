@@ -617,6 +617,30 @@ class m4_eb01_errbp_test extends base_test;
   endtask
 endclass
 
+// M4-EB02 err_slv decode-error R-channel backpressure (testplan.md M4-EB02,
+// spec §4.2/§4.3/§4.5/§5.1/§7.4/§7.4.5, doc/review/REV-030.md §3 "DV-D") — the
+// read-direction mirror of m4_eb01_errbp_test above. Baseline config (same as
+// M1-01; en_default_mst_port='0 by reset default ⇒ unmapped addresses route to
+// each port's internal err_slv). No config_db knob: the r_ready backpressure
+// is carried on the burst item itself (axi_burst_item.r_backpressure), applied
+// per slave port by slvport_driver. The DECERR judgement is the M3-DE01/
+// M4-EB01 SB_DECERR_* family, reused verbatim (no new expected values).
+class m4_eb02_errbp_test extends base_test;
+  `uvm_component_utils(m4_eb02_errbp_test)
+
+  function new(string name = "m4_eb02_errbp_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m4_eb02_errbp_vseq vseq;
+    phase.raise_objection(this, "m4_eb02_errbp_vseq running");
+    vseq = m4_eb02_errbp_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m4_eb02_errbp_vseq done");
+  endtask
+endclass
+
 // M4-BP02 demux lock-retry FSM + same-bucket in-flight ceiling under W-open
 // stress (testplan.md M4-BP02, spec §5.4.1/§5.4.2/§5.5.1/§5.5.3/§7.4.5).
 // Baseline config (same as M1-01). Two off-by-default responder knobs, both

@@ -97,11 +97,14 @@ class xbar_functional_coverage extends uvm_component;
   } miss_order_e;
 
   // Which slave-port channel was observed held not-ready during the M4-EB01
-  // err_slv B-channel backpressure scenario (cg_errbp). Fed by slvport_monitor's
-  // own external valid/ready observation — never a DUT-internal fifo signal.
-  typedef enum bit {
-    EB_AW_HELD = 1'b0, // aw_valid && !aw_ready: err_slv w_fifo full (input aw stall)
-    EB_W_HELD  = 1'b1  // w_valid  && !w_ready : err_slv b_fifo full (input w stall)
+  // err_slv B-channel backpressure scenario (cg_errbp), or its M4-EB02
+  // R-channel read-direction mirror (doc/review/REV-030.md §3 DV-D). Fed by
+  // slvport_monitor's own external valid/ready observation — never a
+  // DUT-internal fifo signal.
+  typedef enum bit [1:0] {
+    EB_AW_HELD = 2'd0, // aw_valid && !aw_ready: err_slv w_fifo full (input aw stall)
+    EB_W_HELD  = 2'd1, // w_valid  && !w_ready : err_slv b_fifo full (input w stall)
+    EB_AR_HELD = 2'd2  // ar_valid && !ar_ready: err_slv r_fifo full (input ar stall, M4-EB02)
   } errbp_chan_e;
 
   // ---- cg_addr_reconfig (spec §3.4, M2-CFG01) ---------------------------
@@ -268,24 +271,28 @@ class xbar_functional_coverage extends uvm_component;
     }
   endgroup
 
-  // ---- cg_errbp (non-decisional, testplan M4-EB01, spec §4.3/§7.4.5) -------
+  // ---- cg_errbp (non-decisional, testplan M4-EB01/M4-EB02, spec §4.3/§7.4.5)
   // Which slave-port request channel was EVER seen held not-ready — the
   // external image of the port's internal err_slv back-pressuring its input
   // when its B-response fifo is starved (b_ready held low): the b_fifo-full
   // path shows as w_valid && !w_ready, and the further w_fifo-full path as
-  // aw_valid && !aw_ready. Fed by slvport_monitor's own external valid/ready
-  // observation only (no DUT-internal fifo signal — CLAUDE.md input boundary).
-  // Proves the M4-EB01 backpressure stimulus genuinely entered the err_slv
-  // input-side backpressure path (证背压非空转); draws no verdict (spec §7.4.5
-  // red line — the b_fifo depth and the exact aw_ready-drop cycle are never
+  // aw_valid && !aw_ready. The M4-EB02 read-direction mirror (r_ready held
+  // low, doc/review/REV-030.md §3 DV-D) shows as ar_valid && !ar_ready, the
+  // external image of the r_fifo-full path. Fed by slvport_monitor's own
+  // external valid/ready observation only (no DUT-internal fifo signal —
+  // CLAUDE.md input boundary). Proves the M4-EB01/M4-EB02 backpressure
+  // stimulus genuinely entered the err_slv input-side backpressure path
+  // (证背压非空转); draws no verdict (spec §7.4.5 red line — the b_fifo/
+  // r_fifo depth and the exact aw_ready/ar_ready-drop cycle are never
   // asserted). Entered-only bins (a bin at 0 ⇒ that channel never held this
-  // run — expected for every config that sends no sustained err_slv write
-  // stream).
+  // run — expected for every config that sends no sustained err_slv write/
+  // read stream).
   covergroup cg_errbp with function sample(errbp_chan_e chan);
     option.per_instance = 1;
     cp_chan: coverpoint chan {
       bins aw_held = {EB_AW_HELD};
       bins w_held  = {EB_W_HELD};
+      bins ar_held = {EB_AR_HELD};
     }
   endgroup
 
@@ -561,9 +568,9 @@ class xbar_functional_coverage extends uvm_component;
     n_ar_retry++;
   endfunction
 
-  // Driven directly by slvport_monitor's own external aw_valid/aw_ready and
-  // w_valid/w_ready folds — testplan M4-EB01, spec §4.3/§7.4.5. Non-decisional
-  // (see cg_errbp header above).
+  // Driven directly by slvport_monitor's own external aw_valid/aw_ready,
+  // w_valid/w_ready, and ar_valid/ar_ready folds — testplan M4-EB01/M4-EB02,
+  // spec §4.3/§7.4.5. Non-decisional (see cg_errbp header above).
   function void sample_errbp(errbp_chan_e chan);
     cg_errbp.sample(chan);
     n_errbp++;
