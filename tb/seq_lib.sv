@@ -1198,6 +1198,50 @@ class slvport_cfg01_seq extends uvm_sequence #(axi_seq_item);
   endtask
 endclass
 
+// slvport_cfg01_defaultdiv_seq — M2-CFG01 enrichment (REV-026 批准清单 B-3,
+// rule 边界重配多样性; 技术依据 doc/evidence/v0.4.15/M4-toggle-bit-
+// decomposition.md §1"清单B具体化"B段). Not a new address table — a per-
+// slave-port decode-miss write+read pair, judged purely by the SAME shared
+// decode_mst_port()/live-table mechanism slvport_cfg01_seq's own default-
+// port leg already relies on (scoreboard_refmodel C1.5), so whichever
+// default-master-port table is live at each item's own AW/AR accept instant
+// is what gets checked (SPEC-3.3/SPEC-4). `base` is caller-supplied and wave-
+// distinct purely for waveform hygiene (kept off batch1/batch2's own
+// addresses and off the other wave's) — the scoreboard needs no help
+// locating which table applies. `atop` stays at axi_seq_item's own default
+// ('0, axi_txn.sv) — this address is unmapped-but-default-routed, still
+// inside BUG-0032's wide-read env constraint (REV-018), same as
+// slvport_cfg01_seq's own unmapped leg.
+class slvport_cfg01_defaultdiv_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_cfg01_defaultdiv_seq)
+
+  int unsigned            slv_port_idx;
+  xbar_types_pkg::addr_t  base; // caller picks a wave-distinct unmapped base
+
+  function new(string name = "slvport_cfg01_defaultdiv_seq");
+    super.new(name);
+  endfunction
+
+  task automatic send(input bit is_write, input xbar_types_pkg::addr_t addr,
+                      input xbar_types_pkg::id_slv_t id, input axi_pkg::len_t len);
+    axi_seq_item it;
+    it = axi_seq_item::type_id::create(
+        $sformatf("cfg01dd_%0d_%s_%0h", slv_port_idx, is_write ? "w" : "r", addr));
+    start_item(it);
+    it.is_write = is_write;
+    it.addr     = addr;
+    it.len      = len;
+    it.id       = id;
+    if (is_write) fill_wr_payload(it, len);
+    finish_item(it);
+  endtask
+
+  task body();
+    send(1'b1, base,          xbar_types_pkg::id_slv_t'(slv_port_idx),     axi_pkg::len_t'(0));
+    send(1'b0, base + 32'h40, xbar_types_pkg::id_slv_t'(slv_port_idx + 8), axi_pkg::len_t'(0));
+  endtask
+endclass
+
 class m2_cfg01_reconfig_vseq extends uvm_sequence #(uvm_sequence_item);
   `uvm_object_utils(m2_cfg01_reconfig_vseq)
   `uvm_declare_p_sequencer(xbar_vseqr)
@@ -1239,12 +1283,59 @@ class m2_cfg01_reconfig_vseq extends uvm_sequence #(uvm_sequence_item);
     repeat (3) @(posedge cfg_vif.clk_i);
   endtask
 
+  // REV-026 B-3 enrichment — two further default-master-port-only
+  // reconfigurations layered on top of V1 (spec §3.3/§3.4), same idle-window
+  // gate/settle discipline as do_reconfig() above; `addr_map`/`en_default_
+  // mst_port` are left untouched (still V1) so this never interacts with the
+  // rule table itself. See xbar_types_pkg.sv's DEFAULT_MST_V2 comment for why
+  // this specific pair (complement, then revert) is what closes
+  // addr_decode_dync's `default_idx_i` toggle residual.
+  task automatic do_reconfig_v2();
+    do @(posedge cfg_vif.clk_i); while (!cfg_vif.all_ax_idle);
+    cfg_vif.default_mst_port <= xbar_types_pkg::DEFAULT_MST_V2;
+    repeat (3) @(posedge cfg_vif.clk_i);
+  endtask
+
+  task automatic do_reconfig_v3();
+    do @(posedge cfg_vif.clk_i); while (!cfg_vif.all_ax_idle);
+    cfg_vif.default_mst_port <= xbar_types_pkg::DEFAULT_MST_V1; // revert
+    repeat (3) @(posedge cfg_vif.clk_i);
+  endtask
+
+  // One decode-miss write+read pair per slave port, judged against whichever
+  // default-master-port table is live (`base` keeps each wave's addresses
+  // distinct — see slvport_cfg01_defaultdiv_seq's header comment).
+  task automatic run_defaultdiv_batch(input xbar_types_pkg::addr_t base);
+    for (int unsigned i = 0; i < xbar_types_pkg::NO_SLV_PORTS; i++) begin
+      automatic int unsigned ii = i;
+      fork
+        begin
+          slvport_cfg01_defaultdiv_seq s;
+          s = slvport_cfg01_defaultdiv_seq::type_id::create(
+              $sformatf("cfg01dd_seq_%0d", ii));
+          s.slv_port_idx = ii;
+          s.base         = base + xbar_types_pkg::addr_t'(ii) * 32'h100;
+          s.start(p_sequencer.slv_sqr[ii]);
+        end
+      join_none
+    end
+    wait fork;
+  endtask
+
   task body();
     if (cfg_vif == null)
       `uvm_fatal("NOCFGVIF", "m2_cfg01_reconfig_vseq: cfg_vif not set")
     run_batch(1'b0); // batch 1 — routed by V0
     do_reconfig();   // one runtime reconfiguration in the idle window
     run_batch(1'b1); // batch 2 — routed by V1
+    // REV-026 B-3 enrichment (additive, batch1/do_reconfig/batch2 above
+    // unchanged): a second and third default-master-port-only reconfiguration,
+    // each followed by a small validated wave, closing addr_decode_dync's
+    // `default_idx_i` toggle gap (see DEFAULT_MST_V2's comment).
+    do_reconfig_v2();
+    run_defaultdiv_batch(32'h9000_1000); // routed by V2 (complement of V1)
+    do_reconfig_v3();
+    run_defaultdiv_batch(32'h9000_2000); // routed by V3 (= V1, round-trip)
   endtask
 endclass
 

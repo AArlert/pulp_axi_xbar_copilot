@@ -1,4 +1,57 @@
 # Work log archive
+## [0.4.27] 2026-08-01 REV-026 加固卡 D-1 落地——M1-01 组收官；DV 卡诚实标出三处结构性摸不到的残余，新登记三张后续卡
+
+**背景**：REV-026 批准清单 D-1（简单 ready 翻转，条件化于 P0 残余）。
+派卡前 orch 用 urg 定位到 axi_demux_simple 的全部 COND 残余集中在一个
+ATOP×ar_id_cnt_full 交叉表达式，怀疑 D-1 原始设想（简单 ready 翻转）
+碰不到它，明确要求 DV 先核实、允许如实报告"此路不通"而非硬凑数字。
+
+**Done**
+- **DV 卡独立核实**：确认 orch 的怀疑成立——axi_demux_simple COND 82.76%
+  的全部 5 个未覆盖 bin 确实 100% 落在同一表达式，D-1 碰不到；但同时发现
+  D-1 确实还有两处真实、可闭合的残余（`axi_mux`/`axi_demux_simple` 的
+  `w_ready`/`r_ready` 从未独立翻转过）——**不是全有全无，落地了能落地的
+  部分，如实标注碰不到的部分**。
+- **`tb/mstport_agent.sv`**：新增独立旋钮 `bp_enable_w`（镜像既有
+  `bp_enable`/`bp_enable_ar`，默认关闭），对 `w_ready` 施加周期性背压。
+  **`tb/slvport_agent.sv`**：新增 `resp_ready_delay` 字段驱动的 `r_ready`
+  有界拖延，**与该笔事务自己的 `r_valid`（ID 限定）同步**而非盲目提前
+  脉冲（说明写得很仔细：流水级会把 AR 接受和 R 到达错开，提前起须的
+  拖延窗口可能在 R 真正出现前就结束）。**`tb/seq_lib.sv`**：新增
+  `slvport_readydelay_seq`，作为 M1-01 第五趟 fanout。
+- **DV 卡的工程纪律亮点**：曾实现写方向 `b_ready` 拖延，urg 核实发现
+  该 bin 已被 M4-EB01 顺带闭合、新代码零新增覆盖，**主动删除死代码**
+  （而非留着凑行数）——同 `slvport_rdata_sat_seq` 当初"读专用、不加写腿"
+  的判断一致。
+- **orch 独立复验**：从 `make clean` 开始独立整跑全量回归确认
+  **29/29 PASS**；独立核对 `axi_mux` Toggle 88.01%→**88.15%**、
+  `axi_demux_simple` Toggle 92.48%→**92.73%**、COND 维持 82.76%（符合
+  预期，本卡不动这个）——与 DV 卡自报数字完全一致。
+- **新登记三张后续任务**（DV 卡诚实标出，非缺陷，均为覆盖率缺口）：
+  (1) `axi_demux_simple` COND 残余——需 C-2（ATOP 命中地址）× BP02/BP03
+  式饱和的交叉构造，现有任何已批准卡范围都不含；(2) `axi_mux` 内部
+  fabric 级 `b_ready`/`r_ready`（`gen_mux.slv_b_readies`/`slv_r_readies`）
+  ——被 demux→mux 间 `axi_multicut` 2 级流水缓冲吸收，M1-01 单笔在飞的
+  构造结构性摸不到，需要"同端口 ≥2 笔响应同时挂起"的持续背压，量级大于
+  D-1；(3) `axi_err_slv` `ar_ready`（Toggle 68.30%，此前未被点名）——
+  需要 M4-EB01 的读方向对偶。
+- Evidence 刷新：`doc/evidence/v0.4.26/M1-01.log`。
+
+**Not done**
+- M1-01 组（A-1/A2/B-1/C-1/D-1）全部完成，**M1-01 组收官**。REV-026
+  剩余四项（B-2/E-1/B-3/C-2/F-1，注：C-2 现与新任务#16 有交叉，落地时
+  一并考虑）+ 新增三项后续任务 + BUG-0048 fixer 卡均未派发。
+
+**Next**
+- 转向 M3-DE01 组：B-2（err_slv 未命中地址多样性）→ E-1（err_slv
+  id[4:0] 多样性）。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对，
+  均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap。
+
 ## [0.4.26] 2026-08-01 REV-026 加固卡 C-1 落地——M1-01 五维 sideband 加宽 + KILL-0005 注伤自证，axi_demux_simple Toggle 转正（≥90%）
 
 **背景**：REV-026 批准清单 C-1（attrs/burst[1]/len/strb/user，(a)→M1-01），

@@ -282,6 +282,21 @@ package xbar_types_pkg;
   localparam logic [NO_SLV_PORTS-1:0][MST_PORT_IDX_W-1:0] DEFAULT_MST_V1 =
       gen_default_mst_v1();
 
+  // ---- M2-CFG01 second reconfiguration wave (REV-026 批准清单 B-3, rule 边界
+  // 重配多样性) — a further, default-master-port-only runtime reconfiguration
+  // on top of V1 (spec §3.3/§3.4: "default master port ... 同样运行时可变"),
+  // not a new address table. DV urg 核实（合并基线 addr_decode_dync）：
+  // `default_idx_i` 是每端口一次性从复位 0 单向抬升到 `DEFAULT_MST_V1[i]=i`
+  // ——每个被抬升过的位从未观察到 1->0 方向，port0（i=0）的三位甚至从未
+  // 偏离过 0（双向皆缺）。`DEFAULT_MST_V2` 把每端口索引取成 `DEFAULT_MST_V1`
+  // 对应值的按位取反：`MST_PORT_IDX_W`=3 位在基线 `NoMstPorts`=8 下恰好
+  // 铺满，任何取反结果仍落在 [0, NoMstPorts) 内、仍是合法 master 端口索引
+  // （无需另行钉一份基线专属表）。随后一次 V1 复原（同一 `DEFAULT_MST_V1`
+  // 值，round-trip）让每一位都补上此前从未发生过的另一方向，两步合起来
+  // 闭合 V1 单向抬升遗留的每端口每一位缺口。
+  localparam logic [NO_SLV_PORTS-1:0][MST_PORT_IDX_W-1:0] DEFAULT_MST_V2 =
+      ~DEFAULT_MST_V1;
+
   // ---- M4-RC01 default-master-port enable->close round trip (spec §3.4,
   // items 1/2 — SPEC-3.4.1/SPEC-3.4.2) -------------------------------------
   // Same per-port-distinct-index shape as EN_DEFAULT_V1/DEFAULT_MST_V1 (every
