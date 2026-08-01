@@ -2,6 +2,42 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.20] 2026-08-01 feature-matrix 补齐 6 条 M4 行（chain audit gap 清零）+ P0 全量合并重测已在后台起跑
+
+**背景**：用户授权 orch 全权自动推进 M4 到极致，每闭环推送，不中途请示。
+按 REV-026 汇总清单，第一步是全体加固卡的强制前置——P0 merge-remeasure
+（`make regress COV=1` 全量重跑，供后续各条 (a) 加固定精确范围）；与此
+并行，先处理一张互不冲突（纯文档，不碰 tb/、不跑仿真）的 L0 卡，避免
+干等。
+
+**Done**
+- **L0 文档卡（haiku，无 rev）**：`doc/feature-matrix.md` 补齐 F-M4-01~06
+  六行，对应 M4-RC01/AW01/OV01/FT01/EB01/BP02。orch 独立复核：`git diff`
+  确认只改了这一个文件、6 行纯新增；`make check` 复跑确认 chain audit 的
+  "scenarios in no feature-matrix row" gap 由 6→0，无新增 gap 类别。
+- **P0 merge-remeasure 已在后台发起**：`cd sim && make clean && make
+  regress COV=1`（28 个场景，含 0.4.18 新增的 M4-EB01/BP02）。用于给
+  REV-026 批准清单里的 A-1/A-2/B-1/B-2/B-3/C-1/C-2/D-1/E-1/F-1 十项
+  (a) 加固卡定精确残余范围（先合并再定范围，REV-026 §汇总："这是 M4
+  出口的正确下一动作"）。
+
+**Not done**
+- P0 合并重测本轮尚未跑完（后台运行中，跨轮次继续等待，完成后独立核对
+  真实残余数字，非采信任何转述）。
+- REV-026 批准清单里的十项 (a) 加固卡、REV-027 的两张读/写向补场景卡、
+  以及最终 M4 签核卡均未派发——依赖 P0 结果定范围，本轮暂不能派。
+
+**Next**
+- P0 跑完后：逐条核对 v0.4.13 旧 signoff 残余风险表 + M4-toggle-bit-
+  decomposition.md 的六类缺口，在当前（含 EB01/BP02/CW-006/CW-007）
+  基线上哪些已经关闭、哪些仍残留，据此定十项加固卡的精确 scope，逐条
+  派 DV 卡（同一目标 testplan 行的多项加固仍按 REV-026 条件 6 拆成独立
+  小闭环，不堆 mega-edit），每卡独立核实+evidence+closeout+push。
+
+**How verified**
+- feature-matrix 补行：`make check` chain audit 段落亲跑核对（见上）。
+- `make selftest` 本轮收尾前复跑（见下）。
+
 ## [0.4.19] 2026-08-01 REV-027——w_open[3] 覆盖率豁免驳回（非结构不可达，是激励产物），顺带查出 M4-BP02 只闭合 AW 侧、AR 侧对偶缺口仍开
 
 **背景**：0.4.18 遗留的 open risk——DV 卡称 w_open[3]（值≥8）在基线
@@ -141,69 +177,4 @@ FSM+ID 计数饱和叠加压力）互相独立、非 merge-gated，用两个并�
 - 两张 DV 卡各自独立 worktree 内均已验证转绿（orch 亲跑，非采信自报）；
   合并后主目录里对两个场景分别单跑复核仍 CLEAN；全量回归 28/28（含
   M4-EB01/M4-BP02），交叉核对 `sim/result_summary.txt`。
-
-## [0.4.17] 2026-08-01 清单 B 分诊 + rev 门禁应用——注册 M4-EB01/M4-BP02，登记 CW-006/007；orch 独立复核纠正"P0 merge-remeasure"前提错误
-
-**背景**：用 Workflow 派 arch 把清单 B（Toggle 定向覆盖缺口）分诊成"(a) 扩充
-既有场景/(b) 新 testplan 行"两类提案，再派独立 rev 门禁审核（REV-026，
-CONDITIONAL PASS）。
-
-**Done**
-- **arch 分诊**：清单 B 六类（A-F）逐条给出 (a)/(b) 归属 + 具体构造思路；
-  新增两条 testplan 行草案（M4-EB01：err_slv B 通道背压，非 merge-gated；
-  M4-BP02：demux 锁定 FSM + ID 计数饱和，arch 原判 merge-gated）；
-  `rst_ni` 运行中复位给出二选一建议（范围豁免 vs 造一个"空闲窗口热复位"
-  新场景），不自行拍板；顺手核实 size[2] 转正前置（全配置 DATA_W=64）。
-- **REV-026（独立 rev 实例）门禁**：CONDITIONAL PASS。批准 A-1/A-2/B-1/
-  B-2/B-3/E-1（(a) 加固，无新判决维度）；C-1 需修改后批准（预测器扩展
-  须做 KILL 注伤自证+期望锚 AXI4 非 RTL，enrichment 须显式列入 testplan
-  行禁静默改激励）；C-2 批准附残余上报纪律（exotic ATOP 编码走
-  SPEC_ISSUE，不现场解释）；M4-EB01 批准可直接派；M4-BP02 批准为条件
-  注册；**独立裁决 rst_ni**——采纳范围豁免（CW-006），**明确驳回**
-  "造一个空闲窗口热复位场景"这个方案（判定其为"toggle-theater"：构造性
-  保证零在飞、不测试任何有意义的复位语义，纯粹为翻一个 toggle 位造场景，
-  违反"目标即门"纪律）；size[2] 独立复核确认转正前置已解。
-- **orch 独立复验并发现一处重要premise错误**：REV-026 把"P0 merge-
-  remeasure"定为全体加固卡的强制前置（理由：怀疑 M2-TL01/TL02/M3-TL01/
-  M4-AW01/M3-DE02/M2-CFG01 等场景的覆盖率数字未被合并进基线报告）。
-  orch 独立核查 `sim/Makefile` `COV_DIR` 解析逻辑 + `sim/regress/
-  regress.list` + `doc/testplan.md` 各行拓扑列，证实：**这个前提是错的**
-  ——这 6 个场景全部是 baseline 拓扑（`COV_DIR` 默认走同一个
-  `out/cov.vdb`），且全部在 `regress.list` 里，`make regress COV=1`
-  会把它们的覆盖率累积合并进同一份数据库；`doc/evidence/v0.4.15/
-  M4-toggle-bit-decomposition.md` 引用的 `urgReport_baseline` 报告本就是
-  这次合并后的产物（`make cov TEST=m1_01_smoke_test` 只是借用一个基线
-  拓扑成员的名字去解析已合并数据库的路径，不是"只测了 m1_01 一个"）。
-  **结论：不需要另跑一次"合并重测"——现有残余数字已经是真实合并后数字**，
-  `lock_aw/ar` FSM 与 `w_open[3:2]` 的缺口是确凿的、可以直接注册
-  M4-BP02，不必等待一个实际上已经做过的步骤。
-- **orch 应用**：`doc/testplan.md` 注册 M4-EB01（🔲）+ M4-BP02（🔲，
-  行文本按 arch 草案 + 前提纠正说明）；`doc/coverage-waivers.md` 新增
-  CW-006（`rst_ni` 运行中复位范围豁免）+ CW-007（`size[2]` 总线宽度上限
-  位，转正）；`doc/review/REV-026.md` 落盘。
-- `make check`/`make selftest`（61/61）复跑绿。
-
-**Not done**
-- M4-EB01/M4-BP02 均只是**注册**（🔲），尚未实现——下一步要派 DV 卡写场景。
-- 清单 B 的 (a) 类加固（A-1/A-2/B-1/B-2/B-3/C-1/C-2/D-1/E-1/F-1）均未
-  动手——已有明确构造思路，等待 DV 卡逐条落地。
-- CW-006 平行的 spec §2.3 条款订正（P-REV026-1）未走——REV-026 明确这是
-  独立门禁、非 CW-006 生效阻塞，可稍后处理。
-- `spill_register` tie-off 的 Kind-A 论证仍待建档。
-
-**Next**
-- 派多个 DV 卡实现批准清单：M4-EB01/M4-BP02 两条新场景（相互独立，可
-  并行）；M1-01 目标的多项 (a) 加固（A-1+A-2/B-1/C-1/D-1）因同时触及
-  同一份激励代码，按"小闭环、非并行"顺序处理；M2-AT01（C-2）/M3-DE01
-  （B-2+E-1）/M2-CFG01+M3-CFG02（B-3+F-1）等目标不同场景的加固可与
-  M4-EB01/M4-BP02 并行。
-
-**How verified**
-- `make check`：docs-check passed，chain audit 无新增缺口（testplan 新增
-  2 行计入既有 feature-matrix gap 类别，非新增 gap 类型）。
-- `make selftest`：61/61 OK。
-- orch 独立核查 `sim/Makefile` COV_DIR 解析逻辑（`ifeq ($(TEST),
-  upstream_sanity)` 分支外一律走默认 `out/cov.vdb`）+ `grep` 确认 6 个
-  场景均在 `regress.list` + `doc/testplan.md` 拓扑列均为 baseline，
-  纠正 REV-026 的 merge-premise 错误，证据充分、可复核。
 

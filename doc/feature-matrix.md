@@ -27,3 +27,9 @@ feature → deliverable → testplan scenarios. Delivery/verification are comput
 | F-M3-08 | M3 | 多配置构建与回归基建：配置点由 TEST 名唯一选定、每配置独立构建产物、运行日志自报生效的全部 `Cfg` 字段与模块参数，基线配置逐位不变（M0-M2 既有证据保持可复现） | tb_top | M3-CF01, M3-CF02, M3-CF03, M3-CF04 |
 | F-M3-09 | M3 | 配置矩阵维度覆盖（SPEC-0 行 3）：拓扑 1×N / N×1 / 4×4、`LatencyMode` NO_LATENCY / CUT_ALL_PORTS（CUT_ALL_AX 由基线承担）、`UniqueIds=1`、`ATOPs=0`、稀疏 `Connectivity`——每个维度取值至少出现在一个配置点 | tb_top+uvm_env | M3-CF01, M3-CF02, M3-CF03, M3-CF04 |
 | F-M3-10 | M3 | ATOP 原子读的跨方向假冲突 stall：条款化后的定向守卫——该交互只影响是否被 stall、不影响功能正确性，保序判据对它不报违反是有意的范围边界（SPEC-6.5/5.2.5，BUG-0012 守卫） | uvm_env+functional_coverage | M3-AT02 |
+| F-M4-01 | M4 | default master port 运行时动态关闭与降位：已使能的 default 端口在 AW/AR 空闲窗口关闭或改索引，原经该端口路由的未命中事务改走 err_slv，前后两批事务按生效时刻配置正确路由（SPEC-3.4.2、BUG-0025/BUG-0031 守卫） | uvm_env+scoreboard_refmodel | M4-RC01 |
+| F-M4-02 | M4 | AW 通道选定后下游背压的锁定-重试机制：mux 入侧背压下路由决策锁定、下拍重试不改路由，背压下路由/数据/W burst 同序无交织正确，无跨源仲裁序断言（SPEC-5.5.1/5.5.4、REV-006 守卫） | uvm_env+scoreboard_refmodel | M4-AW01 |
+| F-M4-03 | M4 | 地址表重叠 rule 优先级与路由正确性：重叠区间按高位 rule 胜出，路由/ID 前缀/响应回送/数据完整性正确，无跨端口错送（SPEC-3.1.3） | uvm_env+scoreboard_refmodel | M4-OV01 |
+| F-M4-04 | M4 | W 通道直通模式（FallThrough）：W beat 与对应 AW 同拍被接受，功能等价于非直通模式，延迟不敏感判据、无固定时序断言（SPEC-7.3.1、SPEC-7.4.3） | uvm_env+scoreboard_refmodel | M4-FT01 |
+| F-M4-05 | M4 | err_slv 写响应背压传导与接收侧稳定性：B 响应缓冲堆积至结构容量上界、反压 aw_ready，释放后单拍 B(DECERR) 无丢失重复、响应回送正确（SPEC-4.2/4.3/5.1、BUG-0025 守卫） | uvm_env+scoreboard_refmodel | M4-EB01 |
+| F-M4-06 | M4 | 多层压力叠加：W burst 通道饱和（≥3 个）+ AW 锁定-重试 + 同桶事务上限聚合、路由/数据/wstrb/wlast/响应/完成序全部正确无饿死，结构覆盖动机、无内部 FSM 状态/计数具体值断言（SPEC-5.3/5.4.1/5.5.1/5.5.3、BUG-0016/REV-007 守卫） | uvm_env+scoreboard_refmodel | M4-BP02 |
