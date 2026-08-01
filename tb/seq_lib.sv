@@ -691,7 +691,10 @@ endclass
 // §6.3/§6.4). Encoding from vendor/axi/src/axi_pkg.sv (the DV parameter-
 // definition source): an atomic load is aw.atop[5:4]=ATOP_ATOMICLOAD, with
 // aw.atop[ATOP_R_RESP] (= bit 5) set — the transaction owes its port both a
-// B and an R (spec §6.3).
+// B and an R (spec §6.3). **Enrichment (REV-026 批准清单 C-2)**: every draw
+// below sweeps ATOP[3:0] (endianness × opcode) across the full atomic-load
+// subset instead of one fixed encoding — see `load_encoding()` below for
+// the spec basis and the atomic-load/BUG-0044 scope boundary.
 //
 // Phase A: each port issues two standalone atomic loads (different target
 // master ports). The blocking driver keeps them single-outstanding, so the
@@ -715,9 +718,41 @@ class slvport_at01_atop_seq extends uvm_sequence #(axi_seq_item);
 
   int unsigned slv_port_idx;
 
-  // ATOP[5:4]=ATOMICLOAD, ATOP[3]=LITTLE_END, ATOP[2:0]=ADD (axi_pkg.sv).
-  localparam axi_pkg::atop_t ATOP_LOAD_ADD =
-      {axi_pkg::ATOP_ATOMICLOAD, axi_pkg::ATOP_LITTLE_END, axi_pkg::ATOP_ADD};
+  // ATOP encoding (REV-026 "C-2" toggle-residual hardening; technical basis
+  // doc/evidence/v0.4.15/M4-toggle-bit-decomposition.md §1 row "axi_mux
+  // aw.atop[5:0]([4:0] 恒定，[5]仅0→1)" — every prior draw here used the one
+  // fixed encoding ATOP[5:4]=ATOMICLOAD/ATOP[3]=LITTLE_END/ATOP[2:0]=ADD,
+  // leaving ATOP[3:0] toggle-closed on one value). `load_encoding()` stays
+  // inside the atomic-load subset ATOP[5:4]=ATOP_ATOMICLOAD — that is the
+  // only subset spec §6.3 defines a response obligation for (B and R both
+  // returned), and §6.3 draws no distinction by opcode (`ATOP[2:0]`,
+  // axi_pkg.sv ATOP_ADD..ATOP_UMIN, values 3'b000-3'b111) or endianness
+  // (`ATOP[3]`, ATOP_LITTLE_END/ATOP_BIG_END, values 1'b0/1'b1) — so
+  // sweeping `idx4` through its full 4-bit range widens the existing §6.3
+  // judgment (still just "B+R came back", scoreboard_refmodel.sv:534
+  // gates only on ATOP[5]=ATOP_R_RESP) without adding a new one. The
+  // remaining ATOP subtypes — atomicstore (`ATOP[5:4]=2'b01`) and the
+  // atomicswap/atomiccompare full-6-bit encodings `6'b11000_` — stay out of
+  // scope: spec §6 has no response-obligation clause for them (BUG-0044,
+  // ACCEPTED@M5); this card does not touch that gap, only the atomic-load
+  // subset residual REV-026 C-2 named.
+  function automatic axi_pkg::atop_t load_encoding(input logic [3:0] idx4);
+    return {axi_pkg::ATOP_ATOMICLOAD, idx4};
+  endfunction
+
+  // Phase B per-port ATOP[3:0] draw (baseline-only class, NO_SLV_PORTS=6 —
+  // testplan.md M2-AT01 config column). A within-instance toggle 1->0 needs
+  // two *consecutive* draws on the same port's own AW.atop wire (VCS toggle
+  // bins are per-simulation-run transitions, not cross-port); a plain
+  // ascending offset (e.g. `(slv_port_idx+12)%16`) leaves every port's
+  // 3-draw sequence monotonic non-decreasing, so ATOP[2] never falls on any
+  // single port even though it rises. This table keeps the same "Phase A
+  // (0..11) union Phase B spans the missing 12..15" full-0..15 coverage,
+  // but places port 2's Phase B draw at index 1 (ATOP[2]=0) right after its
+  // two ATOP[2]=1 Phase-A draws (idx 4,5) — and port 4's at index 3
+  // (ATOP[3]=0) after its two ATOP[3]=1 Phase-A draws (idx 8,9) — so both
+  // bits close their 1->0 direction, not just 0->1.
+  localparam logic [3:0] PHASE_B_IDX4 [6] = '{12, 13, 1, 14, 3, 15};
 
   function new(string name = "slvport_at01_atop_seq");
     super.new(name);
@@ -733,7 +768,12 @@ class slvport_at01_atop_seq extends uvm_sequence #(axi_seq_item);
           $sformatf("at01a_%0d_%0d", slv_port_idx, k));
       start_item(item);
       item.is_write = 1'b1;
-      item.atop     = ATOP_LOAD_ADD;
+      // (slv_port_idx*2+k) mod 16 spans all 6 ports' two Phase-A draws
+      // (0..11) — combined with Phase B's offset draw below, all 16
+      // ATOP[3:0] combinations in the atomic-load subset are exercised at
+      // least once across the port fanout (deterministic, not invented:
+      // every value is a legal atomic-load ATOP[3:0] per axi_pkg.sv).
+      item.atop     = load_encoding(4'((slv_port_idx * 2 + k) % 16));
       item.addr     = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
                       + 32'h0000_0600
                       + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40
@@ -765,7 +805,10 @@ class slvport_at01_atop_seq extends uvm_sequence #(axi_seq_item);
       p.second_item = axi_seq_item::type_id::create(
           $sformatf("at01b_%0d_b", slv_port_idx));
       p.second_item.is_write = 1'b1;
-      p.second_item.atop     = ATOP_LOAD_ADD;
+      // PHASE_B_IDX4 (see field header above): completes the full 0..15
+      // ATOP[3:0] sweep and closes the 1->0 toggle direction on ATOP[2]/[3]
+      // that a plain ascending offset structurally cannot reach.
+      p.second_item.atop     = load_encoding(PHASE_B_IDX4[slv_port_idx]);
       p.second_item.id       = xbar_types_pkg::id_slv_t'(
           {2'd0, 3'((slv_port_idx + 3) % 8)});
       p.second_item.addr     = xbar_types_pkg::addr_t'(tgt)
