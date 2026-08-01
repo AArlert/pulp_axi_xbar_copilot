@@ -13,7 +13,11 @@
 // slave port onto the virtual sequencer's per-port sub-sequencers, so
 // traffic from different slave ports is concurrent (exercising the
 // crossbar's cross-port arbitration, not just serial single-port
-// transactions).
+// transactions). It then runs a second fanout pass of
+// slvport_rdata_sat_seq (REV-026 A-1/A-2 enrichment, see that class'
+// own header comment) — address-mirror low/high saturating reads, added
+// on top of the original per-port traffic rather than replacing any of
+// it.
 
 // ----------------------------------------------------------------------------
 // Shared stimulus helpers (doc/code-suggestion.md 2.1 / 2.2). Both are pure
@@ -110,6 +114,66 @@ class fanout_per_slv #(type SEQ_T = slvport_basic_seq);
   endtask
 endclass
 
+// slvport_rdata_sat_seq — M1-01 enrichment (REV-026 "A-1/A-2" merged card;
+// technical basis doc/evidence/v0.4.15/M4-toggle-bit-decomposition.md §1
+// "清单B具体化" A段): axi_mux `mst_resp_i.r.data[63:0]` and axi_demux_simple
+// `slv_resp_o.r.data[63:0]` mirror the AR address one-for-one
+// (xbar_types_pkg::predict_beat_data returns `{beat_a,beat_a}`, spec §1 —
+// this env's deterministic read-data generator, not a DUT-specific
+// formula), so toggle coverage on those two signals is closed by address
+// diversity rather than independent data randomization. For every target
+// master port this issues single-beat (AxLEN=0, so no per-beat address
+// math is needed beyond the start address itself) reads at that port's
+// region low-saturation address (every region-internal address bit 0) and
+// high-saturation address (every region-internal bit 1, down to the
+// beat-size alignment boundary) — both still decode-table hits (uvm_env.md
+// C2.4, same happy-path rule as slvport_basic_seq), so no new judgement
+// dimension is introduced (SPEC-1/SPEC-5.1 unchanged). The lo/hi/lo order
+// (not just one lo-then-hi pair) is deliberate: a single pair only proves
+// one transition direction (0->1) reached the target signal — issuing
+// low->high->low from this same source is what makes *both* toggle
+// directions self-contained within this sequence's own program order,
+// independent of how other slave ports' concurrent traffic happens to
+// interleave with it. Read-only: axi_mux `mst_req_o.w.data[63:0]` is
+// already 100% covered (M4-toggle-bit-decomposition.md §1), so no write
+// leg is added.
+class slvport_rdata_sat_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_rdata_sat_seq)
+
+  int unsigned slv_port_idx;
+
+  function new(string name = "slvport_rdata_sat_seq");
+    super.new(name);
+  endfunction
+
+  task automatic send_read(input xbar_types_pkg::addr_t addr,
+                            input int unsigned m, input string tag);
+    axi_seq_item it;
+    it = axi_seq_item::type_id::create(
+        $sformatf("rdsat_%s_%0d_%0d", tag, slv_port_idx, m));
+    start_item(it);
+    it.is_write = 1'b0;
+    it.addr     = addr;
+    it.len      = axi_pkg::len_t'(0);
+    it.id       = xbar_types_pkg::id_slv_t'($urandom_range(0, 31));
+    finish_item(it);
+  endtask
+
+  task body();
+    for (int unsigned m = 0; m < xbar_types_pkg::NO_MST_PORTS; m++) begin
+      xbar_types_pkg::addr_t lo_addr, hi_addr;
+
+      lo_addr = xbar_types_pkg::addr_t'(m) * xbar_types_pkg::REGION_SIZE;
+      hi_addr = lo_addr + xbar_types_pkg::REGION_SIZE
+                - xbar_types_pkg::addr_t'(xbar_types_pkg::STRB_W);
+
+      send_read(lo_addr, m, "lo0");
+      send_read(hi_addr, m, "hi");
+      send_read(lo_addr, m, "lo1");
+    end
+  endtask
+endclass
+
 class m1_01_smoke_vseq extends uvm_sequence #(uvm_sequence_item);
   `uvm_object_utils(m1_01_smoke_vseq)
   `uvm_declare_p_sequencer(xbar_vseqr)
@@ -120,6 +184,7 @@ class m1_01_smoke_vseq extends uvm_sequence #(uvm_sequence_item);
 
   task body();
     fanout_per_slv#(slvport_basic_seq)::run(p_sequencer, "slv_seq");
+    fanout_per_slv#(slvport_rdata_sat_seq)::run(p_sequencer, "slv_rdsat_seq");
   endtask
 endclass
 

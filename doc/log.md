@@ -2,6 +2,59 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.24] 2026-08-01 REV-026 加固卡 A-1+A-2 落地——M1-01 叠加地址镜像饱和读，axi_mux/demux r.data toggle 大幅收敛；顺手登记 BUG-0048（lint 基线过期）
+
+**背景**：REV-026 批准清单 A-1/A-2（r.data 饱和，(a)→M1-01 合并卡）。技术
+依据 M4-toggle-bit-decomposition.md：本环境读数据=地址镜像
+（`predict_beat_data={beat_a,beat_a}`），故 all-0/all-1 饱和读序列即可
+闭合 `axi_mux mst_resp_i.r.data[63:0]`/`axi_demux_simple
+slv_resp_o.r.data[63:0]` 的逐位 toggle 缺口。
+
+**Done**
+- **`tb/seq_lib.sv`**：新增 `slvport_rdata_sat_seq`，在 M1-01 既有激励
+  **之上叠加**（非替换）第二轮 fanout：每 slave 端口对每 master 端口各发
+  低饱和（区间内地址位全 0）→高饱和（全 1）→低饱和的单拍读序列——
+  lo/hi/lo 三段而非单一 lo→hi 对是刻意的：单一对只能证明一个 toggle
+  方向，三段序列自身程序序即可独立完成双向翻转，不依赖其他 slave 端口
+  并发流量的偶然交织。
+- **testplan M1-01 行**按 REV-026 条件 2 显式列出 enrichment 维度文本
+  （不是静默替换）。
+- **orch 独立复验**（不采信 DV 卡自报）：`git diff` 确认改动只加不改
+  （原 `slvport_basic_seq` 那趟 fanout 一字未动）；从 `make clean` 开始
+  独立整跑全量回归确认 **29/29 PASS**；亲自生成 merged urg 报告，独立
+  核对 `axi_mux` Toggle **62.55%→73.49%**、`axi_demux_simple` Toggle
+  **72.56%→77.07%**——均为真实、显著提升，均未到 90%（DV 卡如实报告
+  残余：`axi_mux` 剩 8 位是窄突发字节对齐位（C-1 范围）+ 2 位是仅
+  M3-DE02/M4-RC01 default-port 路由才会翻转的地址位（不同场景范围，
+  按"小闭环不堆 mega-edit"纪律未强行在本卡内解决），不为凑数字勉强）。
+- Evidence 刷新：`doc/evidence/v0.4.23/M1-01.log`。
+- **顺手登记 BUG-0048（TOOL_ENV，OPEN）**：DV 卡按纪律对自己改动的
+  `tb/seq_lib.sv` 跑 `lint-diff` 做尽职检查，发现 `doc/lint-baseline.md`
+  自 BUG-0040 的 2026-07-31 全量重同步后，六次 tb/ 落地（M4-EB01/BP02/
+  BP02-w_open3-fix/BP03/本卡）从未重跑重同步步骤，累积 62-77 个新站点
+  （0 新类别）。`git stash` 隔离确认与本卡自身改动无关、是既存漂移
+  （BUG-0040 自己的 guard 早已预告"未来若不重跑会假绿"，这条正是该预告
+  应验）。**orch 独立复核**：亲跑 `cd sim && make clean && make lint-diff
+  TEST=m1_01_smoke_test`（本卡改动仍在工作区）确认 77 个新站点，数字
+  与登记一致，非虚报。不阻塞 M4 覆盖率工作（lint 不在 `make check`/
+  `make selftest` 门禁内）；已建后续 fixer 卡任务（closer≠fixer，逐站点
+  分诊）。
+
+**Not done**
+- REV-026 剩余九项 (a)/(b) 加固卡（B-1/C-1/D-1/B-2/E-1/B-3/C-2/F-1）+
+  BUG-0048 fixer 卡均未派发。
+
+**Next**
+- 继续 M1-01 组：B-1（地址饱和/rule 多样性）→ C-1（sideband 属性/WRAP/
+  长突发/稀疏 strb，含 KILL 注伤自证）→ D-1（ready-delay 分布，视残余
+  决定是否仍需要）。各自独立小闭环。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对 +
+  BUG-0048 亲自复现，均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap。
+
 ## [0.4.23] 2026-08-01 REV-027 加固卡 B 落地——新场景 M4-BP03（AR 侧对偶），五件套一次性转正
 
 **背景**：REV-027 §5「加固卡 B」+ M4-P0-remeasure.md §3 精确定位：
@@ -99,44 +152,4 @@ M4-BP02 是纯写场景，AR 侧对偶（`lock_ar`/`ar_id_cnt_full` 及其伴随
   独立复核，均未采信 DV 卡自报数字。
 - `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
   gap 类别。
-
-## [0.4.21] 2026-08-01 P0 全量合并重测完成，精确核出十项加固卡当前真实残余（doc/evidence/v0.4.20/M4-P0-remeasure.md）
-
-**背景**：REV-026 强制要求全体 (a) 加固卡派发前先做一次全量 COV=1 合并
-重测，用当前（含 M4-EB01/BP02/CW-006/007 落地后）真实数字定各卡精确
-scope，而非沿用 v0.4.13 旧 signoff 的过时残余风险表。
-
-**Done**
-- `cd sim && make clean && make regress COV=1`：**28/28 PASS**（含全部
-  M0-M4 场景）。baseline 拓扑合并报告（22 场景）+ cfgD 独立报告，逐模块
-  对照旧 v0.4.13 残余风险表，写入
-  `doc/evidence/v0.4.20/M4-P0-remeasure.md`（纯记账，不含处置判断）。
-- **确认已完全闭合、无需再派卡的三项**：`axi_xbar_unmuxed` Assert
-  53.85%→**100%**（M4-AW01/BP02 的下游背压顺带闭合）；`axi_demux_simple`
-  Line 83.72%→**91.86%**；`axi_err_slv` Cond 83.33%→**100%**。
-- **确认 REV-026 批准的十项 (a) 加固全部仍有真实残留**，无一项因合并后
-  自然闭合而作废——各卡按原批准范围继续派发（P0 本身即 REV-026 条件 1
-  的兑现证据）。
-- **精确定位 axi_demux_simple 14 条 Assert 中 4 条 0-real-success 的
-  逐条性质**：`NoAtopAllowed` 在 baseline（ATOPs=1）结构性不可达属正常，
-  已在 cfgD（ATOPs=0，M3-CF04）独立报告中 real-succeeded 24 次，**非
-  缺口**；`ar_valid_stable`/`slv_ar_chan_stable`/`slv_ar_select_stable`
-  （AW 侧三条稳定性断言的 AR 镜像）**真实未闭合**——与 REV-027 §2.5 核实
-  的 `lock_ar_valid_q/_d`/`ar_id_cnt_full` 同根，同一个 AR 侧持续背压
-  构造应一并闭合这 5 项（3 Assert + 2 Toggle）。已更新任务清单：
-  REV-027 加固卡 B 的验收判据据此加精。
-
-**Not done**
-- 十项 (a) 加固卡 + REV-027 两张加固卡均未派发——本轮只完成 P0 记账。
-
-**Next**
-- 开始逐条派发：优先 REV-027 加固卡 A（w_open[3] LEAD 加深，M4-BP02 上
-  改动）与加固卡 B（AR 侧对偶，五件套一次闭合），再回到 A-F 十项，逐条
-  小闭环、独立核实、evidence、closeout、push。
-
-**How verified**
-- `make regress COV=1` 亲跑 28/28 PASS；`make cov` 分别生成 baseline 与
-  cfgD 报告，urg HTML 逐模块/逐断言亲读取数（非采信任何转述），取数命令
-  见 `doc/evidence/v0.4.20/M4-P0-remeasure.md` 首行。
-- `make check`/`make selftest` 本轮收尾前复跑（见下）。
 

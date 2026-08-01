@@ -1,4 +1,44 @@
 # Work log archive
+## [0.4.21] 2026-08-01 P0 全量合并重测完成，精确核出十项加固卡当前真实残余（doc/evidence/v0.4.20/M4-P0-remeasure.md）
+
+**背景**：REV-026 强制要求全体 (a) 加固卡派发前先做一次全量 COV=1 合并
+重测，用当前（含 M4-EB01/BP02/CW-006/007 落地后）真实数字定各卡精确
+scope，而非沿用 v0.4.13 旧 signoff 的过时残余风险表。
+
+**Done**
+- `cd sim && make clean && make regress COV=1`：**28/28 PASS**（含全部
+  M0-M4 场景）。baseline 拓扑合并报告（22 场景）+ cfgD 独立报告，逐模块
+  对照旧 v0.4.13 残余风险表，写入
+  `doc/evidence/v0.4.20/M4-P0-remeasure.md`（纯记账，不含处置判断）。
+- **确认已完全闭合、无需再派卡的三项**：`axi_xbar_unmuxed` Assert
+  53.85%→**100%**（M4-AW01/BP02 的下游背压顺带闭合）；`axi_demux_simple`
+  Line 83.72%→**91.86%**；`axi_err_slv` Cond 83.33%→**100%**。
+- **确认 REV-026 批准的十项 (a) 加固全部仍有真实残留**，无一项因合并后
+  自然闭合而作废——各卡按原批准范围继续派发（P0 本身即 REV-026 条件 1
+  的兑现证据）。
+- **精确定位 axi_demux_simple 14 条 Assert 中 4 条 0-real-success 的
+  逐条性质**：`NoAtopAllowed` 在 baseline（ATOPs=1）结构性不可达属正常，
+  已在 cfgD（ATOPs=0，M3-CF04）独立报告中 real-succeeded 24 次，**非
+  缺口**；`ar_valid_stable`/`slv_ar_chan_stable`/`slv_ar_select_stable`
+  （AW 侧三条稳定性断言的 AR 镜像）**真实未闭合**——与 REV-027 §2.5 核实
+  的 `lock_ar_valid_q/_d`/`ar_id_cnt_full` 同根，同一个 AR 侧持续背压
+  构造应一并闭合这 5 项（3 Assert + 2 Toggle）。已更新任务清单：
+  REV-027 加固卡 B 的验收判据据此加精。
+
+**Not done**
+- 十项 (a) 加固卡 + REV-027 两张加固卡均未派发——本轮只完成 P0 记账。
+
+**Next**
+- 开始逐条派发：优先 REV-027 加固卡 A（w_open[3] LEAD 加深，M4-BP02 上
+  改动）与加固卡 B（AR 侧对偶，五件套一次闭合），再回到 A-F 十项，逐条
+  小闭环、独立核实、evidence、closeout、push。
+
+**How verified**
+- `make regress COV=1` 亲跑 28/28 PASS；`make cov` 分别生成 baseline 与
+  cfgD 报告，urg HTML 逐模块/逐断言亲读取数（非采信任何转述），取数命令
+  见 `doc/evidence/v0.4.20/M4-P0-remeasure.md` 首行。
+- `make check`/`make selftest` 本轮收尾前复跑（见下）。
+
 ## [0.4.20] 2026-08-01 feature-matrix 补齐 6 条 M4 行（chain audit gap 清零）+ P0 全量合并重测已在后台起跑
 
 **背景**：用户授权 orch 全权自动推进 M4 到极致，每闭环推送，不中途请示。

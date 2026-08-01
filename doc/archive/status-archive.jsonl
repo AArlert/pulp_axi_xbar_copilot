@@ -1,3 +1,4 @@
+{"date": "2026-08-01", "version": "0.4.16", "summary": "逐位toggle分解（Kind-B前置）完成：M4阶段合法Kind-B豁免集=空集（唯一候选axi_mux R.data被3/3反驳，实为地址镜像）；转正3条err_slv恒定输出Kind-A（CW-003/004/005）。清单B已具体化到信号级，待派DV定向覆盖卡"}
 {"date": "2026-08-01", "version": "0.4.15", "summary": "BUG-0047→SPEC_CHANGED：REV-024划界确认方法论受限面远比表面窄（仅axi_mux宽载荷Toggle子集），建doc/coverage-waivers.md+milestone.md M4追加Kind-A/Kind-B框架，不重pin spec。M4 REJECTED整体仍成立，待逐位分解卡+清单B定向覆盖卡"}
 {"date": "2026-08-01", "version": "0.4.14", "summary": "M4 完整签核卡 REJECTED——机器门禁全绿≠签核，覆盖率定义性出口条件（六类≥90%）未满足，~6类残余缺口可达但未测、不可合法豁免。新登记BUG-0047（Toggle判据vs仅定向纪律的可行性张力）。M4维持🔲，待用户定夺后续优先级"}
 {"date": "2026-08-01", "version": "0.4.13", "summary": "BUG-0046→ACCEPTED@M5（REV-023推翻原失实框架：spec忠实上游文档、根因是上游doc-vs-RTL矛盾）。make check MILESTONE=4 四条机器门禁全绿，只剩签核卡（rev rubric+REV-017条件3+signoff文件）"}
