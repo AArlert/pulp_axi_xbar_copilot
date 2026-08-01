@@ -34,14 +34,17 @@
   不断言固定拍数。
 
 范围：本文承载**五个决策点**的提案。Decision 1 给里程碑归属并已在 `milestone.md`
-起草 M5 草稿；Decision 2–5 是 M5 内待派 DE/DV 卡的架构输入。
+起草 M5 草稿；Decision 2–4 是 M5 内待派 DE/DV 卡的架构输入；**Decision 5（cov_loop）
+随里程碑重构移交 M6**（六类 ≥90% 收敛工具，见 `doc/design-prompt/milestone_restructure.md`）。
 
 ---
 
 ## 1. 决策点 1 — 里程碑归属：新开 M5，排在 M4 签核之后
 
-**建议：新开 M5「约束随机 + 多种子回归 + 压力/soak + 覆盖率驱动闭环」，不并入
-M4；且 M5 排在 M4（六类 ≥90%）签核转 v1.0.0 之**后**（作 v1.0 后的方法学加固线）。**
+**建议：新开 M5「约束随机 + 多种子回归 + 压力/soak」，不并入 M4；且 M5 排在 M4
+签核之**后**（作方法学加固线）。**（**里程碑重构后**：覆盖率驱动闭环＝决策点 5 移交
+M6，M4 出口改"测量 + 三态扫描 + 每格具名归属"、六类 ≥90% 门迁 M6；版本方案见
+`doc/design-prompt/milestone_restructure.md` §7.3，M4 不再转 v1.0.0。）
 
 理由（轴不同 + 时序不宜）：
 
@@ -67,8 +70,9 @@ M4；且 M5 排在 M4（六类 ≥90%）签核转 v1.0.0 之**后**（作 v1.0 �
   一次注伤自证（植入→红→复原→绿），`bugs.md` 记 `KILL` 行。这在 M4 内无处安放，
   独立里程碑更干净。
 
-**版本方案（开放，orch 定）**：M4 签核转 v1.0.0；M5 建议走 v1.1.0（或另立 v2 线）。
-本文按 M5 起草 `milestone.md` 草稿（见该文件），版本号占位 `v1.1.*`。
+**版本方案（里程碑重构后定稿，见 `doc/design-prompt/milestone_restructure.md` §7.3）**：
+0.M.P 规则下 **M5=v0.5.\*、M6=v0.6.\***，**v1.0.0 挂 M6 签核**（M4 不再转 v1.0.0）。
+本文按 M5 起草 `milestone.md` 草稿（决策点 5 cov_loop 移交 M6，见该文件）。
 
 **M5 出口条件草稿**见 `doc/milestone.md` M5 章。
 
@@ -239,7 +243,7 @@ endclass
   种子**不**改 testplan 列。
 - **C3.8 "N 全过"是独立机器制品 = 回归摘要入证据。** 复用 milestone 出口既有的
   「regress 摘要入证据」机制（`milestone.md` 首行）：M5 签核把 `result_summary.txt`
-  捕获为回归证据（如 `doc/evidence/v1.1.*/regress-multiseed.log`），显示全部种子行
+  捕获为回归证据（如 `doc/evidence/v0.5.*/regress-multiseed.log`，M5=v0.5.\* 按 §7.3），显示全部种子行
   `passed=N/N`。**契约长相**：
   1. `regress.list` = 权威种子集（新增 N-种子行）；
   2. 每场景种子列表在 M5 design-prompt 固定记录（确定性）；
@@ -291,6 +295,12 @@ runner 机制零 schema 改动，**未覆盖**"`regress.list ⊇ testplan ✅ �
 ---
 
 ## 5. 决策点 5 — 覆盖率驱动闭环机制（`scripts/` 驱动脚本，功能规格）
+
+> **里程碑归属（里程碑重构后）：本决策点移交 M6**（六类 ≥90% 收敛线），不再属 M5；
+> M5 保留 Decision 2–4（约束随机 + 多种子 + soak）。本节内一切"M4 六类 ≥90% 目标"
+> 的引用（C5.3 可选覆盖目标、C5.4 覆盖范围），重构后**目标门指 M6 收敛门、口径指
+> spec §0#4**——§0#4 六类测量口径本身不变（M4 测量、M6 收敛），故 C5.x 功能规格
+> **无需逐行改动**。见 `doc/design-prompt/milestone_restructure.md` §2/§3.4。
 
 `scripts/` 本仓库自有资产（CLAUDE.md §5，不受上游同步约束）。建议新增
 `scripts/cov_loop.py`。**只给功能规格，不写 Python。**

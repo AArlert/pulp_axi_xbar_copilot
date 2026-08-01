@@ -1,4 +1,67 @@
 # Work log archive
+## [0.4.34] 2026-08-02 REV-030 三模块残余全面分诊——登记 Kind-A CW-009，五张 DV 构造指引卡（含 #16/#17/#18 终判）
+
+**背景**：任务 #21。orch 用 urg 对 `axi_mux`/`axi_demux_simple`/
+`axi_err_slv` 三模块做了一次全量快照，发现残余清单比原始 #16/#17/#18
+三条更宽（`len[7:4]`/`addr[2:0]`/`size[1:0]` 单向等多个未登记位），派发
+一张范围更宽的 rev 分诊卡，仅把三条原始任务作为背景线索、不作结论。
+
+**Done**
+- **rev 独立重生三模块 urg + 逐条对照既有 CW-001~008**：三模块大宗残余
+  （err_slv 恒定输出/四模块 rst_ni/scan/size[2]/atop 非-load 子类型）
+  均已被既有豁免或 BUG-0044 承接，pass、不重复登记；各 `≥90%` 类死位
+  依 REV-028 先例由余量吸收，不登记。
+- **登记 CW-009（Kind-A）**：`axi_demux_simple` Cond 82.76% 五个未覆盖
+  bin 中，`w_open==15`（`axi_demux_simple.sv:168` 主表达式 term2）一 bin
+  结构不可达——`IdCounterWidth=idx_width(MaxMstTrans=10)=4` 全一=15，但
+  下游 `axi_mux i_w_fifo` 深度由 `axi_xbar.sv:141` 硬wire为
+  `Cfg.MaxSlvTrans=6`，加 `PipelineStages=1` 缓冲，结构封顶远低于
+  15——**orch 独立核实全部引用行号（`axi_demux_simple.sv:69`
+  `idx_width`、`axi_mux.sv:319/46` `i_w_fifo` DEPTH、`axi_xbar.sv:141`
+  MaxWTrans wiring）与 `cf_math_pkg::idx_width` 函数实现，逐字符合**；
+  经验佐证（`slvport_agent.sv:448-466` `drive_burst_wopen` 注释）
+  **orch 独立核对确认**：LEAD=6..10 全部干净完成、LEAD=11 触发
+  watchdog 自死锁（driver 侧 AW→W 链无空间，非 DUT 死锁）。
+- **其余 4 bin（`ar_id_cnt_full && atop[ATOP_R_RESP]` 双 1 交叉，即 #16）
+  驳回登记豁免，判定可构造**：rev 逐层核实 `ar_id_cnt_full`（全桶 OR，
+  L557/615）与 `atop[R_RESP]` 各自已被现有场景单独触达，唯缺同拍共存；
+  填桶用从机侧 `resp_hold` 时间驱动自动释放，无死锁；stall 是 RTL 合法
+  防溢出行为——**终判非 SPEC_ISSUE、非 TB_BUG，是普通定向可达
+  planning-gap**。
+- **五张 DV 构造指引**（rev 只给方向性技术要求，不写代码）：DV-A（请求
+  属性取值域：窄传输/字节非对齐/长突发，err_slv 轨 L1 + mux 轨 L2，
+  mux 轨须扩 `predict_beat_data` 并做 KILL）、DV-B（从机 resp/user 多样化，
+  L1/L2）、DV-C=#17（mux `b_ready` 写背压，须新增背压驱动能力，L2）、
+  DV-D=#18（err_slv `ar_ready` 读向背压，M4-EB01 直接镜像，机制全现成，
+  L1）、DV-E=#16（demux atop-under-AR-full 混向构造，L2）。
+- **发现一处交付缺口 flag（非新 bug）**：`addr[2:0]` 字节级非对齐被
+  M3-DE01/M2-CFG01 反复标注"REV-026 C-1 territory"，但 C-1 实际交付
+  （`slvport_sideband_div_seq`）从未驱动 `addr[2:0]≠0`——孤儿残余，归
+  BUG-0047 伞下，orch 派 DV-A 时须明确其归属。
+- **orch 独立复验**：`git diff` 逐行审读 CW-009 新增行；独立重跑 RTL 读取
+  验证 `IdCounterWidth`/`idx_width` 函数实现/`i_w_fifo` DEPTH 绑定/
+  `MaxSlvTrans=6`/`PipelineStages=1`/LEAD 边界经验注释，逐条与 rev 卡
+  引用行号内容一致；独立核对 `axi_err_slv.sv` `ar_ready=~r_fifo_full`、
+  `i_r_fifo` DEPTH 绑定 `MaxTrans`、`axi_xbar_unmuxed.sv:201`
+  `.MaxTrans(4)`（当前 >1 slave 端口配置对应实例）。
+- `doc/review/REV-030.md` 已写入磁盘。
+
+**Not done**
+- 五张 DV 卡（DV-A~E）均未派发，是本轮 M4 收尾工作的下一批主力。#14/#15
+  仍未派发。
+
+**Next**
+- 依次派发 DV-D（#18，L1，机制全现成，最省力）→ DV-A err_slv 轨（L1）→
+  DV-B/DV-C（L1/L2）→ DV-A mux 轨（L2，须扩预测器+KILL）→ DV-E（#16，
+  L2，新混向 primitive）。
+
+**How verified**
+- 见上"orch 独立复验"段——git diff 审读 + 全部 RTL 行号引用逐条重新
+  grep 核对 + `cf_math_pkg::idx_width` 函数体亲读，均未采信 rev 卡自报
+  内容。
+- `make check`（docs-check + chain audit 无新增 gap）本轮复跑绿；本卡
+  未改 RTL/TB，无需重跑回归。
+
 ## [0.4.33] 2026-08-02 REV-029 裁决——addr_decode_dync Branch 83.33% 登记 Kind-A（CW-008），订正 REV-024 §2.2 行 6
 
 **背景**：任务 #20，REV-028 的姊妹裁决。REV-028 顺带发现

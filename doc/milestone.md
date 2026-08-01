@@ -14,8 +14,9 @@
 | M1 | UVM env + smoke | 2/2 | ✅ |
 | M2 | 功能场景 + SVA + 功能覆盖 | 8/8 | ✅ |
 | M3 | 多配置回归 + 错误路径 | 11/11 | ✅ |
-| M4 | 六类覆盖 ≥90% | 0 场景行 | 🔲 进行中 |
-| M5 | 约束随机 + 多种子回归 + 压力/soak + 覆盖率驱动闭环 | 草稿（提案，rev 未过） | 🔲 提案 |
+| M4 | 六类覆盖测量基建 + 全闭包三态扫描 + 每格具名归属（UNOWNED=∅） | 8/8 | 🔲 进行中 |
+| M5 | 约束随机 + 多种子回归 + 压力/soak（方法论线） | 提案（rev 门禁前不生效） | 🔲 提案 |
+| M6 | 六类覆盖 ≥90% 收敛（cov_loop，含 Toggle） | 提案（rev 门禁前不生效） | 🔲 提案 |
 
 ## M0 — 基建 + sanity + spec v0 ✅
 
@@ -53,27 +54,57 @@ Exit criteria:
 - [x] **KILL 覆盖：至少一条打 M3 标签的 KILL 行**（不变量 5 首个生效里程碑）
 - [x] 签核：`doc/evidence/v0.3.20/signoff-M3.md`（C1/C2 兑现记录见该文件 §八，由 0.3.21 closer 卡追加）
 
-## M4 — 六类覆盖 ≥90% 收敛 🔲
+## M4 — 六类覆盖测量基建 + 全闭包三态扫描 + 每格具名归属 🔲
+
+> **性质变更（里程碑重构，本卡提案 → rev 门禁 → orch 应用重 pin）**：M4 出口从
+> "六类 ≥90%"改为"覆盖测量基建 + 全闭包三态扫描 + 每个 <90%（模块,类型）格有
+> 具名归属"。**六类 ≥90% 的百分比达标收敛门移交 M6**（拥有约束随机 + cov_loop
+> 正确工具的里程碑）。谱系：BUG-0047 终判预留选项 (ii)"重议判据口径（spec §0
+> 变更提案 + rev 门禁）"；REV-026 十卡实证定向刷宽总线 Toggle 为坏配对。
+> **KILL 覆盖（不变量 5）与 rev 签核要求不变；M4 内不再有任何百分比达标门。**
 
 Exit criteria:
 
-- [ ] **六类口径以 spec §0 #4 为准**：`line+cond+fsm+tgl+branch+assert`（VCS `-cm` 六个类型关键字，**不含 functional covergroup**——REV-011 §3.3 已裁定"M4 机器判据接不住 covergroup"，本页原"…functional"措辞与 spec 不符，本次订正为与 spec 一致的表述，非新解释）≥90%，DUT 范围含 `axi_xbar` 及其全部强制内部子模块（spec §0 #4 列举），缺口逐条或修或书面豁免（豁免须 rev 签核）
-- [ ] **覆盖率缺口的书面豁免须声明种类并登记于 `doc/coverage-waivers.md`**（每条一行，rev 签核；REV-024 裁决）：
-  - **Kind-A（结构/环境不可达，永久）**：给可证伪的**不可达性**论证——哪个具体事实被推翻则本豁免作废。例：`axi_atop_filter` FSM（§4 clause 7 环境约束，REV-017）、`test_i` scan（出验证范围）、`axi_err_slv` 恒定错误应答数据位。
-  - **Kind-B（方法论受限、延后 M5，临时）**：**仅限**经 rev 逐 bin 判定为"宽数据**载荷**位翻转、纯定向激励不经济可达"的 (模块,类型) 子集（判据见 REV-024 §2.1，须附**逐信号/逐位 toggle 分解**为前置证据）。出口 = **书面记录残余风险 + Kind-B 豁免条目**，**非当下 ≥90%**。可证伪解锁 = **M5 决策点 2（约束随机激励层）落地 + 决策点 5（cov_loop）对这些具体 bin 重新测量；若仍 <90% 方可讨论转 Kind-A 或补定向**；被推翻即作废 = 任一 M5 随机跑使该 bin ≥90%。
-  - **控制/使能/模式/窄配置索引/握手背压/地址-rule 多样性/实例级颗粒度/Cond/Branch/Line/Assert 类缺口一律不得记入 Kind-B**——那些是定向可达的"需补场景"，走正常 DV 微闭环。
-- [ ] functional covergroup（`cg_*`）非空转仍按既有 rubric 第 4/5 条人工抽查把关，不受本页六类机器口径约束
-- [ ] BUG-0018 的 cross bin 盲区在此之前已解决（否则会以"永远填不满"形式再现）
+- [ ] **六类覆盖测量基建**：merged 覆盖库（基线拓扑 24 场景）+ urg 六类判据
+      （`line+cond+fsm+tgl+branch+assert`，口径以 spec §0#4 为准，含例化闭包递归
+      全部子模块，**不含 functional covergroup**——REV-011 §3.3）报告可确定性重生
+      （取证 `doc/evidence/v0.4.35/M4-coverage-final-sweep.md` 命令①②）。
+- [ ] **全闭包三态扫描**：22 个 DUT 模块 × 六类，逐格 N/A（附已核实成因）/ ≥90% /
+      <90% 三态判定完成，与 urg modlist 逐位对账（22+13=35，`M4-coverage-final-sweep.md`
+      §2）。
+- [ ] **每个 <90%（模块,类型）格有具名归属，UNOWNED = 空集**：每格归入且仅归入
+      四类之一——(a) 已修（≥90% 或被 ≥90% 余量吸收，REV-028 先例）；(b) rev 签核
+      Kind-A 书面豁免（`doc/coverage-waivers.md` CW-001~014）；(c) 债务行
+      （`doc/bugs.md` `ACCEPTED@M<n>`，如 BUG-0044）；(d) M6 backlog 登记
+      （`doc/design-prompt/milestone_restructure.md` §6 / 本页 M6）。核对面 = 扫描表 ×
+      CW 表 × bugs.md 债务 × M6 backlog（详见本页 M6 backlog 表 §6.3 的 22×6 全格
+      对照）。**现状订正**：0.4.36 闭环**曾宣告** UNOWNED = 空集，经 REV-032 门禁
+      **证伪**（`stream_register` 三格 Line/Toggle/Branch 漏账，登记 BUG-0049）；
+      **REV-033 裁决 CW-014（Kind-A）+ D1 定向路由后方达成 UNOWNED = 空集**
+      （引用链 BUG-0049 / REV-032 / REV-033）。
+- [ ] **KILL 覆盖（不变量 5）**：至少一条打 M4 标签的 KILL 行。
+- [ ] **Kind-B 豁免登记规则（BUG-0047 guard + REV-024 §2.1）**：任何 Kind-B 登记须
+      先附逐信号/逐位 toggle 分解，解锁 = M5 约束随机层落地 + M6 cov_loop 重测（见
+      `doc/coverage-waivers.md` 抬头新定义）。当前 M4 阶段合法 Kind-B 集为**空集**
+      （REV-025 裁定），本重构不新增 Kind-B。
+- [ ] **functional covergroup（`cg_*`）非空转**仍按 rubric 第 4/5 条人工抽查把关，
+      不受六类机器口径约束；BUG-0018 cross bin 盲区须维持已解决（否则以"永远填
+      不满"再现）。
+- [ ] 签核：`doc/evidence/v0.4.*/signoff-M4.md`（rev 全 rubric；重点核 UNOWNED=∅
+      交叉核对 + Kind-A 论证 + KILL 集完备性 + BUG-0044/45/46 债务真实性）
 
-## M5 — 约束随机 + 多种子回归 + 压力/soak + 覆盖率驱动闭环 🔲（提案草稿，rev 未过）
+## M5 — 约束随机 + 多种子回归 + 压力/soak 🔲（提案草稿，rev 未过）
 
-> **性质：arch 提案草稿，未经 rev 门禁，orch 未落地。** 设计输入与五个决策点见
-> `doc/design-prompt/verification_maturity.md`。轴与 M4 正交：M4 是结构覆盖率百分比
-> 单一轴，本里程碑是验证方法论成熟度轴；二者关系是"M5 随机/闭环产出**可能**帮更
-> 省力关上 M4 结构缺口"，但目标性质不同（提案 Decision 1，C1.1–C1.4）。
-> 定向优先（M4）、随机后（M5）是证据链项目的正确顺序——
-> 随机只能加固/发现，不能替代 M4 的定向关闭（每 ✅ 行须是有 spec 引用、可证伪描述的
-> 具名场景）。
+> **性质：验证方法论成熟度轴，与 M4/M6 的结构覆盖率百分比轴正交。** 设计输入见
+> `doc/design-prompt/verification_maturity.md` 决策点 2–4（决策点 5 cov_loop 随里程碑
+> 重构移交 M6）。**排 M4 签核之后启动**；随机只能加固/发现，不能替代 M4 的定向
+> 关闭，也不承担 M6 的 ≥90% 收敛门——本里程碑出口全部为"能力落地 + KILL 自证"，
+> **无覆盖率百分比门**。M5 的随机/闭环产出**可能**帮更省力关上 M6 结构缺口，但
+> 目标性质不同（design-prompt Decision 1，C1.1–C1.4）。
+> **进门前置不变**：三条 `ACCEPTED@M5` 债务（BUG-0044/0045/0046）到期于 M5 签核，
+> 须**二选一再裁决、不得自动延期**（见各自 guard：BUG-0044 §6 / BUG-0045·0046
+> §3.2）；本里程碑与其版本方案变更（v1.1.*→v0.5.*）均**不移动 `@M5` 锚点**——锚定
+> 里程碑号 M5、非版本串。
 
 Exit criteria（草稿，rev 门禁前不生效）：
 
@@ -91,11 +122,36 @@ Exit criteria（草稿，rev 门禁前不生效）：
       失败 + **无 watchdog 超时（liveness，引 §5.5.4，REV-019 校正）** + **覆盖率趋于饱和**（连续
       K 窗口增量 < ε，作停止判据非 PASS/FAIL）；判决延迟不敏感（§7.4），各桶在飞
       同时压到 §5.4.1 有效上限（design-prompt Decision 4）
-- [ ] **覆盖率驱动闭环**：`scripts/cov_loop.py` 跑确定性随机种子、查功能+结构覆盖、
-      缺口未闭合则继续、饱和/预算上限则停，逐种子记边际贡献 + 停止时残余缺口清单；
-      残余缺口 → 派生定向 testplan 行**或**书面记随机不可达（脚本不 turn green 任何
-      行，覆盖率只测量不作 oracle，design-prompt Decision 5，B0.2/B0.3）
 - [ ] **KILL 覆盖（不变量 5）**：M5 新引入的每类 checker（soak watchdog liveness、
       饱和探测器、随机约束合法性 env 兜底监视）各至少一条打 M5 标签的 KILL 行
-- [ ] 签核：`doc/evidence/v1.1.*/signoff-M5.md`（rev 全 rubric）
+- [ ] **三条 ACCEPTED@M5 债务到期二选一仲裁**（rubric #8，不得自动延期）：BUG-0044
+      （§6 atop 非-load 应答义务，REV-019 SP-1）、BUG-0045（§3.2 `end_addr=='0`
+      末端哨兵，REV-021）、BUG-0046（§3.2 doc-vs-RTL `<=` vs `<`，REV-023）——各自
+      到期动作与可证伪解锁见对应 REV 记录 §Q3/§4
+- [ ] 签核：`doc/evidence/v0.5.*/signoff-M5.md`（rev 全 rubric）
+
+## M6 — 六类覆盖 ≥90% 收敛（cov_loop，含 Toggle）🔲（提案草稿，rev 未过）
+
+> **性质：结构覆盖率百分比达标轴的收敛里程碑——承接 M4 移交的 ≥90% 数字门。**
+> 工具 = M5 约束随机层（决策点 2–4）+ `scripts/cov_loop.py`（决策点 5，见
+> `doc/design-prompt/verification_maturity.md` §5，随重构移交本里程碑）。
+> **工作原则 = random-first, directed-fallback**：先跑 M5 随机层 + cov_loop 测量，
+> 只对随机未命中的 bin 写定向卡（避免 REV-026 实证的"定向刷宽总线 Toggle"坏配对）。
+> **谱系**：BUG-0047 终判选项 (ii)——90% 数字门挂在拥有正确工具的里程碑。
+
+Exit criteria（草稿，rev 门禁前不生效）：
+
+- [ ] **六类覆盖 ≥90% 收敛**（含 Toggle）：全部（模块,类型）格 ≥90%，DUT 范围 =
+      spec §0#4 例化闭包六类；未达标格须 rev 签核书面豁免（Kind-A 结构不可达
+      CW-001~014，或到期重裁的 Kind-B）。
+- [ ] **承接 M4 移交 backlog**：`doc/design-prompt/milestone_restructure.md` §6 的
+      DV-A~G 定向卡 + fifo_v3 / spill_register_flushable 结构残余重测，逐条闭合或
+      书面豁免。
+- [ ] **cov_loop 落地**（决策点 5）：`scripts/cov_loop.py` 跑确定性随机种子、查
+      功能+结构覆盖、逐种子记边际贡献、饱和/预算上限则停、残余缺口清单——脚本只
+      测量不作 oracle（design-prompt B0.2/B0.3），残余缺口 → 定向 testplan 行**或**
+      书面记随机不可达。
+- [ ] **KILL 覆盖（不变量 5）**：M6 若为随机未命中 bin 派定向卡而新增/扩展 checker
+      期望路径，各至少一条打 M6 标签的 KILL 行。
+- [ ] 签核：`doc/evidence/v0.6.*/signoff-M6.md`（rev 全 rubric）
 - [ ] 签核后转 v1.0.0
