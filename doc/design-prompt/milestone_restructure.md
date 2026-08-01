@@ -374,7 +374,7 @@ NEW：
 | **DV-E（#16）** | demux `axi_demux_simple.sv:168` `ar_id_cnt_full && aw.atop[ATOP_R_RESP]` 双 1 交叉（Cond 5 bin 之 4） | 待派；新混向 primitive（`resp_hold` 撑满同桶 AR ≥15 笔 + 满窗口内 fork atop-load 写，命中地址避 §4 clause 7） | **弱**——同拍共存罕见，directed-fallback 主导（#16 可行性 [R30] §5 终判"可构造、非结构矛盾"） | L2 | [R30] §3 DV-E/§5；[FS] §3 行2 |
 | **DV-F（新）** | rr_arb_tree Toggle 内部仲裁节点：`gen_arbiter.index_nodes` 其余位/`req_nodes[6]`/`gen_levels[*].sel`/`upper_mask[0]`/`lower_empty` | 待派；多主并发汇聚同一 master 端口 + 请求端口分布多样化（轮转/稀疏/满载）使 `rr_q` 遍历全起点 | **中**——随机汇聚流量遍历 rr 指针部分可达；节点组合模式须定向补 | L2 | [R31] §7 DV-F；[FS] §5-3 |
 | **DV-G（新，DV-E 家族）** | axi_demux_id_counters Line/Toggle/Branch（`axi_demux_simple.sv:582-589` `push_en&&inject_en` 同拍同 index，经 AR 侧 `inject_i(atop_inject)` 活信号）+ delta_counter id-bucket 在飞高位（深同-ID 占用） | 待派；fork：同 index 群 AR + 窗口内呈现 atop-load 写（命中地址）；深占用用 `resp_hold` | **弱**——同拍同 index 巧合罕见，directed-fallback 主导 | L2 | [R31] §7 DV-G；[FS] §5-1/§5-6 |
-| **重测-1** | fifo_v3 Cond 80.19%/Toggle 82.09%/Branch 78.43% 的**非-flush 余量** | flush 分量已 CW-010 承接（bin-scoped）；非-flush 余量随 DV-A/DV-B（背压+mem 值域）闭合；**定向闭合后重测，仍 <90% 才登记结构残余 Kind-A（不预登记）** | 随 DV-A/B | — | [R31] §5/§8 行5；[FS] §5-5 |
+| **重测-1** | fifo_v3 Cond 80.19%（**全格**）/Toggle 82.09%（全格）/Branch 78.43% 的**非-flush 余量** | **仅 Branch 格**的 flush 分量由 CW-010 承接（bin-scoped，`:122` 的 IF-117 `0 1`）；**Cond 与 Toggle 两格 CW-010 不承接**（REV-035 §Q1(i) 缩窄 + 本次回源：Cond 侧 `:122` 是单项条件、无 bin 可认领 ⇒ 该格无 flush 分量、"非-flush 余量" ≡ 全格；Toggle 侧 `flush_i` 位实存但不在 CW-010 登记面内，扩登记属 rev 裁决面）⇒ **Cond 格由本条单独且完整承接；Toggle 格的目标范围为全格（含 `flush_i` 位这一结构残余），与 DV-A/DV-B 共同承接**；非-flush 余量随 DV-A/DV-B（背压+mem 值域）闭合；**定向闭合后重测，仍 <90% 才登记结构残余 Kind-A（不预登记）** | 随 DV-A/B | — | [R31] §5/§8 行5；[FS] §5-5；[R35] §Q1(i) |
 | **重测-2** | spill_register_flushable Cond 82.49%/Toggle 79.76% 的**非-flush 余量** | flush 分量已 CW-010 承接；非-flush（背压 `a_full_q/b_full_q/ready_i` + 载荷值域）随 DV-A/DV-B 闭合；**定向闭合后重测，仍 <90% 才登记结构残余** | 随 DV-A/B | — | [R31] §5/§8 行8；[FS] §5-7 |
 
 > **薄壳 Toggle 阴影不单列卡**：axi_multicut/axi_cut/spill_register 薄壳 Toggle
@@ -389,13 +389,13 @@ NEW：
 | 归属 | 承接的（模块,类型）/bin | 性质 | 来源 |
 | --- | --- | --- | --- |
 | CW-001 | `axi_atop_filter` 六类（`w_state_q` 全非-FEEDTHROUGH + `r_state_q.INJECT_R`；**R_HOLD 已 Covered 除外**） | Kind-A env 不可达（ATOP miss-addr 构造性禁止） | [FS] §3 行5/§4；coverage-waivers CW-001；[R31] §4 |
-| CW-002 | `axi_xbar`/`axi_mux`/err_slv `test_i` scan | Kind-A 出验证范围 | coverage-waivers CW-002 |
+| CW-002 | `axi_xbar`/`axi_mux`/`axi_err_slv` Toggle 的 `test_i` scan 位（三模块页同一根顶层网） | Kind-A 出验证范围 | coverage-waivers CW-002；[R35] §Q1(ii)（登记面扩至三模块页，bin 范围不放宽） |
 | CW-003/004/005 | `axi_err_slv` 恒定错误应答 `r.data[63:0]`/`r.resp`/`b.resp`/`r.user`/`b.user` | Kind-A 编译期常量 tie-off | coverage-waivers CW-003/004/005；[R30] §1 |
 | CW-006 | 四模块 `rst_ni` 运行中复位方向 | Kind-A（spec §2.3 无热复位语义，范围外） | coverage-waivers CW-006 |
 | CW-007 | mux/demux/err_slv `ar/aw.size[2]` 总线宽度上限位 | Kind-A（64-bit 总线 size[2]≡0） | coverage-waivers CW-007 |
 | CW-008 | `addr_decode_dync` Branch（`sv:146` else，config_ongoing X-theater） | Kind-A（`config_ongoing_i≡0` tie-off，X 守卫永不可达） | coverage-waivers CW-008；[FS] §3 行1 |
 | CW-009 | `axi_demux_simple` Cond `w_open==15`（1 bin） | Kind-A（mux w_fifo 深度 6 结构封顶 w_open≈9<15） | coverage-waivers CW-009；[FS] §3 行2 |
-| CW-010 | flush_i tie-off 根因：rr_arb_tree Line / spill_register_flushable Assert（vacuous）/ fifo_v3·spill_flushable flush Cond·Branch 分量（bin-scoped） | Kind-A（flush 全例化点 tie `1'b0`） | coverage-waivers CW-010；[R31] §1；[FS] §5-3/§5-8 |
+| CW-010 | flush_i tie-off 根因：rr_arb_tree Line + Toggle / spill_register_flushable Assert（vacuous）+ Cond/Toggle / **fifo_v3 仅 Branch**（`:122` IF-117 `0 1`）——均 bin-scoped。**fifo_v3 Cond/Toggle 两格不在登记面内**（[R35] §Q1(i)），改由 §6.1 重测-1 承接 | Kind-A（flush 全例化点 tie `1'b0`） | coverage-waivers CW-010；[R31] §1；[FS] §5-3/§5-8；[R35] §Q1(i) |
 | CW-011 | `lzc` Toggle（常量 `index_lut` + 非-2-幂 padding，结构性永<90%） | Kind-A | coverage-waivers CW-011；[R31] §2；[FS] §5-4 |
 | CW-012 | `axi_id_prepend` `pre_id_i[2:0]`（generate-loop 常量，bin-scoped） | Kind-A | coverage-waivers CW-012；[R31] §3；[FS] §5-2 |
 | CW-013 | counter/delta_counter tie-off 位（`clear_i`/`load_i`/`d_i`/`down_i`/`overflow_o`，bin-scoped） | Kind-A | coverage-waivers CW-013；[R31] §6；[FS] §5-6 |
@@ -419,25 +419,32 @@ NEW：
 | axi_demux（父壳） | 6 | N/A¹ | N/A¹ | PASS(91.99) | N/A² | N/A¹ | N/A¹ |
 | axi_demux_simple | 6 | PASS | **CW-009+DV-E**(82.76) | PASS(93.73) | N/A² | PASS | PASS(92.86) |
 | axi_demux_id_counters | 12 | **DV-G**(73.91) | PASS | **DV-G**(74.06) | N/A² | **DV-G**(79.49) | PASS |
-| counter | 108 | N/A³ | N/A³ | **CW-013+DV-A/DV-G**(43.48) | N/A² | N/A³ | N/A³ |
+| counter | 12 | N/A³ | N/A³ | **CW-013+DV-A/DV-G**(43.48) | N/A² | N/A³ | N/A³ |
 | delta_counter | 108 | PASS | N/A⁴ | **CW-013+DV-A/DV-G**(41.20) | N/A² | PASS | N/A⁵ |
 | axi_err_slv | 6 | PASS | PASS | **CW-002/003/004/005/006/007+BUG-0044+DV-A+DV-D**(70.22) | N/A² | PASS | PASS |
 | axi_atop_filter | 6 | **CW-001**(48.18) | **CW-001**(41.94) | **CW-001**(65.19) | **CW-001**(14.29) | **CW-001**(41.30) | PASS |
 | stream_register | 6 | **CW-014**(75.00) | N/A⁶ | **CW-014+DV-A(D1)**(22.00) | N/A² | **CW-014**(50.00) | N/A⁵ |
 | axi_mux | 8 | PASS | PASS | **CW-002/006/007+BUG-0044+DV-A/B/C**(89.34) | N/A² | PASS | PASS |
 | axi_id_prepend | 48 | PASS | N/A⁷ | **CW-012+DV-C**(78.26) | N/A² | N/A⁷ | PASS |
-| rr_arb_tree | 28 | **CW-010**(80.00) | PASS(95.74) | **CW-007/010+DV-A+DV-F**(77.45) | N/A² | PASS(91.59) | PASS |
+| rr_arb_tree | 28 | **CW-010**(80.00) | PASS(95.74) | **CW-010+DV-A+DV-F**(77.45) | N/A² | PASS(91.59) | PASS |
 | lzc | 56 | N/A³ | PASS(97.73) | **CW-011**(42.59) | N/A² | PASS(97.73) | PASS |
-| fifo_v3 | 26 | PASS(92.68) | **CW-010+重测-1**(80.19) | **CW-010+DV-A/B+重测-1**(82.09) | N/A² | **CW-010+重测-1**(78.43) | PASS |
+| fifo_v3 | 26 | PASS(92.68) | **重测-1**(80.19) | **DV-A/B+重测-1**(82.09) | N/A² | **CW-010+重测-1**(78.43) | PASS |
 | axi_multicut | 48 | N/A¹ | N/A¹ | **DV-A/B 阴影**(89.22) | N/A² | N/A¹ | PASS |
 | axi_cut | 48 | N/A¹ | N/A¹ | **DV-A/B 阴影**(89.22) | N/A² | N/A¹ | N/A¹ |
 | spill_register（薄壳） | 322 | N/A¹ | N/A¹ | **DV-A/B 阴影**(88.51) | N/A² | N/A¹ | N/A¹ |
 | spill_register_flushable | 322 | PASS | **CW-010+重测-2**(82.49) | **CW-010+DV-A/B+重测-2**(79.76) | N/A² | PASS | **CW-010**(0.00,vacuous) |
 | axi_pkg | — | N/A⁸ | N/A⁸ | N/A⁸ | N/A² | N/A⁸ | PASS |
 
-**N/A 成因号**（[FS] §2.3 逐条已核实）：¹ 纯例化壳/薄壳无本体过程语句（仅 Toggle 有 bin）·
-² 无 `enum` FSM 状态寄存器 · ³ 顶层壳/generate 选择，Line/Cond/Branch 无独立 bin ·
-⁴ 无多项布尔组合式（VCS Cond 不生 bin）· ⁵ 无 `assert` · ⁶ 无 `if`/`case`/`?:` 条件语句 ·
+**N/A 成因号**（[FS] §2.3 逐条已核实；³/⁶ 两条经 **[FS] §10.2 重写**，旧表述已被原始
+`modinfo.txt` 证伪——BUG-0051）：¹ 纯例化壳/薄壳无本体过程语句（仅 Toggle 有 bin）·
+² 无 `enum` FSM 状态寄存器 · ³ **无被精化的过程块** ⇒ 无 Line bin：`counter` 为纯例化壳
+（Line/Cond/Branch 三类皆无 bin）；`lzc` 的唯一过程块 `lzc.sv:56` `always_comb` 在
+`if (MODE)` 内、本闭包两实例均 `MODE=0` 故未精化（**仅 Line 为 N/A**——其 Cond/Branch
+实为 97.73，由 `:76`/`:95` 两处 `?:` 生成，**不是** N/A）·
+⁴ 无多项布尔组合式（VCS Cond 不生 bin；适用 `delta_counter`）· ⁵ 无 `assert` ·
+⁶ **仅按位 `|`/`&` 与单信号条件，无逻辑 `&&`/`||`/`?:`** ⇒ VCS `-cm cond` 不生 bin
+（`stream_register.sv:34/35`；注：该模块经 `FFLARNC` 宏展开**确有** `if`，故旧表述
+"全文无 `if`/`case`/`?:`" 不成立）·
 ⁷ generate-if 编译期常量条件（无运行时 Cond/Branch bin）· ⁸ package-scope 内联计入调用点模块。
 
 **UNOWNED=∅ 核验**：全表 132 格逐格有 token，**无空白格、无未归属 <90% 格**——`stream_register`

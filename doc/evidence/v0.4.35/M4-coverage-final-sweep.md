@@ -125,7 +125,7 @@ assert）。
 | `axi_demux`（父，纯例化壳） | 6 | N/A¹ | N/A¹ | **91.99** | N/A² | N/A¹ | N/A¹ |
 | `axi_demux_simple`（子） | 6 | **100.00** | 82.76 | **93.73** | N/A² | **100.00** | **92.86** |
 | `axi_demux_id_counters`（`axi_demux_simple.sv` 内第二模块） | 12 | 73.91 | **100.00** | 74.06 | N/A² | 79.49 | **100.00** |
-| `counter` | 108 | N/A³ | N/A³ | 43.48 | N/A² | N/A³ | N/A³ |
+| `counter` | 108 **[勘误 E1 → §10]** | N/A³ | N/A³ | 43.48 | N/A² | N/A³ | N/A³ |
 | `delta_counter` | 108 | **100.00** | N/A⁴ | 41.20 | N/A² | **100.00** | N/A⁵ |
 | `axi_err_slv` | 6 | **100.00** | **100.00** | 70.22 | N/A² | **100.00** | **100.00** |
 | `axi_atop_filter` | 6 | 48.18 | 41.94 | 65.19 | 14.29 | 41.30 | **100.00** |
@@ -159,7 +159,8 @@ assert）。
    （`rr_arb_tree` 的 `lock_q`/`req_q` 为普通 `logic` 向量，非 `enum`，故其时序
    逻辑不计入 FSM 口径——与 v0.4.0/v0.4.9 报告"组合 `rr_arb_tree`，非本报告口径
    FSM"的既有措辞一致，本卡独立复核确认）。
-3. **`counter.sv`（28 行）/`lzc.sv` 的 Line/Cond/Branch N/A**：`counter.sv`
+3. **[勘误 E2 → §10：本条对 `lzc` 的陈述与成因均已被原始 `modinfo.txt` 证伪；
+   `counter` 部分成立。下文原文保留不改。]** **`counter.sv`（28 行）/`lzc.sv` 的 Line/Cond/Branch N/A**：`counter.sv`
    为 `delta_counter` 的纯参数透传壳（`delta_i` 恒接 `{{W-1{1'b0}},1'b1}`），
    无自身过程语句；`lzc.sv` 顶层模块体本身在 `MODE`/`WIDTH` 参数下走
    generate-case 选择内部实现，Line/Branch 的"有意义代码"落在其内部 generate
@@ -173,11 +174,16 @@ assert）。
    未对单项条件生成 bin（对照 `fifo_v3`/`spill_register_flushable` 等模块的
    Cond 确有数值，佐证 VCS 确实会在多项组合式处生成 bin，此处空白应理解为
    "该模块没有多项布尔组合式"而非工具异常）。
-5. **`stream_register.sv`/`spill_register_flushable.sv` 的 Assert N/A 例外**：
+5. **[勘误 E4 → §10：Assert N/A 判定与其操作性成因（实测无 `assert`）均成立；
+   仅括注"全文无 `if`"一句失真，同 E3 根因。本条为 §10.3 抽样反证新发现，
+   不在 BUG-0051 原登记面内。下文原文保留不改。]**
+   **`stream_register.sv`/`spill_register_flushable.sv` 的 Assert N/A 例外**：
    `stream_register.sv` 全文无 `if`（纯组合值锁存 + 一条 `assert`... 实测无
    assert，Assert 列 N/A）；`spill_register_flushable` **有** 1 条 assert
    （`flush_valid`，见 §3 表末条特别说明，非 N/A，是 0.00% 的真实数字）。
-6. **`stream_register.sv` Cond N/A**：全文（约数十行）无 `if`/`case`/`?:`，
+6. **[勘误 E3 → §10：N/A 判定成立，但本条给出的成因已被原始 `modinfo.txt`
+   证伪，§10.2 给出重写后的成因。下文原文保留不改。]**
+   **`stream_register.sv` Cond N/A**：全文（约数十行）无 `if`/`case`/`?:`，
    纯组合赋值 + 时序锁存，无条件语句可供 VCS 生成 Cond bin。
 7. **`axi_id_prepend.sv` Cond/Branch N/A**：唯一的 `if (PreIdWidth == 0)`
    （82 行）是**编译期常量条件**（generate-if，由参数值在综合前确定分支，
@@ -393,3 +399,151 @@ Assert）——**9 个 (模块,类型) 组合，跨 8 个模块**，均为 spec 
 本文件只是测量记录：**不判定 M4 是否达标、不判断任何缺口的 Kind、不登记
 豁免、不建 bug 行、不派发 DV 卡**。§3/§5/§8 的 UNOWNED 标注与 §4 的 CW-001
 核实发现，均留给 orch/rev 收到本报告后分诊。
+
+## 10. 勘误（2026-08-02 追记，BUG-0051 订正卡；`doc/review/REV-035.md` §Q2(b) 裁定）
+
+**处置形态**：**不覆写、不删除，只追加 + 就地标记**。§1-§9 的全部既有字节原样保留；
+四处错处只在**原位新增**了一个 `[勘误 En → §10]` 标记。保留原文的理由（REV-035
+§Q2(b)）：读者须能看见"当时相信的是什么"，以及三轮复核（REV-031/032/033）与
+四路独立复算中的三路为何都放过了它——覆写会把这条教训一并删掉。**可引用的边界**：
+"不回改" = 不覆写、不删除；**不等于不许批注**。加标记是加法（保留全部原信息 +
+新增一条指针），覆写是减法。
+
+**本节全部数字均回源自原始 urg 文本报告与 vendor RTL，未以本文件任何汇总节
+（§3/§5/§8）为输入**（REV-035 §G7：以汇总为输入的核对，核的是"抄得一致"而非
+"抄得对"——那正是 BUG-0049 的成因）。
+
+### 10.1 逐条勘误
+
+| id | 错处 | 原文所述 | 机器实测（回源） | 取数来源 |
+| --- | --- | --- | --- | --- |
+| **E1** | §2.3 `counter` 行"实例数"列 | `108` | **12**（6×`i_r_counter` + 6×`i_counter_open_w`） | `modinfo.txt` L1692 起 `counter` 模块页 `Module self-instances :` 表逐行数 = 12；交叉核对 `hierarchy.txt`：`grep -c i_r_counter`=6、`grep -c i_counter_open_w`=6。`108` 是**下一行 `delta_counter`** 的数（96×`i_in_flight_cnt` + 12×`counter.sv:28-31` 壳内 `i_counter`），系单格错抄 |
+| **E2** | 脚注 3（标题 + 正文对 `lzc` 的部分） | "`lzc.sv` 的 Line/**Cond**/**Branch** N/A"；"亲验 `modinfo.txt` `lzc` 小节 Line/**Branch** 均为空白" | `lzc` 模块页实有 Coverage 节 = **Assert / Branch / Cond / Toggle**（**无 Line 节**）；**仅 Line 为 N/A**，Cond=**97.73**、Branch=**97.73** | `modinfo.txt` L146860 起 `lzc` 模块页节种类枚举；`modlist.txt:48` `lzc` 行 = `84.51 -- 97.73 42.59 -- 97.73 100.00`（LINE 列为 `--`，COND/BRANCH 列有数） |
+| **E3** | 脚注 6（成因；N/A 判定本身成立） | "`stream_register.sv` 全文无 `if`/`case`/`?:`，纯组合赋值 + 时序锁存，无条件语句可供 VCS 生成 Cond bin" | 该模块**有** `if`：`:37`/`:38` 的 `FFLARNC` 宏展开出 `if (!rst_ni)` / `if (clr_i)` / `else if (ready_o\|reg_ena)`，urg Line 表逐支计数（37.5/37.8/37.10/38.5/38.8/38.10）、Branch 表列 `IF 37` 与 `IF 38` 各 4 支。**Cond 为 N/A 成立**（该页实有节 = Branch / Line / Toggle，无 Cond 节），**但原成因不成立**；重写见 §10.2 | `modinfo.txt` L2611 起 `stream_register` 模块页：节种类枚举 + Line 表 `ALWAYS 37`/`ALWAYS 38` + Branch 表 `IF 37`/`IF 38` |
+| **E4** | 脚注 5 的括注（**本次 §10.3 抽样反证新发现，不在 BUG-0051 原登记面内，已报 orch**） | "`stream_register.sv` 全文无 `if`" | 同 E3，该句失真。**但脚注 5 承载的是 Assert 格**，其操作性成因"实测无 `assert`"经复核**成立**（`grep -c assert vendor/common_cells/src/stream_register.sv` = **0**；该页无 Assert 节）⇒ `(stream_register, Assert)` 的 N/A 判定与成因**均不受影响** | 同上 + vendor RTL 亲读 |
+
+**E1 的影响面**：实例数**不是** `doc/milestone.md` M4 出口条件第二条的判据要件（该条要件
+是"逐格 N/A 附已核实成因"），故 E1 不使任何格判为未满足；但它已被
+`doc/design-prompt/milestone_restructure.md` §6.3 原样继承过一次，**该处（非冻结的
+设计输入）已就地订正为 12**（REV-035 §Q2(c)：底板的价值全在可机械复算）。
+
+### 10.2 两格 N/A 成因重写（M4 出口条件第二条要件）
+
+`doc/spec.md` §0#4 与 `doc/milestone.md` M4 出口第二条要求 N/A 附**已核实的**成因。
+被自己援引的数据源证伪的成因不是已核实的成因 ⇒ 下列两条为重写后的成因，**每条都由
+原始报告正向支持**（不是"没被推翻"）。
+
+**(A) `(lzc, Line)` N/A —— 成因重写**
+
+- `lzc` 模块体内**唯一的过程块**是 `lzc.sv:56-60` 的 `always_comb : flip_vector`，
+  它位于 `:54` `if (MODE) begin : g_flip` 之内。
+- 本闭包的两个 `lzc` 实例——`rr_arb_tree.sv:202-205` `i_lzc_upper` 与 `:211-214`
+  `i_lzc_lower`——**均传 `.MODE(1'b0)`**；urg 亲证本闭包只精化出两种参数变体
+  `WIDTH=6,MODE=0` 与 `WIDTH=9,MODE=0`（`modlist.txt:53/54`）。故被精化的是 `:61-64`
+  的 `g_no_flip` 分支（`assign in_tmp = in_i;`），`g_flip` 连同其 `always_comb`
+  **未被精化**。
+- 模块内其余语句全部是 generate 内的连续 `assign`（`:41/42/63/67/75/76-78/82/83/
+  87/88/93-97/102/103`）⇒ `-cm line` 无过程语句可插桩 ⇒ **该模块页整节无 Line 数据**。
+- **正向支持**：`modinfo.txt` L146860 起的 `lzc` 页实有节 = `Assert/Branch/Cond/
+  Toggle`，**无 `Line Coverage for Module : lzc` 节**；`modlist.txt:48` Line 列 `--`。
+- **判别式在全闭包上自洽**（REV-035 §G4 要求："要能同时解释哪些模块有该类节、哪些
+  没有"）：判别式 = **该模块是否有至少一个被精化的过程块**（含宏展开）。
+  无 Line 节的 10 个模块中，9 个（`axi_xbar`/`axi_xbar_unmuxed`/`addr_decode`/
+  `axi_demux`/`counter`/`axi_multicut`/`axi_cut`/`spill_register`/`axi_pkg`）源码
+  `always*` 计数为 **0**；`lzc` 是唯一"源码有、但被 generate 参数排除"的一例。
+  反向：`stream_register` 源码 `always` 字面计数为 **0** 却**有** Line 节（75.00%）
+  ——因 `FFLARNC` 宏展开出 `always_ff`（urg Line 表标 `ALWAYS 37`/`ALWAYS 38`）。
+  两侧都被同一判别式解释。
+- **同时订正原脚注 3 的因果预设**：原文设想"有意义代码落在 generate 分支的**过程块**
+  里、只是 VCS 未生成 bin"。本闭包下 `lzc` **没有任何过程块被精化**，故不是"有 bin
+  未统计"，而是**结构上无 bin 可生成**。
+- **`(lzc, Cond)`/`(lzc, Branch)` 不是 N/A**：实测均 97.73%，由 `:76-78` 与 `:95-97`
+  两处 `?:` 生成——urg `lzc` Cond 节的源码行号集合 = `{76, 95}`，Branch 节构造 =
+  `TERNARY 76` / `TERNARY 95`。**§2.3 表中 `lzc` 行的逐格标记原本即正确**（仅 Line
+  列标 `N/A³`），失真的只有脚注 3 的文字。
+- **脚注 3 的 `counter` 部分成立、不受本条影响**：`counter.sv` 确为纯例化壳（全文
+  仅 `:28-42` 一处 `delta_counter` 例化、无过程语句），`modinfo.txt` `counter` 页
+  实有节仅 `Toggle` ⇒ Line/Cond/Branch/Assert 四类 N/A 判定与成因均成立。
+
+**(B) `(stream_register, Cond)` N/A —— 成因重写**
+
+- 判别式（**运算符种类**，不是语句形态）：本次 urg 运行的 `-cm cond` 口径**只对
+  逻辑/条件运算符**（`&&`、`||`、`?:`，及作为其操作数修饰的 `!`）且**运行时操作数
+  ≥2 项**的表达式生成 Cond bin；对 **(a) 单信号条件**、**(b) 按位运算符**
+  （`&`、`|`、`~`，即便操作数只有 1 bit）**均不生成**。
+- `stream_register` 两侧都落在"不生成"一边：
+  - 该模块**唯二**的多操作数表达式是 `:34` `ready_o = ready_i | ~valid_o` 与
+    `:35` `reg_ena = valid_i & ready_o`——用的是**按位** `|` / `&`，非逻辑
+    `||` / `&&`。
+  - 该模块**仅有**的条件语句来自 `:37`/`:38` 的 `FFLARNC` 宏展开，其条件
+    （`!rst_ni`、`clr_i`、`ready_o`、`reg_ena`）**逐条都是单信号**——落在脚注 4
+    已确立的规则里。
+- **正向支持（同一份报告、同一次运行内的模块内对照，非跨模块类比）**：
+  - `spill_register_flushable`：`:90` `!a_full_q || !b_full_q`（逻辑 `||`）**生成了**
+    Cond bin；同一模块 `:93` `a_full_q | b_full_q`（按位 `|`）**没有**——该模块
+    Cond 节的源码行号集合实测 = `{53,72,78,79,84,85,90,96}`，**93 不在其中**。
+  - `lzc`：`:76`/`:95` 的 `?:` **生成了** Cond bin；同一模块 `:75` 与 `:93-94` 的
+    按位 `|` **没有**——Cond 行号集合实测 = `{76, 95}`。
+- **判别式在全闭包上自洽**（REV-035 §G4）：
+  - **有 Cond 节的 11 个模块**——`axi_xbar_unmuxed`/`addr_decode_dync`/
+    `axi_demux_simple`/`axi_demux_id_counters`/`axi_err_slv`/`axi_atop_filter`/
+    `axi_mux`/`rr_arb_tree`/`lzc`/`fifo_v3`/`spill_register_flushable`——其**全部**
+    Cond bin 的源码行（程序化逐行核对，共 31 个行号）**无一例外**都含 `&&`/`||`/`?:`。
+  - **无 Cond 节的 11 个模块**——精化后均无此类表达式：`counter`/`addr_decode`/
+    `axi_demux`/`axi_multicut`/`axi_cut`/`spill_register`/`axi_id_prepend`/
+    `stream_register` 源码 `&&`/`||`/`?:` 计数为 0（`stream_register` 只有按位
+    `|`/`&`）；`axi_xbar`/`axi_demux` 的 `?:` 只出现在**参数声明**里
+    （`axi_xbar.sv:65/185`、`axi_demux.sv:62/232`，编译期常量）；`delta_counter`
+    仅有的两条逻辑运算（`:43` `clear_i || load_i`、`:45` `!overflow_q && en_i`）
+    位于 `:29 if (STICKY_OVERFLOW)` 的 `gen_sticky_overflow` 分支内，而本闭包两个
+    参数变体**均为 `STICKY_OVERFLOW=0`**（`modlist.txt:43/44`）⇒ 该分支未精化，
+    精化部分（`:54-82`）条件全为单信号。
+- **明确不采用脚注 4 的现成规则**（REV-035 §Q2(d) 硬警告 1）：脚注 4 的表述是
+  "无多项布尔组合式 ⇒ 不生 bin"。它解释不了本格——`:34`/`:35` **是**二元组合式。
+  本条把判别式收紧到**运算符种类**，才同时解释了 `spill_register_flushable:90`
+  生成而 `:93` 不生成这一模块内对照。**脚注 4 对 `delta_counter` 的结论仍成立**
+  （其精化部分确为单信号条件），只是其规则表述不足以推广。
+
+### 10.3 8 条 N/A 成因脚注的正向抽样反证（REV-035 §Q2(d) 要求，成因维）
+
+方法：对每条脚注至少取一格，用 `modinfo.txt` 机械导出"该模块页实有哪几个 Coverage
+节"，与脚注声称的 N/A 类型**正向**比对（不是"看起来说得通"）。
+
+| 脚注 | 抽样格 | 该模块页实有 Coverage 节（modinfo 亲取） | 结论 |
+| --- | --- | --- | --- |
+| 1 | `addr_decode` Line | `{Toggle}` | ✅ 成立（`addr_decode.sv` `always*` 计数 = 0，纯参数透传例化）。**另记一处措辞过宽**：末句"以上均只有 Toggle 有意义…Assert 无 bin"对 `axi_xbar`/`axi_xbar_unmuxed`/`axi_multicut` 不成立（三者 Assert=100.00），但 §2.3 表中这些格**并未标 `N/A¹`**，逐格标记全部正确 ⇒ 三态判定不受影响 |
+| 2 | `rr_arb_tree` FSM | 全库 `FSM Coverage for Module :` 节**仅 1 个**（`modinfo.txt` L4406，属 `axi_atop_filter`） | ✅ 成立（其余 21 模块 FSM 无节） |
+| 3 | `lzc` Line / `counter` Line | `lzc`={Assert,Branch,Cond,Toggle}；`counter`={Toggle} | ❌ **lzc 部分证伪 → E2/§10.2(A)**；counter 部分 ✅ |
+| 4 | `delta_counter` Cond | `{Branch, Line, Toggle}` | ✅ 成立（无 Cond 节；成因经 §10.2(B) 的精化面复核仍立） |
+| 5 | `stream_register` Assert | `{Branch, Line, Toggle}` | ✅ 判定与操作性成因成立（RTL 中 `assert` 计数 = 0）；括注失真 → E4 |
+| 6 | `stream_register` Cond | `{Branch, Line, Toggle}` | ✅ 判定成立（无 Cond 节）；❌ **成因证伪 → E3/§10.2(B)** |
+| 7 | `axi_id_prepend` Branch | `{Assert, Line, Toggle}` | ✅ 成立（无 Cond/Branch 节；`:82 if (PreIdWidth == 0)` 在 `for (genvar …)` generate 内、条件为参数常量；`:86-92` `always_comb` 体内无运行时条件） |
+| 8 | `axi_pkg` Line | `{Assert}`，self-instances = 0 | ✅ 成立（`asserts.txt` `axi_pkg.wrap_boundary` 408 attempts / 408 real successes） |
+
+**抽样结论**：8 条中 6 条成因正向成立；证伪 2 条（脚注 3 的 lzc 部分、脚注 6），
+另发现 1 处不影响判定的失真括注（脚注 5）。**三态判定本身（哪些格是 N/A）
+经 132 格逐格复算与 `modlist`/`modinfo` 完全一致，无一格判错**——这正是 BUG-0026
+guard 那句话的第三次实例化："判定可以是对的，而摘要仍然误导人"。
+
+### 10.4 §2.3 其余数字的复算结论（划定本勘误的边界）
+
+- **22 模块 × 6 类 = 132 个数值**：与 `modinfo.txt` 各模块页 `SCORE` 行逐格复算
+  **全部一致**，无第四处数值错误。
+- **实例数列**：除 `counter`（E1）外，其余 21 行与 `modinfo.txt`
+  `Module self-instances :` 逐行计数**全部一致**（`delta_counter`=108 正确）
+  ⇒ E1 是单格错抄，**非整列失效**，故"例/实例数"列予以保留而非删除
+  （REV-035 §Q2(c)：该列是 §2.3 与原始 `hierarchy.txt`/`modinfo.txt` 之间唯一的
+  交叉核对锚点）。
+
+### 10.5 机器可复算断言块（closer 复验入口）
+
+下列每行 = `<勘误 id> <模块> <字段> <值>`，由本节表格逐条对应；closer 的复验命令
+直接以 `modinfo.txt` / vendor RTL 校验之，**任一行与机器事实不符即红**。
+
+```
+ERRATA-FACTS
+E1 counter self_instances 12
+E2 lzc sections Assert,Branch,Cond,Toggle
+E3 stream_register sections Branch,Line,Toggle
+E4 stream_register rtl_assert_count 0
+```
