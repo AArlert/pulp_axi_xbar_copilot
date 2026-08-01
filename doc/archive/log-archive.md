@@ -1,4 +1,51 @@
 # Work log archive
+## [0.4.22] 2026-08-01 REV-027 加固卡 A 落地——M4-BP02 写向 w_open[3] 转正，LEAD 深度经验安全上探
+
+**背景**：REV-027 驳回 w_open[3] 豁免、判定其是驱动 LEAD 窗口过保守的产物
+而非结构不可达，给出加固方向（LEAD 从 MaxSlvTrans-1 抬高到真实下游吸收
+深度）。派 L1 DV 卡（sonnet）落地，dv 独立读 REV-027 全文取技术依据，本卡
+不代其转述。
+
+**Done**
+- **`tb/slvport_agent.sv`**：`drive_burst_wopen` 的 `LEAD` 由固定
+  `MaxSlvTrans-1`（=5）改为 `MaxSlvTrans + 2*PipelineStages + 1`（=9，
+  只用 Cfg 参数推导，不抄 RTL 值）。**经验探测过程**（每步套 `timeout`
+  防止真死锁）：LEAD=6..10 全部干净结束、跨 SEED=1/2/3/42 完成时刻
+  逐位一致（确定性非运气）；**LEAD=11 触发驱动任务自死锁**，被
+  `tb_top` 自带 watchdog 安全捕获（`UVM_FATAL`，非真挂起）——证实这是
+  单线程"先开窗后排空"驱动任务自身的阈值，非 DUT 死锁，与 REV-027 的
+  判断一致。最终值留 1 笔余量于探得安全上限（10）、2 笔余量于首次失败
+  点（11）。
+- `tb/seq_lib.sv` 同步订正两处随之过时的旧注释（不再声称 LEAD 卡在 mux
+  FIFO 深度下）。
+- **orch 独立复验**（不采信 DV 卡自报）：`git diff` 确认改动只有 3 个
+  文件、36 行，外科手术式；单跑 `make run TEST=m4_bp02_demuxlock_test
+  SEED=1` 确认 `UVM_ERROR:0`、`SB_SUMMARY` 全零 mismatch、svacheck
+  PASS；**从 `make clean` 开始独立整跑一次全量回归**（不复用 DV 卡自己
+  的构建产物）确认 28/28 PASS；亲自生成 merged urg 报告，逐字节核对
+  `axi_demux_simple` 实例 0（本场景施压的实例）的 `genblk1.w_open[3:0]`
+  三列 toggle 状态**全 Yes**（此前 baseline 下该实例与其余实例一样
+  `w_open[3]=No`）——`w_open[3]` 转正证据独立复核，非采信转述。
+  `axi_demux_simple` 模块级 Toggle 聚合由 70.93%（P0 基线）微升至
+  71.18%（符合预期——本卡只关一个 bit，不是全部残余）。
+- Evidence 刷新：`doc/evidence/v0.4.21/M4-BP02.log`（`make evidence`
+  机械生成，非手写），testplan M4-BP02 行证据路径同步更新，判决门/红线
+  正文未变。
+
+**Not done**
+- REV-027 加固卡 B（AR 侧对偶：`lock_ar`/`ar_id_cnt_full` + 3 条 AR 侧
+  valid-but-not-ready 断言，五件套）尚未派发。
+- REV-026 十项 (a) 加固卡均未派发。
+
+**Next**
+- 派发加固卡 B（AR 侧对偶新场景）。
+
+**How verified**
+- 见上"orch 独立复验"段——单场景 + 从零全量回归 + urg 逐字节核对三重
+  独立复核，均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap 类别。
+
 ## [0.4.21] 2026-08-01 P0 全量合并重测完成，精确核出十项加固卡当前真实残余（doc/evidence/v0.4.20/M4-P0-remeasure.md）
 
 **背景**：REV-026 强制要求全体 (a) 加固卡派发前先做一次全量 COV=1 合并

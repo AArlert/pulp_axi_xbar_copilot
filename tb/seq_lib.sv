@@ -17,7 +17,11 @@
 // slvport_rdata_sat_seq (REV-026 A-1/A-2 enrichment, see that class'
 // own header comment) — address-mirror low/high saturating reads, added
 // on top of the original per-port traffic rather than replacing any of
-// it.
+// it. It then runs a third fanout pass of slvport_waddr_sat_seq (REV-026
+// B-1 enrichment, see that class' own header comment) — the same
+// low/high saturating address construction mirrored onto writes, closing
+// the write-direction half of the `aw.addr`/`ar.addr` toggle gap that the
+// read-only A-1/A-2 pass left open.
 
 // ----------------------------------------------------------------------------
 // Shared stimulus helpers (doc/code-suggestion.md 2.1 / 2.2). Both are pure
@@ -174,6 +178,65 @@ class slvport_rdata_sat_seq extends uvm_sequence #(axi_seq_item);
   endtask
 endclass
 
+// slvport_waddr_sat_seq — M1-01 enrichment (REV-026 "B-1" card; technical
+// basis doc/evidence/v0.4.15/M4-toggle-bit-decomposition.md §1 "清单B具体化"
+// B段): closes the write-direction half of the `aw.addr[31:0]`/`ar.addr[31:0]`
+// toggle gap that slvport_rdata_sat_seq (A-1/A-2) deliberately left open
+// (that sequence is read-only — see its own header comment "Read-only:
+// axi_mux mst_req_o.w.data[63:0] is already 100% covered ... no write leg is
+// added", which is a statement about `w.data`, not about `aw.addr`
+// toggle — `aw.addr` itself was never independently exercised beyond
+// slvport_basic_seq's small `k*128` offsets, k=0..3). This sequence issues
+// single-beat (AxLEN=0) WRITE bursts at each target master port's region
+// low-saturation address (every region-internal address bit 0) and
+// high-saturation address (every region-internal bit 1, down to the
+// beat-size alignment boundary) — the exact same address construction as
+// slvport_rdata_sat_seq, mirrored onto `aw`/`w` instead of `ar`. Both are
+// still decode-table hits (uvm_env.md C2.4), so no new judgement dimension
+// is introduced (SPEC-1/SPEC-3.1/SPEC-3.2 data-completeness/routing
+// judgement unchanged, values only). Same lo/hi/lo ordering rationale as
+// slvport_rdata_sat_seq: a single lo->hi pair only proves one transition
+// direction reached the target signal; issuing low->high->low from this
+// same source makes both toggle directions self-contained in this
+// sequence's own program order.
+class slvport_waddr_sat_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_waddr_sat_seq)
+
+  int unsigned slv_port_idx;
+
+  function new(string name = "slvport_waddr_sat_seq");
+    super.new(name);
+  endfunction
+
+  task automatic send_write(input xbar_types_pkg::addr_t addr,
+                             input int unsigned m, input string tag);
+    axi_seq_item it;
+    it = axi_seq_item::type_id::create(
+        $sformatf("wasat_%s_%0d_%0d", tag, slv_port_idx, m));
+    start_item(it);
+    it.is_write = 1'b1;
+    it.addr     = addr;
+    it.len      = axi_pkg::len_t'(0);
+    it.id       = xbar_types_pkg::id_slv_t'($urandom_range(0, 31));
+    fill_wr_payload(it, it.len);
+    finish_item(it);
+  endtask
+
+  task body();
+    for (int unsigned m = 0; m < xbar_types_pkg::NO_MST_PORTS; m++) begin
+      xbar_types_pkg::addr_t lo_addr, hi_addr;
+
+      lo_addr = xbar_types_pkg::addr_t'(m) * xbar_types_pkg::REGION_SIZE;
+      hi_addr = lo_addr + xbar_types_pkg::REGION_SIZE
+                - xbar_types_pkg::addr_t'(xbar_types_pkg::STRB_W);
+
+      send_write(lo_addr, m, "lo0");
+      send_write(hi_addr, m, "hi");
+      send_write(lo_addr, m, "lo1");
+    end
+  endtask
+endclass
+
 class m1_01_smoke_vseq extends uvm_sequence #(uvm_sequence_item);
   `uvm_object_utils(m1_01_smoke_vseq)
   `uvm_declare_p_sequencer(xbar_vseqr)
@@ -185,6 +248,7 @@ class m1_01_smoke_vseq extends uvm_sequence #(uvm_sequence_item);
   task body();
     fanout_per_slv#(slvport_basic_seq)::run(p_sequencer, "slv_seq");
     fanout_per_slv#(slvport_rdata_sat_seq)::run(p_sequencer, "slv_rdsat_seq");
+    fanout_per_slv#(slvport_waddr_sat_seq)::run(p_sequencer, "slv_wasat_seq");
   endtask
 endclass
 
