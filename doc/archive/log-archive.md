@@ -1,4 +1,60 @@
 # Work log archive
+## [0.4.35] 2026-08-02 REV-030 DV-D（#18）落地——M4-EB02 err_slv 读方向背压，M4-EB01 读向对偶；随后暂停派卡，等用户裁定 M4 出口条件
+
+**背景**：REV-030 §3 DV-D 构造指引，五张 DV 卡中估级最低（L1，机制
+全部现成）的一张，优先派发。**本卡收尾后，用户叫停——M4 六类硬 90%
+出口条件与"结构性可达但性价比低"这类残余（DV-A~E 这一批）持续矛盾，
+需要先裁定 milestone 出口条件本身，暂停继续派发 DV-A/B/C/E 与 #14/#15，
+等用户决策。**
+
+**Done**
+- **`tb/axi_txn.sv`**：新增 `r_backpressure` 字段（镜像既有
+  `b_backpressure`）。**`tb/slvport_agent.sv`**：`drive_burst` 新增
+  `BP_R_HOLD_CYC=50` 有界 `r_ready` 保持窗口（镜像 `BP_B_HOLD_CYC`）；
+  monitor 新增 `EB_AR_HELD` 覆盖点采样（`ar_valid && !ar_ready`，纯外部
+  握手观测，非判决）。**`tb/seq_lib.sv`**：新增 `slvport_eb02_seq`
+  （`num_rd=10 > err_slv r_fifo 深度 4`，单拍读、未命中地址、`atop='0`）
+  + `m4_eb02_errbp_vseq`。**`tb/test_lib.sv`**：新增
+  `m4_eb02_errbp_test`（镜像 `m4_eb01_errbp_test`）。**testplan 新行
+  M4-EB02**（M4-EB01 读向对偶）+ **feature-matrix F-M4-08**。判决门
+  **原样复用** `scoreboard_refmodel.sv` 既有 `SB_DECERR_*` 判据族——
+  **零改动 scoreboard 任何一行**（orch `git diff --stat` 确认）。
+- **未做 KILL 注伤自证，理由经查证成立**：零新增期望值推导路径。orch
+  独立核实 M4-EB01 自己当初落地（0.4.18 版本块，见 `doc/archive/
+  log-archive.md`）同样"判决门复用 M3-DE01 的 SB_DECERR_* 判据族（不新
+  发明期望值）"、同样未做 KILL——本卡与该先例判断口径一致，非临时找
+  借口。
+- **orch 独立复验**：diff 审读确认全部改动为纯加型（新字段/新
+  localparam/新覆盖点/新 seq/新 test 类），`scoreboard_refmodel.sv`
+  确认零改动；从 `make clean` 开始独立整跑全量回归确认 **30/30 PASS**
+  （含新场景 `m4_eb02_errbp_test`）；独立重新生成 urg 合并报告，直接
+  解析 `axi_err_slv`（mod32.html）模块级汇总：**SCORE 94.04/LINE
+  100/COND 100/TOGGLE 69.78%→70.22%/BRANCH 100/ASSERT 100**，
+  `slv_resp_o.ar_ready` 由 No/No/No 转 **Yes/Yes/Yes（全部 6 实例+合并
+  视图，双向翻转）**，与 DV 卡自报数字完全一致。
+- Evidence 刷新：`doc/evidence/v0.4.34/M4-EB02.log`。
+- DV 卡如实登记一处流程偏差（非 taxonomy 五类）：受"先建后测"实际执行
+  顺序影响，未在动手前单独重跑一次排除本场景的基线核实 REV-030 引用的
+  69.78%/No,No,No，改用落地后交叉核验弥补（单跑新场景确认非判决 cover
+  `cp_chan` 精确只命中 `ar_held`，证明改动范围精确）。orch 认为该弥补
+  手法可接受，不影响本卡收版。
+
+**Not done**
+- **暂停**：DV-A/B/C/E 四张卡、#14（M4 签核卡）、#15（BUG-0048 fixer）
+  均未派发，等待用户对 M4 出口条件的裁定后再定后续动作。
+
+**Next**
+- 视用户裁定结果而定——可能是新增处置类别（如"定向可达但性价比劣于
+  M5 约束随机"的第三类豁免）、可能是重写 M4 出口条件本身（六类硬 90%
+  →更灵活的判据），也可能是维持现状继续按 REV-030 五张卡推进。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + scoreboard 零改动确认 + 从零全量
+  回归 + urg 逐字段核对 + M4-EB01 KILL 先例交叉核实，均未采信 DV 卡
+  自报数字。
+- `make check`（chain audit 无新增异常 gap，只是"仅锚父节"计数从 13→14
+  的已知形状增量）/`make selftest`（61/61）本轮复跑绿。
+
 ## [0.4.34] 2026-08-02 REV-030 三模块残余全面分诊——登记 Kind-A CW-009，五张 DV 构造指引卡（含 #16/#17/#18 终判）
 
 **背景**：任务 #21。orch 用 urg 对 `axi_mux`/`axi_demux_simple`/

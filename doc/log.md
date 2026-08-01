@@ -2,6 +2,70 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.38] 2026-08-02 BUG-0049 关闭（UNOWNED=∅ 经两条独立链确认）——并由复验反手挖出四条新账目缺陷 BUG-0050~0053
+
+**背景**：M4 关门前置。BUG-0049 的修复面（REV-033 裁 CW-014 + arch 返工 + orch 应用）
+已在 0.4.37 落地，本闭环只做**关闭**——按不变量 3（closer ≠ fixer）派全新 rev 实例
+独立复验。orch 侧**同时**另跑四路互不知情的独立复算作收卡对抗验证：这是对
+BUG-0049 根因之三（"orch 复验只抽查数字未做完备性交叉核对"）的直接反制。
+
+**Done**
+- **REV-034（closer 卡，rev·L3）**：从原始 urg 报告 `sim/out/urgText6/modlist.txt`
+  独立重做 132 格三态（N/A 59 + PASS 43 + <90% 30）与 30 格四表集合差，**UNOWNED=∅**；
+  例化闭包 22 成员经 RTL BFS 独立重建、与 urg 模块页集合双向差集为空；CW-014 逐 bin
+  账平（39=4+1+26+8）、所引 RTL 事实逐条回源；D1 已录 §6.1 DV-A 且两侧措辞不矛盾。
+  产物：`doc/review/REV-034.md`（含 30 格集合差附表，未来签核核读 UNOWNED=∅ 的底板）。
+- **BUG-0049 CLOSED（机器背书）**：closer 跑
+  `make evidence BUG=BUG-0049 CMD=… EXPECT='RESULT CELLS=132 LT90=30 UNOWNED=0'`
+  一次跑通，脚本自行翻状态并写 `doc/evidence/v0.4.37/BUG-0049.log`（首行即 `CMD:`）。
+  配套实质记录 `doc/evidence/v0.4.37/BUG-0049-closure.md`（BUG-0029 guard 要求的位置），
+  两份文件的形式件/实质件分工已写进其抬头。orch 前置填 `fix_commit=861c7f8`
+  （`BUG_STATES_NEED_COMMIT` 含 CLOSED）。
+- **orch 四路独立复算（收卡对抗验证）**：正向枚举（从 §2.3 实测表）/ 反向枚举（从四个
+  归属面）/ 直查覆盖库原始事实（绕过全部 markdown）/ 从 RTL 重推例化闭包，四路互不
+  知情，再由第五个裁决者比对分歧。三路作答者的 30 格 below90 集合**逐格完全一致**，
+  裁决者独立复算同得 `CELLS=132 LT90=30 UNOWNED=0` —— 与 REV-034 逐格吻合。
+  **UNOWNED=∅ 由两条完全独立的证据链确认。**
+- **新登记四条（无条件登记；三条系复验反手挖出，一条系 closer 报出）**：
+  - **BUG-0050**（引用越界族，与 BUG-0049 互为镜像）：CW-010 认领 `fifo_v3` Cond 的
+    flush 分量，而该 bin **物理不存在**（`fifo_v3.sv:122` 单项条件，26 个实例的
+    Condition 段行号恒为 {73,88,101}）；CW-002/CW-007 被引用于其登记文本之外的模块页；
+    BUG-0044 承接两格 Toggle 的链接只在 REV-030、未回写债务行本体。四条均为"过度引用"
+    而非"无人认领"，**剥离后 UNOWNED 仍为 ∅**，故不影响 BUG-0049 的关闭。
+  - **BUG-0051**（证据事实错抄族）：final-sweep §2.3 `counter` 实例数写 108（真值 12，
+    系 `delta_counter` 之数误抄，已被 §6.3 继承）；脚注 3 对 `lzc` 的 Line/Cond/Branch
+    N/A 陈述与同表 Cond=97.73/Branch=97.73 自相矛盾；脚注 6 对 `stream_register` Cond
+    的成因被同一份 modinfo 证伪。**M4 出口第二条要求"附已核实成因"，成因写错等同未满足。**
+  - **BUG-0052**（框架路径漂移）：`.claude/agents/{rev,dv}.md`、`dispatch/SKILL.md`、
+    `doc/bugs.md:3` 表头共四处引用 0.8.0 已合并掉的 `workflow/review/*`、`workflow/fail/*`
+    路径，`test -e` 逐条实测全 MISSING。REV-034 实例是第一个撞上并靠卡内订正绕过的。
+  - **BUG-0053**（记录卫生）：`REV-033.md` 尾部工具标记随 `861c7f8` 入库；REV-034 实例
+    写自己记录时**当场复现同一泄漏**（自检删除）——系统性写作陷阱，非一次性疏忽。
+
+**Not done**
+- 卡E（M4 签核重开）未派——`make check MILESTONE=4` 条件 3 尚红。
+- BUG-0048（lint baseline 漂移）仍 OPEN，下一闭环主件（fixer + 独立 closer 两次派发）。
+- BUG-0050~0053 均 OPEN：0050/0053 待 rev 裁决处置面，0051/0052 待派 fixer。**四条都压在
+  M4 签核之前**——0050/0051 直接触及 M4 出口第二、三条的诚实性，0052/0053 是记录卫生。
+
+**Next**
+- 闭环2：BUG-0048 fixer（DV，逐站点分诊 62 个新 lint 站点 + 重同步基线；硬约束不得
+  `make clean` 毁 `sim/out` 覆盖库）+ 独立 closer。
+- 闭环3：BUG-0050~0053 处置（rev 裁决 + fixer）。
+- 闭环4：卡E M4 签核（rev·L3 全 rubric），通过后 `make bump minor=1` + tag v0.5.0。
+
+**How verified**
+- `make evidence BUG=BUG-0049 …` 退出 0、签名命中，脚本自行回填 CLOSED + verify_evidence
+  （非手改）；`doc/evidence/v0.4.37/BUG-0049.log` 首行为 `CMD:`。
+- 四路复算的关键事实 orch 侧逐条机核复现：`grep -c i_counter_open_w/i_r_counter
+  sim/out/urgText6/hierarchy.txt` 各得 6（counter=12，非 108）；`grep -n flush_i
+  vendor/common_cells/src/fifo_v3.sv` 只得 :25/:122，遍历 26 个 fifo 实例 Condition 段
+  无 LINE 122；`modlist.txt:48` lzc 行 Cond/Branch=97.73 与脚注 3 正文矛盾；四条 workflow
+  死路径 `test -e` 全 MISSING；`tail -3 doc/review/REV-033.md` 见工具标记。
+- `make check` docs-check passed、chain audit 无新增 gap 形状；`make selftest` 见本块提交。
+- 本闭环零 RTL/TB 改动，未跑 sim、未 `make clean`、`sim/out/` 全程只读（覆盖库另备份至
+  scratchpad 防误删）。
+
 ## [0.4.37] 2026-08-02 里程碑重构落地——M4 出口重定义、新增 M6 承接 ≥90% 门，spec §0#4 重 pin（BUG-0047 选项 (ii) 兑现）
 
 **背景**：用户裁定"覆盖率 90% 出口不该留在只有定向激励的里程碑"，走
@@ -121,60 +185,4 @@ orch 机械应用 + 重 pin。
 - `make check` 本轮复跑绿（docs-check passed；chain audit 仅既有已知
   形状，"仅锚父节"14 处与 0.4.35 记录一致，无新增 gap）。本闭环零
   RTL/TB 改动，无需重跑回归。
-
-## [0.4.35] 2026-08-02 REV-030 DV-D（#18）落地——M4-EB02 err_slv 读方向背压，M4-EB01 读向对偶；随后暂停派卡，等用户裁定 M4 出口条件
-
-**背景**：REV-030 §3 DV-D 构造指引，五张 DV 卡中估级最低（L1，机制
-全部现成）的一张，优先派发。**本卡收尾后，用户叫停——M4 六类硬 90%
-出口条件与"结构性可达但性价比低"这类残余（DV-A~E 这一批）持续矛盾，
-需要先裁定 milestone 出口条件本身，暂停继续派发 DV-A/B/C/E 与 #14/#15，
-等用户决策。**
-
-**Done**
-- **`tb/axi_txn.sv`**：新增 `r_backpressure` 字段（镜像既有
-  `b_backpressure`）。**`tb/slvport_agent.sv`**：`drive_burst` 新增
-  `BP_R_HOLD_CYC=50` 有界 `r_ready` 保持窗口（镜像 `BP_B_HOLD_CYC`）；
-  monitor 新增 `EB_AR_HELD` 覆盖点采样（`ar_valid && !ar_ready`，纯外部
-  握手观测，非判决）。**`tb/seq_lib.sv`**：新增 `slvport_eb02_seq`
-  （`num_rd=10 > err_slv r_fifo 深度 4`，单拍读、未命中地址、`atop='0`）
-  + `m4_eb02_errbp_vseq`。**`tb/test_lib.sv`**：新增
-  `m4_eb02_errbp_test`（镜像 `m4_eb01_errbp_test`）。**testplan 新行
-  M4-EB02**（M4-EB01 读向对偶）+ **feature-matrix F-M4-08**。判决门
-  **原样复用** `scoreboard_refmodel.sv` 既有 `SB_DECERR_*` 判据族——
-  **零改动 scoreboard 任何一行**（orch `git diff --stat` 确认）。
-- **未做 KILL 注伤自证，理由经查证成立**：零新增期望值推导路径。orch
-  独立核实 M4-EB01 自己当初落地（0.4.18 版本块，见 `doc/archive/
-  log-archive.md`）同样"判决门复用 M3-DE01 的 SB_DECERR_* 判据族（不新
-  发明期望值）"、同样未做 KILL——本卡与该先例判断口径一致，非临时找
-  借口。
-- **orch 独立复验**：diff 审读确认全部改动为纯加型（新字段/新
-  localparam/新覆盖点/新 seq/新 test 类），`scoreboard_refmodel.sv`
-  确认零改动；从 `make clean` 开始独立整跑全量回归确认 **30/30 PASS**
-  （含新场景 `m4_eb02_errbp_test`）；独立重新生成 urg 合并报告，直接
-  解析 `axi_err_slv`（mod32.html）模块级汇总：**SCORE 94.04/LINE
-  100/COND 100/TOGGLE 69.78%→70.22%/BRANCH 100/ASSERT 100**，
-  `slv_resp_o.ar_ready` 由 No/No/No 转 **Yes/Yes/Yes（全部 6 实例+合并
-  视图，双向翻转）**，与 DV 卡自报数字完全一致。
-- Evidence 刷新：`doc/evidence/v0.4.34/M4-EB02.log`。
-- DV 卡如实登记一处流程偏差（非 taxonomy 五类）：受"先建后测"实际执行
-  顺序影响，未在动手前单独重跑一次排除本场景的基线核实 REV-030 引用的
-  69.78%/No,No,No，改用落地后交叉核验弥补（单跑新场景确认非判决 cover
-  `cp_chan` 精确只命中 `ar_held`，证明改动范围精确）。orch 认为该弥补
-  手法可接受，不影响本卡收版。
-
-**Not done**
-- **暂停**：DV-A/B/C/E 四张卡、#14（M4 签核卡）、#15（BUG-0048 fixer）
-  均未派发，等待用户对 M4 出口条件的裁定后再定后续动作。
-
-**Next**
-- 视用户裁定结果而定——可能是新增处置类别（如"定向可达但性价比劣于
-  M5 约束随机"的第三类豁免）、可能是重写 M4 出口条件本身（六类硬 90%
-  →更灵活的判据），也可能是维持现状继续按 REV-030 五张卡推进。
-
-**How verified**
-- 见上"orch 独立复验"段——diff 审读 + scoreboard 零改动确认 + 从零全量
-  回归 + urg 逐字段核对 + M4-EB01 KILL 先例交叉核实，均未采信 DV 卡
-  自报数字。
-- `make check`（chain audit 无新增异常 gap，只是"仅锚父节"计数从 13→14
-  的已知形状增量）/`make selftest`（61/61）本轮复跑绿。
 
