@@ -2,6 +2,81 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.19] 2026-08-01 REV-027——w_open[3] 覆盖率豁免驳回（非结构不可达，是激励产物），顺带查出 M4-BP02 只闭合 AW 侧、AR 侧对偶缺口仍开
+
+**背景**：0.4.18 遗留的 open risk——DV 卡称 w_open[3]（值≥8）在基线
+`MaxSlvTrans=6` 下"结构性不可达"、建议 Kind-A 豁免。用户授权 orch 全权
+派卡裁决。派发一张 L3 rev 卡（独立首过，opus，全 rubric），只给一手材料
+文件/行号清单，不带任何一方结论（含 26 条 make guards 命中，Hard/Context
+分栏逐字粘贴）。
+
+**Done**
+- **rev 独立裁决完毕，doc/review/REV-027.md**：**驳回豁免**（不登记任何
+  coverage-waivers.md 条目，CW-008 保留未用）。核心发现：w_open 是
+  demux 内部"W 解复用控制计数器"（4 位，由 `MaxMstTrans=10` 定宽），RTL
+  门仅在满量程 15 设限，**不在 8**；spec §5.4.2"基线见证达 8>6"讨论的是
+  另一个计数器（每桶 AW ID 计数器，pop 于 B），**不是** w_open（pop 于
+  W）——DV 卡的转述张冠李戴。w_open 真实上界 = 下游 AW 吸收深度（mux
+  w_fifo 深度 6 + demux→mux `axi_multicut` spill 容量 2 + demux 自身
+  lock 1 ≈ 8~9），且随 `LatencyMode` 逐 config 浮动（cfgB 更宽）——结构
+  上足以翻 bit3，非结构常量。观测峰值 5 = 驱动 `drive_burst_wopen` 自设
+  `LEAD=MaxSlvTrans-1` 的产物（基于"LEAD≥mux FIFO 深度即死锁"这一**不
+  准确**的前提——mux w_fifo 满是可恢复背压，W 末拍无条件弹出、与 full
+  无关）。Kind-A 举证责任未尽；Kind-B 被 BUG-0047 guard + REV-024 §4
+  （控制/计数位排除在外）双重禁止。
+- **rev 亲自重跑取数**：裁决开始时 sim/out 是未带 COV=1 的空壳（同
+  KILL-0004 型号），亲自 `make clean && make regress COV=1`（28/28
+  PASS）后从真实 merged 基线 vdb 用 `urg` 取逐位 toggle（本机 xcov 因
+  Verdi 版本早于受测基线不可用，记 TOOL_ENV、非阻塞）。
+- **顺带查出（rev Q5 核实）**：M4-toggle-bit-decomposition.md 原把
+  `lock_aw/ar`、`aw/ar_id_cnt_full` 成对列为缺口，M4-BP02 是纯写场景，
+  **只闭合了 AW 侧**（`lock_aw_valid_q/_d` 全 7 实例 Yes、`aw_id_cnt_full`
+  受压端口 Yes、`w_open[2:0]` 全 Yes）；**AR 侧（`lock_ar_valid_q/_d`、
+  `ar_id_cnt_full`）全 7 实例仍为 No，完全未闭合**——0.4.18 未点出这一半
+  缺口，本次据真库补记。
+- **taxonomy-class anomaly（rev 强制字段）**：否——w_open[3]/lock_ar/
+  ar_id_cnt_full 是覆盖率缺口（零 mismatch、无 checker 见红），非
+  failure_taxonomy 五类失败，不开 bugs.md 行；DV 转述的两处事实性偏差
+  （"结构不可达"框架、"LEAD≥FIFO 即死锁"注释）是本次裁决订正的评审发现，
+  非 DUT/TB/工具/spec/约束缺陷，M4-BP02 场景本身判决无泄漏、功能正确。
+- **rev 交付 guidance（不写激励代码）**：排两张独立"需补场景"DV 卡，供
+  orch 后续按 REV-024 §2 既定处置排队派发——加固卡 A（写向，关
+  `w_open[3]`）：把 LEAD 从 `MaxSlvTrans-1` 经验性提高到真实下游吸收深度
+  （≈8，须探定安全上界而非盲设常数，LEAD 推导只准用 Cfg 参数+经验探测，
+  不得抄 RTL 内部信号值）；加固卡 B（读向，关 `lock_ar`/`ar_id_cnt_full`）
+  ：AR 持续背压 + 读桶在飞数压至 §5.4.1 有效上限，判决门复用既有读向
+  判据。两卡均不占用 coverage-waivers.md 条目。
+- **定级 vs 实际**：L3/opus/全 rubric 与实际工作量相符（多文件 RTL/spec
+  交叉推导 + 独立取数复验），无失配。
+- 首轮派发因 orch 自己给的 Workflow 结构化输出 schema 设计缺陷
+  （`taxonomy_anomaly` 字段声明为"必填+可空对象"，subagent 工具调用层
+  反复无法满足校验，5 次重试耗尽后 workflow 报错退出）导致一次空跑；
+  rev 的实际投入（186807 tokens、63 次工具调用、约 23 分钟）**并未浪费**
+  ——doc/review/REV-027.md 已被完整写出（非结构化回传失败与审阅记录落盘
+  是两件独立的事），orch 从磁盘上的记录文件直接读取裁决全文，未采信任何
+  转述。schema 已改为扁平字段（去掉嵌套可空对象）供下次复用，但本次未
+  重新触发 agent 调用（记录已存在，无需重跑）。
+
+**Not done**
+- 加固卡 A/B（w_open[3] 写向、lock_ar/ar_id_cnt_full 读向）尚未派发——
+  按"小闭环即停"原则，本轮只完成裁决闭环，派发留给下一轮。
+- 清单 B 剩余 (a) 类加固（A-1/A-2/B-1/B-2/B-3/C-1/C-2/D-1/E-1/F-1）仍未
+  动手，需串行处理（REV-026 条件 6）。
+
+**Next**
+- 派发加固卡 A（w_open[3]，写向 LEAD 加深）与加固卡 B（AR 侧对偶缺口）
+  ——两者互相独立、不触碰同一 seq 类的同一段代码（A 改 drive_burst_wopen
+  的 LEAD 计算，B 是新读向场景），但均触及 tb/seq_lib.sv/slvport_agent.sv
+  等共享文件，按 REV-026 条件 6 精神串行排队，不并行 worktree。
+- 之后再回到清单 B 剩余 (a) 类加固。
+
+**How verified**
+- rev 亲自 `make clean && make regress COV=1`（28/28 PASS）+ `urg` 真库
+  逐位 toggle 核对，非采信任何转述（doc/review/REV-027.md §0/§2.5）。
+- orch 独立复核：确认 doc/review/REV-027.md 已完整落盘（六问结构齐备、
+  Overall verdict 明确），未采信失败的 StructuredOutput 回传碎片。
+- `make check`/`make selftest` 本轮收尾前复跑（见下）。
+
 ## [0.4.18] 2026-08-01 M4-EB01/M4-BP02 落地转绿——两张 DV 卡并行 worktree 实现，独立复验+合并冲突手工消解
 
 **背景**：清单 B 批准清单里的两条新场景（err_slv B 通道背压 / demux 锁定
@@ -131,84 +206,4 @@ CONDITIONAL PASS）。
   upstream_sanity)` 分支外一律走默认 `out/cov.vdb`）+ `grep` 确认 6 个
   场景均在 `regress.list` + `doc/testplan.md` 拓扑列均为 baseline，
   纠正 REV-026 的 merge-premise 错误，证据充分、可复核。
-
-## [0.4.16] 2026-08-01 逐位 Toggle 分解完成（Kind-B 前置兑现）——M4 阶段合法 Kind-B 豁免集为空集，转正 3 条 Kind-A（err_slv 恒定输出）
-
-**背景**：REV-024 授权了 Kind-B（方法论受限、延后 M5）豁免路径，但明确"不
-预先授予任何具体豁免，须先有逐信号/逐位 toggle 分解证据"。本周期用
-Workflow 工具跑一套多 agent 流水线兑现这个前置：刷新覆盖率数据 → 4 模块
-（axi_mux/axi_xbar/axi_demux_simple/axi_err_slv）并行逐位分解 → 每条
-"载荷候选"由 3 个独立怀疑者做对抗性反驳投票 → 综合报告 → 独立 rev 复核
-（REV-025）。
-
-**Done**
-- **覆盖率数据刷新**：核实并确认此前 sim/out 已因两次不带 COV=1 的
-  make regress（KILL-0004 自证卡、M4 签核卡 falsification）变成非
-  instrumented 空壳，干净重跑 make clean && make regress COV=1（26/26
-  PASS）；基线聚合数字与 v0.4.9 逐位一致（LINE 80.84/COND 71.66/
-  TOGGLE 47.87/FSM 7.14/BRANCH 82.99/ASSERT 78.62/GROUP 90.89，orch 独立
-  核对 doc/evidence/v0.4.9/M4-coverage-baseline.md 表格逐位吻合），证明
-  数据库确系真实 instrumented。
-- **4 模块并行逐位分解**：每个模块独立读 urg Toggle Port Details 报告 +
-  RTL 逐信号核实语义。关键发现——
-  - `axi_mux` 是唯一被标"载荷候选"的模块：`mst_resp_i.r.data[63:0]`
-    （散布 ~30/64 位未双向翻）。同模块 `mst_req_o.w.data[63:0]` 与
-    `id[7:0]` 前缀+原ID 两段经核实**已 100% 覆盖、非缺口**，直接反驳
-    REV-024 把 W/R.data 打包处理的假设。
-  - `axi_xbar` 顶层核实"0 载荷位"——54 个 toggle 位全是窄控制/配置
-    （clk/rst/test/en_default/default_mst_port），载荷 toggle 转移到子
-    模块度量，无残余宽载荷缺口。
-  - `axi_demux_simple` 写载荷 100% 覆盖，读载荷 87.5%（8 位残），主导
-    缺口是属性字段（119/225 bin）与地址（67/225 bin），均非载荷类。
-  - `axi_err_slv` 入侧写载荷 100% 覆盖；出侧发现三处**恒定常量输出**
-    （`r.data=RespData`、`r.resp/b.resp=Resp`、`user` tie-off）——
-    结构性 Kind-A，非 Kind-B。
-- **对抗性核实**：唯一"载荷候选"（axi_mux R.data）被 3/3 独立怀疑者
-  反驳——核心证据：TB `predict_beat_data` 返回 `{beat_a,beat_a}`（32-bit
-  地址镜像拼成 64-bit），R.data 实际由读地址决定、并非不透明随机载荷；
-  toggle 覆盖每位只需 all-0/all-1 两个饱和向量即可翻遍，根本不需要
-  "扫大量互异取值"，故不满足 Kind-B 判据(2)"纯定向不经济"。
-- **REV-025（独立 rev 实例）复核**：亲验 `axi_err_slv.sv`/
-  `axi_xbar_unmuxed.sv`/`xbar_types_pkg.sv`/`mstport_agent.sv`/
-  `seq_lib.sv` 具体行号，确认综合报告结论成立且比报告自述更强（R.data
-  的判据(1)"纯载荷"本身也不成立，两判据双失）。Conditional pass，三条
-  应用条件：仅新增 Kind-A A-1/A-2/A-3；size[2] 暂缓转正（须先确认 cfgA-E
-  全部配置数据总线 ≤64 位）；订正报告一处内部措辞不一致。
-- **orch 独立复验**（不采信自报）：亲读 `axi_err_slv.sv:23-27/145/
-  188-198` 确认三个常量赋值点；亲读 `axi_xbar_unmuxed.sv:195-211` 确认
-  两处例化点均未 override `RespData`；亲读 `xbar_types_pkg.sv:374-385`
-  确认 `predict_beat_data` 返回值；亲读 `seq_lib.sv:32-35` 确认 wdata 用
-  `$urandom` 随机填充；交叉核对覆盖率数字与 v0.4.9 基线逐位一致。
-- **orch 应用**：`doc/coverage-waivers.md` 新增 CW-003/004/005（err_slv
-  三条 Kind-A，引 REV-025）；Kind-B 模板行保留但注明"当前结论为空集"；
-  待建档区新增 size[2] 条目（附暂缓理由）；`doc/bugs/BUG-0047.md` 标记
-  逐位分解前置已完成、清单 B 已具体化到信号/位段级。产出
-  `doc/evidence/v0.4.15/M4-toggle-bit-decomposition.md`（完整分解报告 +
-  4 模块附录）+ `doc/review/REV-025.md`（仲裁记录）。
-- `make check`/`make selftest`（61/61）复跑绿。
-
-**Not done**
-- **清单 B**（约 6 类具体信号/位段，已在证据文件里具体化到信号级）仍
-  需逐条派 DV 定向覆盖卡——不因本次分解免除，反而更精确（如 axi_mux/
-  demux 的 r.data 现在明确知道"定向饱和读 all-0→all-1 即可闭"，不再是
-  笼统的"需补场景"）。
-- size[2] Kind-A 候选转正前需要一次跨配置（cfgA-E）数据总线宽度确认。
-- M4 仍未签核（REJECTED 判决未变，本轮工作是把"该走哪条路"这件事从
-  猜测变成了有逐位证据支撑的确定结论——净结果是收窄了处置空间：没有
-  Kind-B 可用，全部要么已覆盖、要么走 Kind-A、要么得真去补场景）。
-
-**Next**
-- 用户已完成本轮方法学张力优先项。下一步需用户决定：是逐条铺开清单 B
-  的 DV 定向覆盖卡（现在已经有信号级精确指引），还是先处理 size[2] 的
-  跨配置确认，或是先看其它待建档 Kind-A 项（`rst_ni`、
-  `spill_register` tie-off）。
-
-**How verified**
-- `make check`：docs-check passed，chain audit 无新增缺口。
-- `make selftest`：61/61 OK。
-- 覆盖率数字交叉核对：本次刷新的基线聚合数字与 v0.4.9 报告逐位一致。
-- REV-025 亲验的全部 RTL/TB 行号，orch 二次独立核对（见 Done 段），
-  均准确无误。
-- 本周期产生真实仿真（make regress COV=1，26/26），但非 testplan 场景
-  评审——不涉及 evidence.py 登记，是覆盖率测量性质的证据文件。
 

@@ -1,3 +1,4 @@
+{"date": "2026-08-01", "version": "0.4.19", "summary": "REV-027裁决w_open[3]覆盖率豁免请求：驳回（非结构不可达，是驱动LEAD窗口产物，Kind-A举证未尽、Kind-B被BUG-0047/REV-024§4双重禁止）。顺带查出M4-BP02只闭合AW侧，AR侧(lock_ar/ar_id_cnt_full)仍开。排两张需补场景DV卡（写向LEAD加深/读向对偶）待派发"}
 {"date": "2026-08-01", "version": "0.4.18", "summary": "M4-EB01(err_slv B通道背压)/M4-BP02(demux锁定FSM+ID计数饱和)并行worktree落地+独立复验，手工消解4处合并冲突，全量回归28/28。清单B剩余(a)类加固待串行处理"}
 {"date": "2026-08-01", "version": "0.4.17", "summary": "清单B分诊+REV-026门禁应用：注册M4-EB01/M4-BP02（🔲），登记CW-006(rst_ni范围豁免)/CW-007(size[2]转正)。orch纠正REV-026的merge-premise错误——6个场景本就已合并进baseline覆盖率，无需另跑合并。待派DV卡实现"}
 {"date": "2026-08-01", "version": "0.4.16", "summary": "逐位toggle分解（Kind-B前置）完成：M4阶段合法Kind-B豁免集=空集（唯一候选axi_mux R.data被3/3反驳，实为地址镜像）；转正3条err_slv恒定输出Kind-A（CW-003/004/005）。清单B已具体化到信号级，待派DV定向覆盖卡"}
@@ -5,4 +6,3 @@
 {"date": "2026-08-01", "version": "0.4.14", "summary": "M4 完整签核卡 REJECTED——机器门禁全绿≠签核，覆盖率定义性出口条件（六类≥90%）未满足，~6类残余缺口可达但未测、不可合法豁免。新登记BUG-0047（Toggle判据vs仅定向纪律的可行性张力）。M4维持🔲，待用户定夺后续优先级"}
 {"date": "2026-08-01", "version": "0.4.13", "summary": "BUG-0046→ACCEPTED@M5（REV-023推翻原失实框架：spec忠实上游文档、根因是上游doc-vs-RTL矛盾）。make check MILESTONE=4 四条机器门禁全绿，只剩签核卡（rev rubric+REV-017条件3+signoff文件）"}
 {"date": "2026-08-01", "version": "0.4.12", "summary": "登记KILL-0004（M4-OV01 tie-break注伤自证，orch独立复验）。M4机器门禁4条中3条转PASS，仅剩条件3（BUG-0046仲裁中，REV-023）"}
-{"date": "2026-08-01", "version": "0.4.11", "summary": "BUG-0045→ACCEPTED@M5、BUG-0043→WONTFIX（REV-021/022 独立仲裁应用）；核验中新登记BUG-0046（同源独立spec-gap，已派REV-023）。M4机器门禁条件3阻塞项转移，条件4（KILL）待DV卡交付"}

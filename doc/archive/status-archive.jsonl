@@ -1,3 +1,4 @@
+{"date": "2026-08-01", "version": "0.4.11", "summary": "BUG-0045→ACCEPTED@M5、BUG-0043→WONTFIX（REV-021/022 独立仲裁应用）；核验中新登记BUG-0046（同源独立spec-gap，已派REV-023）。M4机器门禁条件3阻塞项转移，条件4（KILL）待DV卡交付"}
 {"date": "2026-08-01", "version": "0.4.10", "summary": "M4 收尾第二项：六类覆盖率基线重出（REV-016条件2兑现）+ regress evidence 登记，M4 机器门禁4条中2条转PASS。剩余：BUG-0045/0043终态、M4 KILL覆盖、REV-017条件3、完整签核"}
 {"date": "2026-08-01", "version": "0.4.9", "summary": "M4 收尾第一项：BUG-0041 分诊闭环，REV-020 终判 WONTFIX（accepted-vendor-quirk）；顺带登记 BUG-0045（spec-gap 候选，非阻塞）；BUG-0043 维持观察。M4 收尾剩余：覆盖率基线重出、REV-017 条件3、完整签核"}
 {"date": "2026-08-01", "version": "0.4.8", "summary": "M5 立项阶段 0 完成（arch 提案+REV-019 CONDITIONAL PASS+登记 BUG-0044）。重要：REV-019 裁定 M5 须排 M4 签核之后，下一步转回收尾 M4（覆盖率基线重出+REV-017 条件3+签核），非直接开始 M5 阶段1。计划全文见 misty-petting-horizon.md"}
