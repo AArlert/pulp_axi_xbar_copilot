@@ -1,4 +1,39 @@
 # Work log archive
+## [0.4.29] 2026-08-01 REV-026 加固卡 E-1 落地——M3-DE01 组收官，err_slv ID toggle 全闭合
+
+**背景**：REV-026 批准清单 E-1（err_slv id[4:0]，(a)→M3-DE01），M3-DE01
+组第二张（也是最后一张）。DV 卡先用 urg 核实：`slv_resp_o.b.id[4]` 在
+全部 6 个实例上从未翻转过（既有场景写方向 ID 从未超过 9）、
+`slv_resp_o.r.id[4]` 在 4 个实例上只翻过一个方向。
+
+**Done**
+- **`tb/seq_lib.sv`**：新增 `slvport_de01_iddiv_seq`，作为 M3-DE01 第三趟
+  fanout 叠加（不改前两趟）。每端口驱动 id=0→id=31（`id_slv_t` 全 1）
+  →id=0 的饱和往返，写/读方向各一次，同 A-1/A2 当初的地址镜像饱和读
+  同一手法搬到 ID 维度。地址复用既有未命中窗口、取与前两趟不重叠的
+  偏移量，`atop` 恒 `'0` 原样保留。
+- **testplan M3-DE01 行**在 B-2 那句之后追加 E-1 的 enrichment 句。
+- **orch 独立复验**：diff 审读确认只加不改；从 `make clean` 开始独立
+  整跑全量回归确认 **29/29 PASS**；独立核对 `slv_resp_o.b.id[4:0]`/
+  `slv_resp_o.r.id[4:0]` 均转为 **Yes/Yes/Yes（全闭合，双向）**——不只是
+  bit4，饱和往返构造顺带闭合了其余位上零散残留的单向缺口；
+  `axi_err_slv` 模块级 Toggle **68.59%→69.19%**，与 DV 卡自报数字完全
+  一致。
+- Evidence 刷新：`doc/evidence/v0.4.28/M3-DE01.log`。
+
+**Not done**
+- **M3-DE01 组（B-2/E-1）收官**。REV-026 剩余三项（B-3/C-2/F-1）+ 三张
+  新任务（#16-18）+ BUG-0048 fixer 卡 + 最终 M4 签核卡均未派发。
+
+**Next**
+- B-3（M2-CFG01/M3-CFG02 rule 边界重配加宽）。
+
+**How verified**
+- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对，
+  均未采信 DV 卡自报数字。
+- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
+  gap。
+
 ## [0.4.28] 2026-08-01 REV-026 加固卡 B-2 落地——M3-DE01 err_slv 地址多样性自给自足
 
 **背景**：REV-026 批准清单 B-2（err_slv 未命中 addr，(a)→M3-DE01）。DV 卡

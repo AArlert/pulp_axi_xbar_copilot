@@ -2,6 +2,65 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.32] 2026-08-02 REV-028 裁决——config_ongoing_i 覆盖率缺口候选驳回登记，订正 REV-024 一处 Branch 误归因
+
+**背景**：任务 #19。B-3 加固卡（0.4.30）观察到 `addr_decode_dync` 的
+`config_ongoing_i` 端口在 `addr_decode.sv:106` 被硬接 `1'b0`，疑似
+Kind-A 覆盖率豁免候选。orch 只给 rev 卡原始材料位置（RTL 文件+行号、
+urg 取数命令、spec、REV-024 §2.2、`doc/coverage-waivers.md` 全文），
+不传递任何一方结论，由全新 rev 实例独立判断。
+
+**Done**
+- **rev 独立核实可达性成立**：`axi_xbar_unmuxed.sv:101/116` 例化的是
+  `addr_decode`（非 napot、非直接 dync），其端口列表根本不含
+  `config_ongoing_i`；`addr_decode.sv:106` 唯一驱动源为字面常量
+  `1'b0`。结构不可达，Kind-A 之"质"成立。
+- **但 rev 独立发现该缺口不构成需登记的"门失败"**：重生 urg 报告显示
+  `(addr_decode_dync, Toggle)` 合并值 = **92.00% ≥ 90%**，已过门；
+  `config_ongoing_i` 的 2 个死 bin 在分母内如实计入、非 silent
+  exclude，被 8% 余量吸收。`doc/coverage-waivers.md` 抬头明文限定登记
+  面为"有 bin、<90%"——此门不满足，登记反而是无失败 gate 却补一行的
+  思辨性制品（`workflow/discipline.md` rule 2）。**裁决：驳回登记，
+  不改 `doc/coverage-waivers.md`。**
+- **rev 顺带独立发现该模块真正的 <90% 数字另有其人**：Branch 83.33% 唯一
+  残余是 `addr_decode_dync.sv:146` 的 `IF` 语句 else 分支（urg Branch 表
+  `IF 146` = 1/2 covered，`MISSING_ELSE`），条件为
+  `!$isunknown(addr_map_i) && ~config_ongoing_i`——因
+  `config_ongoing_i≡0` 恒不致 false，else 分支唯一触达路径是
+  `addr_map_i` 出现 X，与 `config_ongoing_i` 无关。**REV-024 §2.2 行 6**
+  把这条 Branch 残余笼统归为"地址/rule 多样性→补场景"，orch 独立核对
+  REV-024 原文确认该行**从未提及** `config_ongoing_i`，且该 83.33% 数字
+  自 REV-024 基线（M4 大量地址/rule 多样性加固卡落地后的今天）**分毫未
+  变**——独立证实"更多样地址补场景"这条处方对这个 Branch 分支从未起过、
+  也不可能起作用（X 注入无功能语义，rev 称为 toggle/branch-theater）。
+  这是对 REV-024 一处历史误归因的订正，rev **未越界代为处置**，只 flag
+  给 orch 另派卡。
+- **orch 独立复验**：`doc/coverage-waivers.md` 确认零改动（`git status`
+  无该文件变更）；亲自重新解析 `sim/out/urgReport/mod20.html`——
+  头部汇总 `LINE 100.00/COND 100.00/TOGGLE 92.00/BRANCH 83.33/ASSERT
+  100.00` 与 rev 卡自报逐字一致；Branch 明细表 `TERNARY 105`=2/2、
+  `TERNARY 106`=2/2、`IF 146`=1/2（`MISSING_ELSE`），5/6=83.33% 精确
+  对账；亲读 `doc/review/REV-024.md:126` 确认该行文本原文确实通篇只谈
+  `addr_i`/rule 表 start/end、无 `config_ongoing_i` 字样。
+- `doc/review/REV-028.md` 已写入磁盘（完整推导过程+裁决+分流建议）。
+
+**Not done**
+- IF-146 Branch else 残余（`addr_decode_dync` 真正的 <90% 数字）需独立
+  另派 rev/DV 卡裁决（rev 建议候选 Kind-A：仿真专用 X-sanity 断言守卫、
+  仅 X 注入可达、无功能覆盖意义），本卡不越界代为处置。任务 #16-18、
+  #14、#15 仍未派发。
+
+**Next**
+- 新任务：IF-146 Branch else 独立裁决卡（订正 REV-024 §2.2 行 6 的
+  Branch 归因，评估 Kind-A 登记）。随后继续 #16-18。
+
+**How verified**
+- 见上"orch 独立复验"段——urg HTML 逐字节解析比对 + REV-024 原文亲读 +
+  `git status` 确认 coverage-waivers.md 零改动，均未采信 rev 卡自报
+  数字。
+- `make check`（docs-check + chain audit 无新增 gap）本轮复跑绿；本卡
+  未改 RTL/TB，无需重跑回归。
+
 ## [0.4.31] 2026-08-02 REV-026 加固卡 C-2 落地——M2-AT01 ATOP 编码多样性转正，REV-026 十项加固卡清单收官
 
 **背景**：REV-026 批准清单 C-2（aw.atop[5:0] 命中地址扩，(a)→M2-AT01，
@@ -114,41 +173,6 @@ default-master-port 索引的双向翻转（`default_idx_i` 此前只单向从�
 **How verified**
 - 见上"orch 独立复验"段——diff 审读 + M3-CFG02 guard 数字核对 + 从零
   全量回归 + urg 逐字节核对（含顺手核实 F-1），均未采信 DV 卡自报数字。
-- `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
-  gap。
-
-## [0.4.29] 2026-08-01 REV-026 加固卡 E-1 落地——M3-DE01 组收官，err_slv ID toggle 全闭合
-
-**背景**：REV-026 批准清单 E-1（err_slv id[4:0]，(a)→M3-DE01），M3-DE01
-组第二张（也是最后一张）。DV 卡先用 urg 核实：`slv_resp_o.b.id[4]` 在
-全部 6 个实例上从未翻转过（既有场景写方向 ID 从未超过 9）、
-`slv_resp_o.r.id[4]` 在 4 个实例上只翻过一个方向。
-
-**Done**
-- **`tb/seq_lib.sv`**：新增 `slvport_de01_iddiv_seq`，作为 M3-DE01 第三趟
-  fanout 叠加（不改前两趟）。每端口驱动 id=0→id=31（`id_slv_t` 全 1）
-  →id=0 的饱和往返，写/读方向各一次，同 A-1/A2 当初的地址镜像饱和读
-  同一手法搬到 ID 维度。地址复用既有未命中窗口、取与前两趟不重叠的
-  偏移量，`atop` 恒 `'0` 原样保留。
-- **testplan M3-DE01 行**在 B-2 那句之后追加 E-1 的 enrichment 句。
-- **orch 独立复验**：diff 审读确认只加不改；从 `make clean` 开始独立
-  整跑全量回归确认 **29/29 PASS**；独立核对 `slv_resp_o.b.id[4:0]`/
-  `slv_resp_o.r.id[4:0]` 均转为 **Yes/Yes/Yes（全闭合，双向）**——不只是
-  bit4，饱和往返构造顺带闭合了其余位上零散残留的单向缺口；
-  `axi_err_slv` 模块级 Toggle **68.59%→69.19%**，与 DV 卡自报数字完全
-  一致。
-- Evidence 刷新：`doc/evidence/v0.4.28/M3-DE01.log`。
-
-**Not done**
-- **M3-DE01 组（B-2/E-1）收官**。REV-026 剩余三项（B-3/C-2/F-1）+ 三张
-  新任务（#16-18）+ BUG-0048 fixer 卡 + 最终 M4 签核卡均未派发。
-
-**Next**
-- B-3（M2-CFG01/M3-CFG02 rule 边界重配加宽）。
-
-**How verified**
-- 见上"orch 独立复验"段——diff 审读 + 从零全量回归 + urg 逐字节核对，
-  均未采信 DV 卡自报数字。
 - `make check`/`make selftest`（61/61）本轮复跑绿，chain audit 无新增
   gap。
 

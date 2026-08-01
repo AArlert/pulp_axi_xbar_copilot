@@ -1,3 +1,4 @@
+{"date": "2026-08-01", "version": "0.4.24", "summary": "REV-026加固卡A-1+A-2落地：M1-01叠加地址镜像饱和读，axi_mux Toggle 62.55%→73.49%、axi_demux_simple 72.56%→77.07%（独立复核确认）。顺手登记BUG-0048（lint基线过期，不阻塞）。剩余9项(a)加固卡待派"}
 {"date": "2026-08-01", "version": "0.4.23", "summary": "REV-027加固卡B落地：新场景M4-BP03（AR侧对偶），5项目标gate一次性转正（lock_ar/ar_id_cnt_full+3条Assert）。axi_demux_simple LINE/BRANCH转100%，ASSERT转92.86%。三重独立复核+feature-matrix补F-M4-07"}
 {"date": "2026-08-01", "version": "0.4.22", "summary": "REV-027加固卡A落地：M4-BP02写向w_open[3]转正，LEAD由MaxSlvTrans-1经验安全上探至MaxSlvTrans+2*PipelineStages+1=9。三重独立复核（单跑/从零全量回归/urg逐字节核对）。下一步加固卡B（AR侧对偶五件套）"}
 {"date": "2026-08-01", "version": "0.4.21", "summary": "P0全量COV=1合并重测（28/28 PASS），精确核出十项(a)加固卡真实残余。确认3项已自然闭合；AR侧valid-but-not-ready断言+lock_ar+ar_id_cnt_full五件套仍全开，并入REV-027加固卡B。详见M4-P0-remeasure.md"}
