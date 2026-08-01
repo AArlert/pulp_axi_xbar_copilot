@@ -16,7 +16,7 @@ rm -f sim/out/simv_lint.daidir/.vcs.timestamp
 cd sim && make lint TEST=m2_or03_guard_test
 ```
 
-基线快照：2026-07-31 · 框架 0.4.6 · 合计 **296** 条 · 唯一站点 **236** 个 · 类别 **8** 种
+基线快照：2026-08-02 · 框架 0.4.38 · 合计 **330** 条 · 唯一站点 **264** 个 · 类别 **8** 种
 
 > **2026-07-31 全量重同步说明（BUG-0040 分诊卡）**：上一次快照（2026-07-28）
 > 冻结之后，`tb/` 又落地了若干本身已各自登记在案的合法变更——BUG-0034 修复
@@ -36,16 +36,53 @@ cd sim && make lint TEST=m2_or03_guard_test
 > 每一条能对上旧表的站点，风格结论原样沿用；新增的站点全部套用 BUG-0021
 > 已确立的机械判据逐条核实（详见 `doc/bugs/BUG-0040.md` `## triage`）。
 
+> **2026-08-02 全量重同步说明（BUG-0048 fixer 卡）**：上一次快照（2026-07-31，
+> BUG-0040 修复 `212a6fc`）之后，`tb/` 又落地 18 个提交（M4-OV01/FT01/RC01/
+> AW01/EB01/BP02/BP03 场景 + REV-026 十项加固卡 + REV-030 DV-D），基线同样
+> 未跟着重新生成，`make lint-diff` 报出 **83 个新站点 / 55 个已消失站点、
+> 0 个新类别**（BUG-0048，BUG-0040 的复发）。逐条读码分诊（每类机械判据沿用
+> BUG-0021 `## rca`，方法沿用 BUG-0040）：**83/83 全部风格，0 条真缺陷**。
+>
+> 其中 **51 条是既有基线站点因行号后移而重现**——以 `git show 212a6fc:<file>`
+> 与当前文件做 difflib 行映射逐条对上了它在旧表里的那一行（含 `Lint-[WMIA-L]`
+> 4 条 `tb/axi_txn.sv` UVM 宏站点、`Lint-[ULCO]` 5 条、`Lint-[NS]` 40 条、
+> `axi_chan_sva.sv` 的 RLAST 断言三元组），构造未变，风格结论原样沿用。
+> 余下 **32 条是本期新落地代码引入的新构造**，逐条核实同属 BUG-0021 已判风格
+> 的形态：
+>
+> - `Lint-[NS]` 23 条（`tb/seq_lib.sv` 12 + `tb/slvport_agent.sv` 11）：全部是
+>   `wait fork;` / `@(posedge clk);` / `repeat(n) @(posedge clk);` /
+>   `do @(posedge clk); while(…);` / `wait(cond);` 五种语句终止符形态。机械
+>   筛查覆盖全部 65 个新 `NS` 站点（40 条行号后移 + 25 条新增），65/65 落入上述形态
+>   加「多行 `assert…else` 收尾 `;`」，**零** `if(…);`/`for(…);` 空体。
+> - `axi_chan_sva.sv` 6 条（`262/263/266` 与 `291/292/295`，每处 `SVA-UA` +
+>   `SVA-AECASR` + `NS` 各一）：BUG-0042 修复（`fd4b5b6`，M4-FT01）把原来一条
+>   WLAST 断言拆成 AW 分支与 W-last 分支各一条。两条都是 `always_ff` 内的
+>   **立即断言**（无 preponed 采样概念，IEEE 1800 §16.4），判决表达式
+>   `actual_idx == aw_len` / `this_idx == exp_len` 内**零函数调用**，被点名的
+>   是 action block 里的 `` `uvm_error ``——与 BUG-0021 A 节已判风格的
+>   WLAST/RLAST 立即断言同形，非 BUG-0015 那类判决期采样缺陷。
+> - `Lint-[ULCO]` 3 条（`tb/seq_lib.sv:330`、`tb/slvport_agent.sv:174/268`）：
+>   `int unsigned` 循环变量与 `axi_pkg::len_t`（`vendor/axi/src/axi_pkg.sv:60`
+>   = `logic [7:0]`，无符号）比较。IEEE 1800 §11.6/§11.8.1 两侧均无符号 ⇒
+>   8 bit 侧零扩展；`xbit eval` 实测 `32'd255 >= 8'hFF`、`32'd255 == 8'hFF`、
+>   `32'd0 <= 8'h00` 全为 `1'h1`，上下边界均无符号位扩展异常。循环变量 32 bit，
+>   `len=255` 时正常退出，无 8 bit 自环。判据同 BUG-0021 B 节。
+>
+> 与 2026-07-31 同理，本次仍做**全量重取**而非「追加 83 行、留着 55 条对不上
+> 当前代码的陈旧行号」——那会让基线自相矛盾（264 个真实站点 vs 319 行表）。
+> **判定结论对旧站点无一条改判。**
+
 ## 按类别
 
-| 类别 | 条数 | 性质（BUG-0021 分诊 + REV-010 §3.1 复核 + BUG-0040 2026-07-31 重同步复核） |
+| 类别 | 条数 | 性质（BUG-0021 分诊 + REV-010 §3.1 复核 + BUG-0040/0048 重同步复核） |
 |---|---|---|
-| `Lint-[NS]` | 85 | 风格（空语句/多行语句终止符：`wait fork;`/`@(posedge clk);`/`do…while(…);`/`repeat(n) @(posedge clk);`/`cover property(…);` 等）——BUG-0021 分诊全查零空体；BUG-0040 复核新增的 46 处逐条确认同属该形态，无 `if(…);`/`for(…);` |
-| `Lint-[SVA-AECASR]` | 54 | 风格（action block 内 UVM 报告 API 的固有保守告警，或 `always_ff` 内立即断言的过程代码，均非 preponed/observed 采样竞争）；真缺陷部分已于 c29bede 清零，BUG-0040 新增 11 处逐条确认零函数调用进入 property 判决表达式 |
-| `Lint-[SVA-UA]` | 44 | 风格（未命名断言）；`scripts/svacheck.py` 两层判据均不依赖断言名；BUG-0040 复核确认「带标签 cover 不报」的判据在新站点上同样成立 |
-| `Lint-[SVA-CE]` | 46 | 风格（`disable iff` 参数非裸标识符） |
-| `Lint-[SVA-DIU]` | 46 | 风格（`disable iff` 用法） |
-| `Lint-[ULCO]` | 6 | 风格（`int unsigned` vs `logic [7:0]` 零扩展比较，IEEE 1800 §11.6/§11.8.1 语义正确）——0.4.2 重构合并 `tb/seq_lib.sv` 重复循环体后从 14 降到 6，净减少非新增，无需分诊 |
+| `Lint-[NS]` | 108 | 风格（空语句/多行语句终止符：`wait fork;`/`@(posedge clk);`/`do…while(…);`/`repeat(n) @(posedge clk);`/`cover property(…);` 等）——BUG-0021 分诊全查零空体；BUG-0040 复核新增 46 处、BUG-0048 复核新增 65 处逐条确认同属该形态，无 `if(…);`/`for(…);` |
+| `Lint-[SVA-AECASR]` | 60 | 风格（action block 内 UVM 报告 API 的固有保守告警，或 `always_ff` 内立即断言的过程代码，均非 preponed/observed 采样竞争）；真缺陷部分已于 c29bede 清零，BUG-0040 新增 11 处、BUG-0048 新增 3 处逐条确认零函数调用进入 property 判决表达式 |
+| `Lint-[SVA-UA]` | 46 | 风格（未命名断言）；`scripts/svacheck.py` 两层判据均不依赖断言名；BUG-0040/0048 复核确认「带标签 cover 不报」的判据在新站点上同样成立 |
+| `Lint-[SVA-CE]` | 46 | 风格（`disable iff` 参数非裸标识符）——BUG-0048 期间站点集合逐字未变 |
+| `Lint-[SVA-DIU]` | 46 | 风格（`disable iff` 用法）——BUG-0048 期间站点集合逐字未变 |
+| `Lint-[ULCO]` | 9 | 风格（`int unsigned` vs `logic [7:0]` 零扩展比较，IEEE 1800 §11.6/§11.8.1 语义正确）——0.4.2 重构合并 `tb/seq_lib.sv` 重复循环体后从 14 降到 6；BUG-0048 期间随新增写向序列/驱动回到 9，3 处新站点 `xbit eval` 复核零扩展成立 |
 | `Lint-[SV-PIU]` | 9 | 风格（`$unit` 作用域 import）；可移植性债务，非缺陷 |
 | `Lint-[WMIA-L]` | 6 | 风格（4 条为 UVM-1.2 宏展开体内的库代码；2 条 `scoreboard_refmodel.sv` 的 `ro.id >> ID_W_SLV` 右移改写零扩展赋值——`xbit eval` 核实 `8'hFF >> 5` 与 `8'hFF[7:5]` 数值等价，widening、无截断） |
 
@@ -53,12 +90,12 @@ cd sim && make lint TEST=m2_or03_guard_test
 
 | 文件 | 条数 |
 |---|---|
+| `tb/tb/sva/axi_chan_sva.sv` | 90 |
 | `tb/tb/sva/axi_xbar_stall_sva.sv` | 87 |
-| `tb/tb/sva/axi_chan_sva.sv` | 81 |
+| `tb/tb/slvport_agent.sv` | 36 |
 | `tb/tb/sva/axi_xbar_txlimit_sva.sv` | 33 |
-| `tb/tb/slvport_agent.sv` | 24 |
+| `tb/tb/seq_lib.sv` | 28 |
 | `tb/tb/sva/axi_xbar_atop_sva.sv` | 16 |
-| `tb/tb/seq_lib.sv` | 15 |
 | `tb/tb/mstport_agent.sv` | 12 |
 | `tb/tb/sva/axi_xbar_route_sva.sv` | 8 |
 | `tb/tb/tb_top.sv` | 6 |
@@ -72,56 +109,79 @@ cd sim && make lint TEST=m2_or03_guard_test
 
 | 类别 | 文件 | 行 |
 |---|---|---|
-| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 79 |
-| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 92 |
-| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 119 |
-| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 141 |
-| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 143 |
-| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 148 |
-| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 156 |
-| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 158 |
-| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 169 |
-| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 223 |
+| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 146 |
+| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 176 |
+| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 244 |
+| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 276 |
+| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 278 |
+| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 283 |
+| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 291 |
+| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 293 |
+| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 304 |
+| `Lint-[NS]` | `tb/tb/mstport_agent.sv` | 413 |
 | `Lint-[NS]` | `tb/tb/scoreboard_refmodel.sv` | 385 |
 | `Lint-[NS]` | `tb/tb/scoreboard_refmodel.sv` | 386 |
 | `Lint-[NS]` | `tb/tb/scoreboard_refmodel.sv` | 394 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 109 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 544 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 883 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 893 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 897 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1039 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1042 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1178 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1182 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1186 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1368 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1402 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1429 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1432 |
-| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1453 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 122 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 929 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1312 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1322 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1326 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1337 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1339 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1343 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1345 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1365 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1635 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1638 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1774 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1778 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1782 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1964 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 1998 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 2025 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 2028 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 2049 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 2477 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 2479 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 2565 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 2610 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 2613 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 2619 |
+| `Lint-[NS]` | `tb/tb/seq_lib.sv` | 2621 |
 | `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 50 |
 | `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 56 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 84 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 93 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 109 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 131 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 137 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 90 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 99 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 115 |
 | `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 163 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 174 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 192 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 212 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 216 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 167 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 177 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 186 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 210 |
 | `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 226 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 231 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 227 |
 | `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 234 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 236 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 245 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 277 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 295 |
-| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 390 |
-| `Lint-[NS]` | `tb/tb/sva/axi_chan_sva.sv` | 256 |
-| `Lint-[NS]` | `tb/tb/sva/axi_chan_sva.sv` | 276 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 260 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 271 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 289 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 309 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 313 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 323 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 328 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 331 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 333 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 342 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 396 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 407 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 417 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 447 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 504 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 518 |
+| `Lint-[NS]` | `tb/tb/slvport_agent.sv` | 613 |
+| `Lint-[NS]` | `tb/tb/sva/axi_chan_sva.sv` | 266 |
+| `Lint-[NS]` | `tb/tb/sva/axi_chan_sva.sv` | 295 |
+| `Lint-[NS]` | `tb/tb/sva/axi_chan_sva.sv` | 318 |
 | `Lint-[NS]` | `tb/tb/sva/axi_xbar_atop_sva.sv` | 162 |
 | `Lint-[NS]` | `tb/tb/sva/axi_xbar_atop_sva.sv` | 169 |
 | `Lint-[NS]` | `tb/tb/sva/axi_xbar_route_sva.sv` | 59 |
@@ -173,8 +233,9 @@ cd sim && make lint TEST=m2_or03_guard_test
 | `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_chan_sva.sv` | 184 |
 | `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_chan_sva.sv` | 193 |
 | `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_chan_sva.sv` | 197 |
-| `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_chan_sva.sv` | 253 |
-| `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_chan_sva.sv` | 273 |
+| `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_chan_sva.sv` | 263 |
+| `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_chan_sva.sv` | 292 |
+| `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_chan_sva.sv` | 315 |
 | `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_xbar_atop_sva.sv` | 154 |
 | `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_xbar_route_sva.sv` | 50 |
 | `Lint-[SVA-AECASR]` | `tb/tb/sva/axi_xbar_stall_sva.sv` | 452 |
@@ -268,8 +329,9 @@ cd sim && make lint TEST=m2_or03_guard_test
 | `Lint-[SVA-UA]` | `tb/tb/sva/axi_chan_sva.sv` | 182 |
 | `Lint-[SVA-UA]` | `tb/tb/sva/axi_chan_sva.sv` | 191 |
 | `Lint-[SVA-UA]` | `tb/tb/sva/axi_chan_sva.sv` | 195 |
-| `Lint-[SVA-UA]` | `tb/tb/sva/axi_chan_sva.sv` | 252 |
-| `Lint-[SVA-UA]` | `tb/tb/sva/axi_chan_sva.sv` | 272 |
+| `Lint-[SVA-UA]` | `tb/tb/sva/axi_chan_sva.sv` | 262 |
+| `Lint-[SVA-UA]` | `tb/tb/sva/axi_chan_sva.sv` | 291 |
+| `Lint-[SVA-UA]` | `tb/tb/sva/axi_chan_sva.sv` | 314 |
 | `Lint-[SVA-UA]` | `tb/tb/sva/axi_xbar_atop_sva.sv` | 152 |
 | `Lint-[SVA-UA]` | `tb/tb/sva/axi_xbar_atop_sva.sv` | 161 |
 | `Lint-[SVA-UA]` | `tb/tb/sva/axi_xbar_atop_sva.sv` | 168 |
@@ -296,15 +358,18 @@ cd sim && make lint TEST=m2_or03_guard_test
 | `Lint-[SVA-UA]` | `tb/tb/sva/axi_xbar_txlimit_sva.sv` | 271 |
 | `Lint-[SVA-UA]` | `tb/tb/sva/axi_xbar_txlimit_sva.sv` | 273 |
 | `Lint-[SVA-UA]` | `tb/tb/sva/axi_xbar_worder_sva.sv` | 112 |
-| `Lint-[ULCO]` | `tb/tb/mstport_agent.sv` | 159 |
-| `Lint-[ULCO]` | `tb/tb/mstport_agent.sv` | 166 |
-| `Lint-[ULCO]` | `tb/tb/slvport_agent.sv` | 87 |
-| `Lint-[ULCO]` | `tb/tb/slvport_agent.sv` | 90 |
-| `Lint-[ULCO]` | `tb/tb/slvport_agent.sv` | 168 |
+| `Lint-[ULCO]` | `tb/tb/mstport_agent.sv` | 294 |
+| `Lint-[ULCO]` | `tb/tb/mstport_agent.sv` | 301 |
+| `Lint-[ULCO]` | `tb/tb/seq_lib.sv` | 330 |
+| `Lint-[ULCO]` | `tb/tb/slvport_agent.sv` | 93 |
+| `Lint-[ULCO]` | `tb/tb/slvport_agent.sv` | 96 |
 | `Lint-[ULCO]` | `tb/tb/slvport_agent.sv` | 171 |
-| `Lint-[WMIA-L]` | `tb/tb/axi_txn.sv` | 31 |
-| `Lint-[WMIA-L]` | `tb/tb/axi_txn.sv` | 32 |
-| `Lint-[WMIA-L]` | `tb/tb/axi_txn.sv` | 33 |
-| `Lint-[WMIA-L]` | `tb/tb/axi_txn.sv` | 34 |
+| `Lint-[ULCO]` | `tb/tb/slvport_agent.sv` | 174 |
+| `Lint-[ULCO]` | `tb/tb/slvport_agent.sv` | 265 |
+| `Lint-[ULCO]` | `tb/tb/slvport_agent.sv` | 268 |
+| `Lint-[WMIA-L]` | `tb/tb/axi_txn.sv` | 69 |
+| `Lint-[WMIA-L]` | `tb/tb/axi_txn.sv` | 70 |
+| `Lint-[WMIA-L]` | `tb/tb/axi_txn.sv` | 71 |
+| `Lint-[WMIA-L]` | `tb/tb/axi_txn.sv` | 72 |
 | `Lint-[WMIA-L]` | `tb/tb/scoreboard_refmodel.sv` | 761 |
 | `Lint-[WMIA-L]` | `tb/tb/scoreboard_refmodel.sv` | 831 |
