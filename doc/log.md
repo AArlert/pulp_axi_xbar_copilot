@@ -2,6 +2,111 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.40] 2026-08-02 REV-037 批量裁决 14 条（14/14 判「修」）+ C1 全链闭合（BUG-0065/0055 CLOSED）——回源纪律在四个环节各拦下一处错误
+
+**背景**：M4 出口条件 3 因 14 条 OPEN 恒红，签核卡无法派。本周期先用一张 rev
+批量裁决卡把 14 条一次定终态并切出七张 fixer 卡的顺序，再跑通第一组（C1）的
+`fixer → 独立 closer` 全链。每一环都强制"不得照抄上游结论、每个数字自己
+回源"，**结果这条纪律在四个不同环节各拦下一处错误**——这是本周期最值得记的
+部分，比关掉的两条 bug 更重要。
+
+**Done**
+- **REV-037（rev·L3）**：BUG-0052~0065 逐条终态 = **14/14 判「修」，零
+  `ACCEPTED`，零 `WONTFIX`**。每条附处置面 + 可证伪复验签名 + fixer 类型 +
+  分组。零接受的理由写在 §1 抬头：rubric #8 对"可证伪接受理由 + 到期条件"的
+  要求是刻意昂贵的，本批每条订正成本都低于写一份站得住的接受理由；四条最接近
+  可接受的（0057 半面 / 0059 / 0062 / 0064）在条目内写明被考虑过的接受论证及其
+  败因，以免看起来像反射性盖章。切出七卡顺序 `C1 → C2 → C3a → C3b`，
+  `C4/C5/C6` 并行。
+- **C1 全链闭合**：BUG-0065（根 `Makefile` 加 `docs-archive: archive` 兼容
+  别名，`scripts/docs.py` 零触碰）+ BUG-0055（删 19 条上游 tag、`.git/config`
+  落 `tagOpt=--no-tags`、`CLAUDE.md` §5 两处命令订正）**双双 CLOSED**，
+  证据 `doc/evidence/v0.4.39/BUG-{0065,0055}.log`。M4 条件 3 的 active
+  由 17 降至 16。
+- **tag 命名空间已净化**：本地 24 → 5 个 tag。归属判据为
+  `merge-base --is-ancestor $(rev-parse "$t^{}")` 对 `master` /
+  `upstream/master`，实测在 24 个 tag 上互斥且完备（5/19，both=0 neither=0）
+  ⇒ 用判据分类而非人工名单。`git ls-remote --tags origin` 实测那 19 条从未推到
+  origin ⇒ 删除是纯本地且可从 upstream 取回，非不可逆。
+- **回源纪律的四次现场兑现**（本周期的主要产出）：
+  1. **REV-037 推翻台账行内五处表述**——BUG-0052 死引用"4 处"实为 **7 处/4
+     文件**（漏 `.claude/agents/dv.md:58`）· BUG-0055 称 `doc/milestone.md`
+     规定 M4 关门须 `git tag v0.5.0`，实测**该文件从未规定 tag 动作** ·
+     BUG-0056 称两份详情页 `ref:` 均含 `make clean`，实为 BUG-0048 的**已订正**
+     且 `min_repro` 型 2 处**均已归档** · BUG-0057 称 scratchpad 目录不存在，
+     实为**目录仍在**（判定不变、理由须换成"不在版本控制内"）· BUG-0061 称
+     4 条 guard 受污染，实为 **16 个废 token/9 页、仅 3 页真丢失本意路径**。
+     **即上一周期的缺陷登记本身就带错，5/14 的行内表述经不起回源。**
+  2. **C1 fixer 拒绝在算术死角处静默取舍**——`CLAUDE.md` 天花板 9578
+     （39500 − 其它四份 29922），基线 9570 ⇒ **余量仅 8 字节**，而三条强制
+     操作性内容最省需 66 字节，无解。它删了 §5 末尾的 FB 快照枚举，并明确
+     上报"这是卡面未授权的取舍，请复核"，未当默许吃掉。
+  3. **C1 closer 拒绝照抄候选签名**——REV-037 给 BUG-0065 的候选是"看
+     `make -n docs-archive` 退出码"。它审出该形态对一种真实退化是盲的：仅删
+     规则体而保留 `.PHONY` 中的名字 → `exit 0` **假绿**；改为
+     `diff <(make -n docs-archive) <(make -n archive)` 后同一注入判红。
+     **照抄就会关掉一条其实没修好的 bug。**
+  4. **closer 接住 orch 的一处记账缺陷**——BUG-0055 的〔勘误¹〕原指向
+     `verify_evidence` 列，而 `evidence.py` 转 CLOSED 时机械覆写该列 ⇒ 勘误会被
+     静默抹掉。已改为自包含并指向 `REV-037:204-215`。
+- **新登记四条存量/机制缺陷**（登记无条件）：**BUG-0066** `scripts/regress.py:50`
+  无条件 `make clean` → `rm -rf sim/out`，跑一次 `make regress` 即摧毁 7 个
+  `cov.vdb` + `urgText6/`（危害面比 BUG-0056 大一个量级：不需照抄文档命令，而
+  M4 条件 2 与 M5 出口都要求跑它）· **BUG-0067** 65 条 bug 行中 23 条无详情页，
+  而 `regression_guard` 只存在于详情页 ⇒ 已 CLOSED 的 0049/0050/0051 三条**没有
+  任何 guard 载体**；`docs.py` 孤儿检查单向 · **BUG-0068** `CLAUDE.md` 预算饱和
+  （余量 +8 字节），且上游只设上限、**没设溢出时该删什么的判据** ·
+  **BUG-0069** `make evidence` 的 `CMD` 若含字面 `$(...)` 会被 GNU Make 的 recipe
+  展开静默吞空（凶险分支是"跑得通但验的不是原意图"）。
+
+**Not done**
+- **C2~C6 六张卡未派**：BUG-0052/0053/0054/0056/0057/0058/0059/0060/0061/0062/
+  0063/0064 十二条仍 OPEN，加新登四条中的三条 ⇒ **条件 3 active 16 条**，M4
+  签核卡（卡E）仍不能派。
+- **BUG-0068 须 rev 裁决**两件事：(a) 追认或推翻 C1 对 `CLAUDE.md` §5 那段 FB
+  枚举的删除；(b) 结构面走哪条路（抬 `TOTAL_BUDGET`——`test_budgets.py` 断言
+  消息明写抬阈是 "a reviewed decision" / 按 FB-28 已论证的分层下沉到 skill 层 /
+  维持现状并接受每次新增都要删）。**在裁决前，`CLAUDE.md` 正文增删一律须 orch
+  明示授权。**
+- **族级 guard（REV-035 §Q5）仍未落地，且连载体都不存在**——REV-037 §5 问 1
+  实测 `grep -rln "UNOWNED=" scripts/ sim/ Makefile` 零命中，且三条 CLOSED 行
+  无详情页 ⇒ §Q5.3 的归属规定今天无法被满足。已裁为 **M4 签核卡前置**，非本批
+  关闭前置。
+- **BUG-0066 未修 ⇒ 全仓禁 `make regress` / `make clean`**（REV-037 §7 条件 5）。
+  M4 条件 2 现由既有 `result_summary.txt` 满足，但 M5 的 N=5 多种子回归会撞上。
+
+**Next**
+- 派 **C2**（BUG-0056 + BUG-0061），rev 排的第二组；随后 `C3a → C3b`，
+  `C4/C5/C6` 可并行。每组仍走 `fixer → 独立 closer` 两次派发。
+- **BUG-0066 宜插队**：它是唯一一条"不需任何人犯错、只需按既定流程跑一次就
+  损毁取证基础"的缺陷，且 M5 出口必然要跑 `make regress`。
+- 一张 rev 卡合并处理 BUG-0068 的两问 + 族级 guard 的落地形状（两者都在"机制
+  层"，宜同卡）。
+- 之后卡E M4 签核（全 rubric），通过后关门。
+
+**How verified**
+- 两条 bug 均由 `make evidence BUG=… CMD=… EXPECT=…` 机器背书翻列：
+  `doc/evidence/v0.4.39/BUG-{0065,0055}.log`，首行 `CMD:` **全命令内联、从仓库
+  根可重放**（不同于 BUG-0057 那种指向已消失 session scratchpad 的死链接），且
+  echo 的签名串**嵌入实测值**、`EXPECT` 正则把数字钉死 ⇒ 不可靠一句 `echo` 伪造。
+- **orch 收卡复验一律走集合差而非抽查**（BUG-0049 的教训）：REV-037 收卡
+  `OPEN 行集合 ⊖ 裁决集合` 双向 **∅/∅**（14/14 全覆盖）；C1 收卡
+  `现存 tag ⊖ origin 5 条` 双向 **∅/∅**（没多删也没少删）+ 逐 tag 归属复算
+  `ours=5 theirs=0`；证据孤儿检测 `v0.4.39` 下 **2 文件 vs bugs.md 2 引用**
+  精确相等。
+- **orch 独立证伪四次**（不采信 closer 的报告，自己注入）：`.PHONY` 陷阱
+  （裸 `make -n` exit 0 假绿 / 签名 exit 1 真红，当场对照）· 完整删别名 ·
+  `git tag v0.5.0 fb2c193` · `git config --unset remote.upstream.tagOpt`——
+  **四次全部真红且复绿，工作区零残留**（tag=5、`tagOpt=--no-tags` 原样）。
+- 两条签名各从仓库根**全新 shell 重放** → exit 0，输出与 log 逐字一致。
+- BUG-0069 由 orch 独立复现：`CMD='echo $(pwd)'` → `--cmd 'echo '`（吞空）；
+  `CMD='echo $$(pwd)'` → `--cmd 'echo $(pwd)'`（正确）。
+- BUG-0066 由 orch 独立回源三处坐实：`regress.py:50` · `sim/Makefile:187` ·
+  `sim/out/` 下 8 项覆盖工件实存（**未实跑回归**，复现即损毁）。
+- BUG-0067 的 23 条由 orch 独立集合差复算，反向差集为空。
+- 门：`docs-check passed` · `make selftest` **61/61 OK** · 7 个 `cov.vdb` 全程
+  完好（全链未 `make clean`、未 `make regress`）。
+
 ## [0.4.39] 2026-08-02 BUG-0048/0050/0051 三条 CLOSED——M4 出口第二/三(b)条转为成立；复验链反手挖出十条存量缺陷（BUG-0052~0065）
 
 **背景**：M4 关门前置。本周期跑了三条独立的 fixer→closer 链（每条 closer 都是与
@@ -135,124 +240,4 @@ BUG-0049 根因之三（"orch 复验只抽查数字未做完备性交叉核对"�
 - `make check` docs-check passed、chain audit 无新增 gap 形状；`make selftest` 见本块提交。
 - 本闭环零 RTL/TB 改动，未跑 sim、未 `make clean`、`sim/out/` 全程只读（覆盖库另备份至
   scratchpad 防误删）。
-
-## [0.4.37] 2026-08-02 里程碑重构落地——M4 出口重定义、新增 M6 承接 ≥90% 门，spec §0#4 重 pin（BUG-0047 选项 (ii) 兑现）
-
-**背景**：用户裁定"覆盖率 90% 出口不该留在只有定向激励的里程碑"，走
-BUG-0047 终判预留选项 (ii)。链条：arch 提案（卡B）→ rev 门禁（卡C，
-REV-032）**首判 REJECTED**（轴 4 抓出 `stream_register` 三格漏账——
-"UNOWNED=∅"宣告失实）→ orch 登记 BUG-0049 → 独立 rev 处置卡
-（REV-033）裁归属 → arch 返工（G-1/G-2）→ rev 复审 **APPROVED** →
-orch 机械应用 + 重 pin。
-
-**Done**
-- **REV-032（门禁 + 复审）**：七轴合格、轴 4 首判抓漏。复审对含
-  stream_register 的 22×6 全格重做集合差——132 格与 final-sweep §2.3
-  全一致，APPROVED 无条件。副产物：G-2 揪出 verification_maturity 四处
-  v1.1 版本残留（orch 复核补出 L44 一处，比 REV-032 清单多一处）。
-- **BUG-0049 登记**（无条件登记）：stream_register Line 75.00/Toggle
-  22.00/Branch 50.00 三格漏账，归因三层如实入账（卡A §3 标注遗漏、
-  orch 复验未做完备性交叉核对、REV-031 承接汇总清单为输入）。
-- **REV-033**：三格独立裁决——Line/Branch 全 Kind-A、Toggle 拆 31 bit
-  Kind-A（P1 tie-off/P2 push-gate 同 CW-001 INJECT_R 根因/P3 rst_ni）
-  + `data_i.len[7:4]` 8 bit 定向可达路由 DV-A err_slv 宿主族。登记
-  **CW-014**；顺带订正 REV-032 "非-load ATOP" 表述（`atop[5]` 实为
-  读返回类原子，`axi_pkg.sv:447` 独立重推）。
-- **提案返工（卡B'）**：G-1 五点（§6.2 收 CW-014、§6.1 收 D1、计数
-  013→014 五处、UNOWNED 现状如实化、**新增 §6.3 22×6 全格→归属对照
-  表**——未来签核 UNOWNED=∅ 核读的底板）+ G-2 四处版本残留 old/new。
-- **orch 机械应用**（rev 批准后，零创作）：spec §0#4 一句替换 +
-  修改记录 #12 行 + `docs.py --pin-spec` **重 pin**（新 sha
-  `dad62e08…`）；milestone.md 从提案围栏块脚本拼装（M4 重定义 +
-  M5 瘦身 + **M6 新增**，Abstract 修"0 场景行"漂移，M0-M3 零变化）；
-  coverage-waivers 抬头 Kind-B 解锁改"M5 随机层 + M6 cov_loop"；
-  verification_maturity 修订 A-E（Decision 5 移交 M6 + 版本残留清理）；
-  BUG-0047 详情页追加选项 (ii) 落地段（冻结正文不回改，仅追加）；
-  删 `milestone.md~` 杂物。
-- **新里程碑架构生效**：M4 = 测量基建 + 三态扫描 + 每格具名归属
-  （UNOWNED=∅，四表交叉核）；M5 = 纯方法论（随机层/多种子/soak，无
-  百分比门，三条 `ACCEPTED@M5` 锚零移动）；M6 = 六类 ≥90% 收敛
-  （cov_loop，random-first directed-fallback，v1.0.0 改挂 M6 签核）。
-
-**Not done**
-- 卡E（M4 签核重开，新出口条件下全 rubric）未派——下一闭环主件。
-- BUG-0048（lint 门机制修）仍 OPEN，压在签核后（保 merged vdb）；
-  BUG-0049 仍 OPEN（closer 另派，待 CW-014 已 pin〔本 commit 兑现〕+
-  D1 已录 backlog〔提案 §6.1 已录〕后可派 closer）。
-- M6 backlog 的 DV-A~G 七张定向卡均未派（M6 时 random-first 处置）。
-
-**Next**
-- 卡E：M4 签核重开（rev·L3，全 rubric，§6.3 对照表为 UNOWNED=∅ 核读
-  底板；签核文含 15 条 RTL-only 条款 oracle 边界段）。通过后
-  `make check MILESTONE=4` + bump minor + tag v0.5.0，M4 关门。
-
-**How verified**
-- REV-032 复审段独立重做 132 格集合差 + 四处 OLD 逐字 grep；orch 应用
-  前对四处 old/new 做保真度 grep（全部唯一命中）、milestone 抬头 md5
-  比对提案 §3.1 一致；应用后 `python3 scripts/docs.py --pin-spec` 成功
-  重 pin（拒绝-登记-重试链：首次 pin 被脚本按"修改记录先行"规则正确
-  拦截，补 #12 行后通过）。
-- `make check`（docs-check passed + chain audit 无新增 gap 形状）与
-  `make selftest`（61/61 OK）应用后复跑绿。本闭环零 RTL/TB 改动，无需
-  重跑回归。
-
-## [0.4.36] 2026-08-02 卡A 覆盖率全景复测 + REV-031 UNOWNED 分诊——M4 残余首次达成"每格有归属"，CW-010~013 登记
-
-**背景**：用户裁定 M4"六类硬 ≥90%"出口与定向激励约束的张力走 BUG-0047
-终判选项 (ii)（重议判据口径），路线 = 里程碑重构（M4 出口改"测量+分诊
-完成"、新增 M6 承接 ≥90% 数字门、M5 保持纯方法论）。重构提案（arch 卡）
-动笔前，先以一张 DV 测量卡（卡A）取权威数字、一张 rev 卡（REV-031）关掉
-无归属缺口——backlog 表须基于实测，不抄旧表。
-
-**Done**
-- **卡A（DV·L1）**：`doc/evidence/v0.4.35/M4-coverage-final-sweep.md`。
-  merged vdb 完整性核验（24 基线场景，cfgE 经亲测 UCAPI-INSTANCEMISMATCH
-  证实结构不可并入，非构建隔离习惯）；六类全闭包三态扫描（22 DUT 模块，
-  22+13=35 与 modlist 逐位对账）；<90% 格逐一归属标注。三大发现：
-  (i) REV-024 两悬案自然消解——`axi_xbar` Toggle 40.74→94.44 PASS、
-  `axi_xbar_unmuxed` Assert 53.85→100 PASS（历史加固卡副作用关闭，无人
-  回测过）；(ii) 9 个 UNOWNED (模块,类型) 格子（8 个首次按模块页测量的
-  闭包内 common_cells 模块）；(iii) CW-001 对 `r_state_q.R_HOLD` 论证
-  失实（普通读背压可达、已 Covered、与 ATOP 无关）。
-- **REV-031（rev·L3）**：9 格逐格独立裁决（测量卡建议仅作路由输入）。
-  新登记 **CW-010~013** 四条 Kind-A（flush_i 全例化点 tie-0 根因一行承接
-  多格 bin-scoped 分量 / lzc 常量 LUT+非 2 幂 padding / axi_id_prepend
-  pre_id_i generate 常量 / counter-delta_counter tie-off 位），各附可证伪
-  解锁；**零 Kind-B**（BUG-0047 guard 合规）。混合格拆分：结构位入豁免、
-  定向位路由 DV——新增 **DV-F**（rr_arb_tree 仲裁竞争多样性）、**DV-G**
-  （id_counters push+inject 同拍同 index，DV-E 家族）两张待派卡；薄壳
-  Toggle（89.22/88.51）判 DV-A/B 阴影不新开卡。CW-001 措辞订正（R_HOLD
-  除外标注，豁免主体维持）；REV-024 §2.2 行 9 表后追加勘误批注（
-  multicut/cut 结构无 Cond bin，"55-65%"应属 spill_register_flushable，
-  原表格行一字未改）；"待建档项" spill bypass 经 urg 反证（Bypass=0/1
-  两参数均例化）撤项。
-- **orch 独立复验**：卡A——git status 单文件、modlist/modinfo 抽查
-  spill_flushable 82.49/lzc 42.59/id_counters 73.91/xbar 94.44/unmuxed
-  Assert 100/ar_ready Yes×3/R_HOLD Covered 全对上、格式对齐 v0.4.0 先例。
-  REV-031——编辑面精确 3 文件、REV-024 批注纯追加（diff 全 + 行）、
-  flush 六处 tie-off/pre_id_i/lzc LUT/counter 三 tie-off/down_i(1'b1)
-  逐一亲验 RTL 对上。counter 实例数分歧（卡A 108 vs REV-031 12，实为
-  delta_counter 之数）不影响任何百分比与处置，已记 REV-031 §6。
-- **M4 残余状态**：至此全部 <90% 格子首次达成"每格有归属"——CW-001~013 /
-  BUG-0044 / DV-A~G 待派清单 / 已吸收，UNOWNED = 空集。
-
-**Not done**
-- 里程碑重构提案（arch 卡B：spec §0#4 修订 + milestone M4/M5/M6 + backlog
-  表）及其 rev 门禁（卡C）未派——本闭环只做了它的数据前置。
-- DV-A/B/C/E/F/G 六张定向卡均未派（重构落地后按 M6 backlog 处置）。
-- BUG-0048（lint 基线漂移）未修——已决策：机制修（lint-diff 挂进门禁），
-  排在 M4 签核后以保住 merged vdb 供签核 rev 独立复算。
-
-**Next**
-- 卡B：arch 里程碑重构提案（M4 出口改"测量+分诊完成、无 silent gap"，
-  新增 M6 承接六类 ≥90%，M5 纯方法论；backlog 表数据源 = 本闭环
-  final-sweep + REV-030 DV-A~E + REV-031 DV-F/G）→ 卡C rev 门禁 →
-  orch 应用重 pin → M4 签核重开。
-
-**How verified**
-- 见上"orch 独立复验"段——两卡数字均未采信自报，urg text 报告与 RTL
-  例化点逐项亲验。
-- `make check` 本轮复跑绿（docs-check passed；chain audit 仅既有已知
-  形状，"仅锚父节"14 处与 0.4.35 记录一致，无新增 gap）。本闭环零
-  RTL/TB 改动，无需重跑回归。
 
