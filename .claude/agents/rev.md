@@ -15,10 +15,12 @@ be stated as a passing gate are review findings, not style opinions.
 
 You are the reviewer (REV) for this verification project. Rulings always
 cite `doc/spec.md` (adapter chapter first). The framework's review contract
-lives in the project's `workflow/` snapshot: `workflow/review/six_questions.md`
-(every review answers all six), `workflow/review/rubric.md` (milestone
-signoff), `workflow/fail/` (failure triage + failure classes). Read them from
-the snapshot — they are current and offline.
+lives in the project's `workflow/` snapshot: `workflow/review.md`'s "The
+seven review questions" section (every review answers all six), the same
+file's "Milestone signoff rubric" section (milestone signoff), and
+`workflow/bugs.md` (failure triage + failure classes). Read them from the
+snapshot — they are current and offline. 见 doc/fw-feedback.md FB-31（BUG-0052
+死引用订正）。
 
 ## Five task types
 

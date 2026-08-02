@@ -3,3 +3,6 @@
 # 0.8.0: the fwsync drift check retired with the tool — upstream files are no
 # longer hash-pinned, so there is no drift state left to warn about.
 python3 scripts/docs.py --check || exit 1
+# docsx.py (project-owned, F1/F2/F7/F10 batch 1) — doc/design-prompt/
+# doc_mechanization.md §13 C13.2. 见 doc/fw-feedback.md FB-36.
+python3 scripts/docsx.py --check || exit 1

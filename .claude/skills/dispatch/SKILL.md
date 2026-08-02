@@ -42,7 +42,7 @@ card by type:
 | DE fix | bugs.md row id (symptom / min repro / spec basis), spec sections, relevant rtl paths | DV's expected-value derivation, waveform-analysis reasoning |
 | DV scenario | testplan row id, spec sections, RTL module ports (header only, not the body), the designated register/parameter defs file | DE's implementation approach, RTL internals, design-prompts |
 | DV re-verification | bugs.md row id, recorded TEST+SEED, regression scope to carry | DE's fix reasoning (fix commit id only) |
-| rev gate/review/arbitration/signoff | the review scope list (files/rows), the criteria source (spec sections / workflow/review/) | any party's verbal conclusions (rev reads the primary material itself) |
+| rev gate/review/arbitration/signoff | the review scope list (files/rows), the criteria source (spec sections / workflow/review.md) | any party's verbal conclusions (rev reads the primary material itself) |
 
 ## 3. Pre-dispatch self-check (every line)
 

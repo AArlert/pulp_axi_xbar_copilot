@@ -77,6 +77,10 @@ regress:
 check:
 	@python3 scripts/docs.py --check $(if $(SCEN),--scen $(SCEN)) \
 		$(if $(MILESTONE),--milestone $(MILESTONE))
+	@python3 scripts/docsx.py --check
+# docsx.py is project-owned (F1/F2/F7/F10 batch 1; doc/design-prompt/
+# doc_mechanization.md §13 C13.1) — no SCEN/MILESTONE narrowing yet.
+# 见 doc/fw-feedback.md FB-36.
 
 # Registered regression_guards binding the given files (card assembly +
 # review.md spot-check 6). Usage: make guards FILES="tb/sva/foo.sv tb/bar.sv"

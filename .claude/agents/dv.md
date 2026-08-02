@@ -55,12 +55,12 @@ card first.
   per covergroup tagged `[FCOV_SUMMARY]` — e.g.
   `[FCOV_SUMMARY] cg_tx_limit samples=60 inst_cov=80.00` — so evidence.py
   archives the coverage numbers into the excerpt's key-line section
-  (`workflow/evidence_record.md` row 6) and coverage evidence stays
-  self-sufficient at signoff.
+  (`workflow/records.md`'s "Evidence record" field table, row 6) and
+  coverage evidence stays self-sufficient at signoff. 见 doc/fw-feedback.md
+  FB-31（BUG-0052 死引用订正）。
 - For waveform chasing, log location, and coverage triage prefer the xverif
   toolkit (NOT on PATH — entry paths and probing rules: header of
-  `scripts/make/vcs-2018.mk`). Failure triage follows
-  `workflow/fail/*.md`.
+  `scripts/make/vcs-2018.mk`). Failure triage follows `workflow/bugs.md`.
 
 ## Exclusion zone
 
