@@ -170,6 +170,41 @@ class TestSignoffGate(DocsBase):
         self.assertIn("[FAIL] 1.", cp.stdout)
         self.assertIn("M1-01", cp.stdout)
 
+    def test_open_bug_blocks_completion_message(self):
+        """BUG-0054: --next's milestone-completion block used to ignore bug
+        status entirely — it only checked regress evidence + signoff file
+        existence, so it could print "three hard conditions met" with bugs
+        still OPEN. Red/green per REV-037 §BUG-0054's prescribed evaluator
+        reuse (not string-matching the signoff file's prose verdict)."""
+        ev_dir = self._green_with_regress_summary()
+        (ev_dir / "signoff-M1.md").write_text("# signoff\nverdict: pass\n",
+                                              encoding="utf-8")
+        # red: an OPEN bug alongside the existing KILL-001 row must block
+        # the completion message even though regress+signoff are in place.
+        self.doc("bugs.md").write_text(
+            "# Bugs\n\n" + _table(EN["bug_header"], [
+                "| KILL-001 | KILL | TB | M1 scoreboard KILL: injected "
+                "off-by-one, red->green | - | - | - | - |",
+                "| BUG-0001 | OPEN | TB | still open | - | - | - | - |"]),
+            encoding="utf-8")
+        cp = run(self.tmp, "docs.py", "--next", check=True)
+        self.assertNotIn("three hard conditions met", cp.stdout)
+        self.assertIn("still missing", cp.stdout)
+        self.assertIn("BUG-0001", cp.stdout)
+        # green: closing it out (with a valid replay-command evidence line)
+        # restores the completion message.
+        (ev_dir / "BUG-0001.log").write_text("CMD: true\nexpect: ok\n",
+                                              encoding="utf-8")
+        self.doc("bugs.md").write_text(
+            "# Bugs\n\n" + _table(EN["bug_header"], [
+                "| KILL-001 | KILL | TB | M1 scoreboard KILL: injected "
+                "off-by-one, red->green | - | - | - | - |",
+                "| BUG-0001 | CLOSED | TB | fixed | - | y | abc123 | "
+                "doc/evidence/v0.1.0/BUG-0001.log |"]),
+            encoding="utf-8")
+        cp = run(self.tmp, "docs.py", "--next", check=True)
+        self.assertIn("three hard conditions met", cp.stdout)
+
     def test_kill_coverage_with_archived_row(self):
         """Regression for FB-29: check_kill_coverage() must scan both live
         bugs.md and bugs_archive.md (not just live). When a KILL row has been

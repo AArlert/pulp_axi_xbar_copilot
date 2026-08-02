@@ -76,6 +76,48 @@ class TestCmdEvidence(unittest.TestCase):
         self.assertNotEqual(cp.returncode, 0)
         self.assertIn("--expect", cp.stderr + cp.stdout)
 
+    def test_cmd_out_of_repo_path_refused_with_zero_footprint(self):
+        # BUG-0057: a CMD embedding an absolute path outside the repo (the
+        # shape doc/evidence/v0.4.6/BUG-0040.log froze in) is not
+        # replayable from the repo alone (workflow/review.md Q3) and must
+        # be rejected before anything runs or is written.
+        cp = self.ev("--bug", "BUG-0001", "--cmd", "bash /tmp/x.sh",
+                     "--expect", "x")
+        self.assertNotEqual(cp.returncode, 0)
+        self.assertIn("out-of-repo", cp.stderr + cp.stdout)
+        self.assertFalse(
+            (self.tmp / "doc" / "evidence").exists()
+            and any((self.tmp / "doc" / "evidence").rglob("*.log")))
+        self.assertIn("VERIFYING",
+                      (self.tmp / "doc" / "bugs.md")
+                      .read_text(encoding="utf-8"))
+
+    def test_cmd_in_repo_absolute_path_accepted(self):
+        # The out-of-repo check must not false-positive on an absolute
+        # path that resolves inside the repo (e.g. $(pwd)-style commands
+        # that happen to embed CFG.root itself).
+        cp = self.ev("--bug", "BUG-0001", "--cmd",
+                     "echo %s" % str(self.tmp / "doc" / "bugs.md"),
+                     "--expect", "bugs.md")
+        self.assertEqual(cp.returncode, 0, cp.stdout + cp.stderr)
+
+    def test_bug_id_short_form_rejected(self):
+        # BUG-0060: a bare number (the literal shape that tripped two
+        # independent closers, per doc/bugs.md BUG-0069's account) is
+        # rejected outright rather than guessed/normalized.
+        cp = self.ev("--bug", "0001", "--cmd", "echo x", "--expect", "x")
+        self.assertNotEqual(cp.returncode, 0)
+        self.assertIn("BUG-NNNN", cp.stderr + cp.stdout)
+
+    def test_bug_id_typo_rejected_before_any_write(self):
+        # BUG-0060: validation must happen before the evidence file is
+        # written — previously a typo'd/nonexistent id left a fully
+        # signed, orphaned .log on disk even though the run "failed".
+        cp = self.ev("--bug", "BUG-9999", "--cmd", "echo x", "--expect", "x")
+        self.assertNotEqual(cp.returncode, 0)
+        self.assertIn("no row with id", cp.stderr + cp.stdout)
+        self.assertFalse((self.tmp / "doc" / "evidence").exists())
+
 
 class TestFourQuadrants(EvidenceBase):
     def test_uvm_pass_registers_and_backfills(self):

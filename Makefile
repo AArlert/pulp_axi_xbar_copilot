@@ -29,6 +29,9 @@ help:
 	@echo "  make evidence SCEN=<id> TEST=<t> SEED=<n> [SPEC_REF=SPEC-x.y] [LOG=<path>]"
 	@echo "  make evidence BUG=<id> TEST=<t> SEED=<n>            bug closure (closer != fixer)"
 	@echo "  make evidence BUG=<id> CMD='<cmd>' EXPECT='<regex>' non-sim re-verification"
+	@echo "    CMD/EXPECT may contain literal \$$(...) / \$$VAR shell syntax"
+	@echo "    (e.g. CMD='echo \$$(pwd)') — passed through to the shell"
+	@echo "    unexpanded by make; no \$$\$$-escaping needed (BUG-0069)"
 
 handoff:
 	@python3 scripts/docs.py --handoff
@@ -46,10 +49,18 @@ run:
 # Non-sim re-verification (lint/compile/tool criteria — runs CMD, exit 0 +
 # EXPECT signature required, fail-closed twice):
 #   make evidence BUG=BUG-003 CMD='make -C sim lint' EXPECT='lint clean'
+# BUG-0069: CMD/EXPECT use $(value ...), not a plain $(CMD)/$(EXPECT)
+# reference. A command-line-set variable is stored unexpanded and
+# re-expanded on every reference — a CMD containing its own $(...)/$VAR
+# (e.g. `echo $(pwd)`) would otherwise be silently re-evaluated by make
+# itself before reaching the shell, swallowing anything that isn't a
+# defined make variable. $(value ...) takes the raw text once and skips
+# that second pass, so $(pwd)/$VAR now reach the shell exactly as typed.
+# 见 doc/fw-feedback.md FB-34.
 evidence:
 	@python3 scripts/evidence.py $(if $(SCEN),--scen $(SCEN)) \
 		$(if $(BUG),--bug $(BUG)) \
-		$(if $(CMD),--cmd '$(CMD)' --expect '$(EXPECT)', \
+		$(if $(value CMD),--cmd '$(value CMD)' --expect '$(value EXPECT)', \
 		--test $(TEST) --seed $(SEED)) \
 		$(if $(LOG),--log $(LOG)) $(if $(SPEC_REF),--spec-ref $(SPEC_REF))
 

@@ -56,16 +56,26 @@ def main():
     new_cat = sorted({c for c, _, _ in new} - {c for c, _, _ in base})
 
     print("[LINT-DIFF] 本次 %d 站点 / 基线 %d 站点 (%s)" % (len(cur), len(base), baseline))
+    # BUG-0058: `gone` (基线认领了实测不存在的站点) 曾只打印、不进退出码——
+    # 幽灵站点可在基线里凭空存在而门禁永远不发现，且会让未来某个真新站点在
+    # 三元组撞上一条幽灵行时被误认成"已知"。判据从"不得引入新告警"扩为
+    # "基线必须等于实测"，阻塞的解除路径是显式的"分诊后并入基线"（重新生成
+    # 基线），不是脚本自行放行。
     for c, f, ln in gone:
-        print("[LINT-DIFF] 已消失（不阻塞，可在分诊后并入基线）: %s tb/%s:%d" % (c, f, ln))
+        print("[LINT-DIFF] 已消失（阻塞——若确认应移出基线，重新生成基线一次"
+              "性并入，而非留着不管）: %s tb/%s:%d" % (c, f, ln))
     if new_cat:
         print("[LINT-DIFF] 新类别: %s" % ", ".join(new_cat))
     for c, f, ln in new:
         print("[LINT-DIFF] 新站点: %s tb/%s:%d" % (c, f, ln))
-    if new:
-        sys.exit("[LINT-DIFF][FAIL] %d 个新站点须分诊；判为风格才可并入基线，"
-                 "判为真缺陷另开 bug 行" % len(new))
-    print("[LINT-DIFF] PASS：无新类别、无新站点")
+    print("LINT-DIFF SETS cur=%d base=%d new=%d gone=%d"
+          % (len(cur), len(base), len(new), len(gone)))
+    if new or gone:
+        sys.exit("[LINT-DIFF][FAIL] %d 个新站点须分诊（判为风格才可并入基线，"
+                 "判为真缺陷另开 bug 行）；%d 个基线站点已消失（须重新生成"
+                 "基线并入，基线不得认领实测不存在的站点）"
+                 % (len(new), len(gone)))
+    print("[LINT-DIFF] PASS：无新类别、无新站点、无消失站点")
 
 
 if __name__ == "__main__":

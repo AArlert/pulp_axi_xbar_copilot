@@ -67,6 +67,12 @@ card by type:
 - [ ] The card states its acceptance criteria (rev gate passed /
       compile+lint clean / scenario PASS + evidence / review record path)
       **and its grade** (L0–L3; in doubt, graded up).
+- [ ] **Each dispatched instance gets its own scratchpad subdirectory**
+      (`<scratchpad>/<role><card#>/`, self-created by the instance) — the
+      card states that path and forbids reading sibling subdirectories.
+      Scratchpad is session-scoped, not instance-scoped (BUG-0059: nothing
+      else separates one instance's working files from another's, closer
+      included); see doc/fw-feedback.md FB-33.
 - [ ] `make guards FILES="<the card's file list>"` run; every matched
       guard block pasted verbatim (registered fact, no reasoning).
       Above ~6 hits split **hard** (paths match files this card edits)

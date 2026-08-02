@@ -312,9 +312,53 @@ def milestone_evidence_dirs(mnum):
 def signoff_file_exists(mnum):
     # Fixed shape of the drifted-once bug: Path.glob() returns a generator,
     # and a generator object is always truthy — the inner any() must consume
-    # it so the check reflects real matches.
+    # it so the check reflects real matches. NOTE: existence only — the
+    # file's recorded verdict (PASS/CONDITIONAL/REJECTED) is deliberately
+    # never machine-read (see milestone_bugs_terminal()'s docstring, BUG-0054
+    # / doc/fw-feedback.md FB-31): doc/milestone.md:3 treats "rev signoff
+    # record" as one of two independent gates, not something a script judges.
     pattern = CFG.signoff_glob.format(m=mnum)
     return any(any(d.glob(pattern)) for d in milestone_evidence_dirs(mnum))
+
+
+def milestone_bugs_terminal(mnum):
+    """Bug-terminal machine condition (doc/milestone.md:3's "bugs 终态或未到期
+    ACCEPTED"). Extracted out of cmd_signoff so cmd_handoff's `--next` can
+    reuse the exact same evaluator instead of maintaining its own — narrower
+    — private copy: before this, `--next` never looked at bug status at all,
+    so it could report a milestone's "hard conditions met" while bugs were
+    still OPEN (BUG-0054). Returns (ok, detail); detail is empty when ok,
+    else a " — active: ..." / " — accepted debt due: ..." trailer identical
+    to cmd_signoff's condition-3 line. 见 doc/fw-feedback.md FB-31."""
+    bug_rows = parse_table(CFG.bugs)
+    active, due = [], []
+    for r in bug_rows:
+        st = r.get(CFG.C["bug_status"], "").strip()
+        if st in BUG_DONE_STATES:
+            continue
+        acc = BUG_ACCEPTED_RE.match(st)
+        if acc:
+            # Unexpired accepted debt passes this signoff; due-or-overdue
+            # debt blocks it — otherwise ACCEPTED becomes the new rug.
+            if int(acc.group(1)) <= int(mnum):
+                due.append("%s %s" % (r.get(CFG.C["bug_id"], "?"), st))
+            continue
+        active.append(r.get(CFG.C["bug_id"], "?"))
+    closure_errs = []
+    for r in bug_rows:
+        if r.get(CFG.C["bug_status"], "").strip() == "CLOSED":
+            check_evidence(r.get(CFG.C["bug_verify"], ""),
+                           "bug %s" % r.get(CFG.C["bug_id"], "?"),
+                           closure_errs)
+    ok = not active and not due and not closure_errs
+    detail = ""
+    if active:
+        detail += " — active: " + ", ".join(active)
+    if due:
+        detail += " — accepted debt due: " + ", ".join(due)
+    if closure_errs:
+        detail += " — " + "; ".join(closure_errs)
+    return ok, detail
 
 
 def cmd_handoff():
@@ -752,6 +796,18 @@ def cmd_next():
         if not any((d / "result_summary.txt").exists() for d in ev_dirs):
             missing.append("regress evidence (copy result_summary.txt into "
                            "doc/evidence/v<ver>/)")
+        # BUG-0054: reuse cmd_signoff's own evaluator (doc/milestone.md:3's
+        # full machine-condition set) instead of the private, narrower copy
+        # this block used to carry — that copy never looked at bug status or
+        # kill coverage at all, so it could call a milestone "done" with
+        # OPEN bugs still on the books. 见 doc/fw-feedback.md FB-31.
+        bugs_ok, bugs_detail = milestone_bugs_terminal(mnum)
+        if not bugs_ok:
+            missing.append("bugs not all terminal/ACCEPTED-unexpired%s"
+                           % bugs_detail)
+        if not kill_coverage_hits(mnum):
+            missing.append("no KILL row tagged %s (kill coverage)"
+                           % milestone)
         if not signoff_file_exists(mnum):
             missing.append("rev milestone signoff (%s in doc/evidence/"
                            "v<ver>/)" % CFG.signoff_glob.format(m=mnum))
@@ -759,9 +815,18 @@ def cmd_next():
             acts.append((1, "%s scenarios all ✅ — still missing: %s"
                          % (milestone, "; ".join(missing))))
         else:
-            acts.append((1, "%s three hard conditions met → make bump-minor "
-                            "+ git tag v0.%d.0 to enter the next milestone"
-                         % (milestone, int(mnum) + 1)))
+            # File existence is not the same as an approving verdict
+            # (BUG-0054): the signoff record's actual disposition (PASS /
+            # CONDITIONAL PASS / REJECTED) stays a human read, never a
+            # regex match — REV-037 §BUG-0054 ruled that parsing prose for
+            # a keyword is fragile and gameable, so this line only claims
+            # what the machine actually verified and defers the rest.
+            acts.append((1, "%s three hard conditions met — before make "
+                            "bump-minor + git tag v0.%d.0, read doc/"
+                            "evidence/v0.%s.*/%s and confirm its recorded "
+                            "verdict is not REJECTED"
+                         % (milestone, int(mnum) + 1, mnum,
+                            CFG.signoff_glob.format(m=mnum))))
 
     print("== next actions (%s / %s, %s profile — mechanical derivation; "
           "semantic decisions stay with you) ==" % (version, milestone,
@@ -866,36 +931,9 @@ def cmd_signoff(mnum=None):
     if not cond2:
         fails.append(2)
 
-    bug_rows = parse_table(CFG.bugs)
-    active, due = [], []
-    for r in bug_rows:
-        st = r.get(CFG.C["bug_status"], "").strip()
-        if st in BUG_DONE_STATES:
-            continue
-        acc = BUG_ACCEPTED_RE.match(st)
-        if acc:
-            # Unexpired accepted debt passes this signoff; due-or-overdue
-            # debt blocks it — otherwise ACCEPTED becomes the new rug.
-            if int(acc.group(1)) <= int(mnum):
-                due.append("%s %s" % (r.get(CFG.C["bug_id"], "?"), st))
-            continue
-        active.append(r.get(CFG.C["bug_id"], "?"))
-    closure_errs = []
-    for r in bug_rows:
-        if r.get(CFG.C["bug_status"], "").strip() == "CLOSED":
-            check_evidence(r.get(CFG.C["bug_verify"], ""),
-                           "bug %s" % r.get(CFG.C["bug_id"], "?"),
-                           closure_errs)
-    cond3 = not active and not due and not closure_errs
-    detail = ""
-    if active:
-        detail += " — active: " + ", ".join(active)
-    if due:
-        detail += " — accepted debt due: " + ", ".join(due)
-    if closure_errs:
-        detail += " — " + "; ".join(closure_errs)
+    cond3, detail3 = milestone_bugs_terminal(mnum)
     print("[%s] 3. all bugs terminal or ACCEPTED-unexpired, closures "
-          "evidenced%s" % ("PASS" if cond3 else "FAIL", detail))
+          "evidenced%s" % ("PASS" if cond3 else "FAIL", detail3))
     if not cond3:
         fails.append(3)
 
@@ -937,18 +975,27 @@ def check_kill_coverage(mnum):
     question) — this only catches the milestone with zero kills at all.
     See doc/fw-feedback.md FB-29."""
     tag = "M%s" % mnum
-    bug_rows = parse_table(CFG.bugs)
-    abug_rows = parse_table(CFG.bugs_archive)
-    hits = [r.get(CFG.C["bug_id"], "?") for r in bug_rows + abug_rows
-            if r.get(CFG.C["bug_status"], "").strip() == "KILL"
-            and re.search(r"\b%s\b" % re.escape(tag),
-                          r.get(CFG.C["bug_summary"], ""))]
+    hits = kill_coverage_hits(mnum)
     ok = bool(hits)
     print("[%s] 4. kill coverage: >=1 KILL row tagged %s (%s)"
           % ("PASS" if ok else "FAIL", tag,
              ", ".join(hits) if hits else
              "none — no checker proven able to fail this milestone"))
     return ok
+
+
+def kill_coverage_hits(mnum):
+    """Pure-data half of check_kill_coverage() above — the hit list, no
+    printing. cmd_handoff (`--next`) reuses this to gate milestone
+    completion without the PASS/FAIL banner leaking into its action-list
+    output (BUG-0054 / doc/fw-feedback.md FB-31)."""
+    tag = "M%s" % mnum
+    bug_rows = parse_table(CFG.bugs)
+    abug_rows = parse_table(CFG.bugs_archive)
+    return [r.get(CFG.C["bug_id"], "?") for r in bug_rows + abug_rows
+            if r.get(CFG.C["bug_status"], "").strip() == "KILL"
+            and re.search(r"\b%s\b" % re.escape(tag),
+                          r.get(CFG.C["bug_summary"], ""))]
 
 
 def cmd_chain(rid):

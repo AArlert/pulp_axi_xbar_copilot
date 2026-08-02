@@ -54,6 +54,21 @@ KEY_LINES_MAX = 30
 # file instead, and truncation is made visible.
 SVA_DETAIL_RE = re.compile(r'^\s*"([^"]+)",\s*\d+:\s*\S+.*?'
                            r'(\d+)\s+attempts?\b.*?(\d+)\s+match', re.I)
+# BUG-0060: the row id form actually seen in doc/bugs.md is BUG-NNNN — a
+# bare number (e.g. `BUG=0048`, missing the prefix) is rejected outright
+# rather than guessed/normalized, since guessing the zero-padding width
+# silently would risk writing evidence for the wrong id. 见
+# doc/fw-feedback.md FB-32.
+BUG_ID_RE = re.compile(r"^BUG-\d+$")
+# BUG-0057: catches an absolute-path token embedded in a --cmd string (the
+# concrete failure mode found: `CMD: bash /tmp/<session>/scratchpad/x.sh`,
+# which stops being replayable the moment that temp dir is gone). Not
+# preceded by ':' or a word char, so URL schemes ("http://") and the tail
+# of an identifier are skipped. This is a heuristic scan, not a shell
+# parser — it exists to catch that concrete shape, not to sandbox
+# arbitrary CMD text (workflow/review.md Q3: "stranger reproduce from the
+# repo alone"). 见 doc/fw-feedback.md FB-32.
+CMD_ABS_PATH_RE = re.compile(r'(?<![:\w])(/[\w./-]+)')
 
 
 def read_version():
@@ -124,6 +139,30 @@ def extract(log_path, rid):
     return summary, sva_lines, agg_lines + keys
 
 
+def row_exists(path, id_col, id_val):
+    """Peek a markdown table for a matching id without writing anything —
+    used to validate --bug *before* any evidence file touches disk
+    (BUG-0060: writing before validating left a fully-formed, orphaned
+    .log file on an id typo, invisible to docs.py's orphan scan since that
+    only walks doc/bugs/*.md, never doc/evidence/). 见
+    doc/fw-feedback.md FB-32."""
+    esc = "\x00"
+    header = None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if not s.startswith("|"):
+            header = None
+            continue
+        cells = [c.strip().replace(esc, "|")
+                 for c in s.replace("\\|", esc).strip("|").split("|")]
+        if header is None:
+            header = cells
+        elif not all(set(c) <= set("-: ") for c in cells) and \
+                dict(zip(header, cells)).get(id_col, "") == id_val:
+            return True
+    return False
+
+
 def update_row(path, id_col, id_val, updates):
     """Locate a markdown table row by its id column and update the given
     columns (supports \\| escapes)."""
@@ -174,6 +213,19 @@ def main():
     CFG = load_config()
 
     rid = args.scen or args.bug
+    if args.bug:
+        # BUG-0060: validate the id — form, then existence — before
+        # anything runs or gets written. Previously the row lookup
+        # happened after the evidence file was already on disk, so a typo
+        # (e.g. `BUG=0048` missing the prefix) left an orphaned, fully
+        # signed .log with no bugs.md row to back it.
+        if not BUG_ID_RE.match(args.bug):
+            sys.exit("--bug expects the row id in its full BUG-NNNN form "
+                     "(got %r) — a bare number/short form is rejected "
+                     "rather than guessed" % args.bug)
+        if not row_exists(CFG.bugs, CFG.C["bug_id"], args.bug):
+            sys.exit("no row with id %s in %s — evidence not written"
+                     % (args.bug, CFG.bugs.name))
     if args.cmd:
         # Non-sim re-verification (lint/compile/tool-output criteria —
         # pulp FB-16). Fail-closed twice: nonzero exit is never evidence,
@@ -184,6 +236,14 @@ def main():
         if not args.expect:
             sys.exit("--cmd requires --expect <regex>: name the output "
                      "signature that proves the fix")
+        for tok in CMD_ABS_PATH_RE.findall(args.cmd):
+            resolved = str(Path(tok).resolve())
+            if resolved != str(CFG.root) and \
+                    not resolved.startswith(str(CFG.root) + "/"):
+                sys.exit("--cmd references an out-of-repo absolute path "
+                         "(%s) — evidence commands must be replayable from "
+                         "the repo alone (workflow/review.md Q3); rejected "
+                         "before running anything" % tok)
         try:
             exp = re.compile(args.expect)
         except re.error as e:
