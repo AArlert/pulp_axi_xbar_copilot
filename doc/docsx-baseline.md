@@ -10,15 +10,6 @@ BUG-0052's row narrates the 7 dead `workflow/` references it reports (now correc
 
 | id | family | locus | rev_ref |
 | --- | --- | --- | --- |
-| BL-0001 | F2 | doc/bugs.md:23:workflow/fail | REV-038 §B.1 |
-| BL-0002 | F2 | doc/bugs.md:23:workflow/fail/ | REV-038 §B.1 |
-| BL-0003 | F2 | doc/bugs.md:23:workflow/fail/* | REV-038 §B.1 |
-| BL-0004 | F2 | doc/bugs.md:23:workflow/fail/*.md | REV-038 §B.1 |
-| BL-0005 | F2 | doc/bugs.md:23:workflow/fail/failure_record.md | REV-038 §B.1 |
-| BL-0006 | F2 | doc/bugs.md:23:workflow/review/ | REV-038 §B.1 |
-| BL-0007 | F2 | doc/bugs.md:23:workflow/review/* | REV-038 §B.1 |
-| BL-0008 | F2 | doc/bugs.md:23:workflow/review/rubric.md | REV-038 §B.1 |
-| BL-0009 | F2 | doc/bugs.md:23:workflow/review/six_questions.md | REV-038 §B.1 |
 
 ## Forward references to not-yet-built §14 deliverables + the design's own worked examples
 
@@ -201,6 +192,7 @@ REV-038 §A-c4 named this exact locus while gating the design contract: the desi
 | BL-0150 | F4 | doc/guards.md:G-0063 | REV-038 §A-c5 |
 | BL-0151 | F4 | doc/guards.md:G-0064 | REV-038 §A-c5 |
 | BL-0152 | F4 | doc/guards.md:G-0066 | REV-038 §A-c5 |
+| BL-0153 | F4 | doc/guards.md:G-0068 | REV-038 §B.2; REV-038 §A-c5 |
 
 ## doc/bugs.md rows with no doc/bugs/<id>.md page — pre-existing historical debt (F5, BUG-0067)
 
@@ -228,7 +220,6 @@ REV-038 §A-c4 named this exact locus while gating the design contract: the desi
 | BL-0084 | F5 | bugs.md:BUG-0061 | REV-038 §B.1 |
 | BL-0085 | F5 | bugs.md:BUG-0065 | REV-038 §B.1 |
 | BL-0086 | F5 | bugs.md:BUG-0067 | REV-038 §B.1 |
-| BL-0087 | F5 | bugs.md:BUG-0068 | REV-038 §B.1 |
 | BL-0088 | F5 | bugs.md:BUG-0069 | REV-038 §B.1 |
 | BL-0089 | F5 | bugs.md:BUG-0070 | REV-038 §B.1 |
 | BL-0090 | F5 | bugs.md:BUG-0071 | REV-038 §B.1 |
