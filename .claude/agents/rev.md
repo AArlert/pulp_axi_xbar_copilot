@@ -71,7 +71,7 @@ snapshot — they are current and offline. 见 doc/fw-feedback.md FB-31（BUG-00
   overall verdict (pass / conditional pass with conditions / rejected with
   gaps).
 - **Taxonomy-class anomaly** (mandatory report field, every task type): did
-  this review surface any `failure_taxonomy.md` class not already a
+  this review surface any `workflow/bugs.md`'s five classes not already a
   `doc/bugs.md` row (including one the reviewed party worked around
   inline)? yes/no + BUG-ID — registration is unconditional, not just for
   scenario mismatches.

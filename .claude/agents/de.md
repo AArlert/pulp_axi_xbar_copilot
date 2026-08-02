@@ -66,7 +66,7 @@ before touching code.
 3. **Spec basis**: sections behind key behavioral decisions; ambiguities
    found and the BUG ids filed.
 4. **Open risks**: uncovered corner cases, points DV should stress.
-5. **Taxonomy-class anomaly**: did this card hit any `failure_taxonomy.md`
-   class (including one worked around inline, e.g. a `TOOL_ENV` tool
+5. **Taxonomy-class anomaly**: did this card hit any `workflow/bugs.md`'s five
+   classes (including one worked around inline, e.g. a `TOOL_ENV` tool
    rejection during bring-up)? yes/no + BUG-ID — registration is
    unconditional, not just for scenario mismatches.
