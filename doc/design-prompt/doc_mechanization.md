@@ -47,8 +47,8 @@ frontmatter 层，无一扫描正文自由文本，且多处只实现了单向�
   "冻结记录不回改"——对它们做活体核对等于逼人回改已冻结的一手件。
 - **C1.4 可执行字段隔离（executable-field separation）**：**唯一**可被执行器接收的
   值是本设计新定义的字段——`count`/`bidiff` 标记的 `check=`/`left=`/`right=`，与
-  `doc/guards.md` 的 `check` 列（`type: script` 行）。存量 `ref:` 字段（42 份详情页
-  + `guards.md`）**永不**进执行器（§12）。
+  `doc/guards.md` 的 `check` 列（`type: script` 行）。存量 `ref:` 字段（详情页
+  + `guards.md`，页数见 §F4）**永不**进执行器（§12）。
 
 ## F1. 数字断言（number assertion，活体/冻结两形态 + 元检查）
 
@@ -100,8 +100,10 @@ REV-035 §Q5 族级 guard（D1/D2/D3）的**通用底座**。
 
 ## F4. guard 载体（`doc/guards.md` 单表）
 
-新建 `doc/guards.md` 承载**全部** `regression_guard`（现散落在 42 份详情页——
-`grep -l '## regression_guard' doc/bugs/*.md | wc -l`，orch 亲跑 2026-08-02）。它
+新建 `doc/guards.md` 承载**全部** `regression_guard`（现散落在详情页——数量由命令
+现算：44 <!-- docsx:count check="grep -l '## regression_guard' doc/bugs/*.md | wc -l" -->
+（A-c4：设计文档在 F1 活文件集内，静态"42"已漂移至实测 44，改为自食其力的
+`docsx:count` 标记、不再写死）。它
 同时是 REV-035 §Q5 族级 guard 的落地载体，schema 须满足其 Q5 点 3 归属规定
 （多条 bug 指向同一实现，各自 `note` 只写对应哪个差集）。
 
@@ -120,6 +122,11 @@ REV-035 §Q5 族级 guard（D1/D2/D3）的**通用底座**。
   - `type: checklist` 的**新增行即红**（不在 §F10 baseline 中即为新增）——REV-035
     §Q3(b)：checklist 是机械化 TODO，把今天能关的门写成 TODO 等于留开它；新 guard
     一律 `type: script`。存量 checklist guard 经 baseline 豁免。
+  - **rev 授权例外通道（A-c5）**：确经 rev 判明**不可机械化**的新 checklist guard
+    （如 REV-037 对 BUG-0057 的"EXPECT 来自门禁不可机械化"、BUG-0059 的"orch 派卡
+    非脚本执行"）经 §F10 baseline 的 `rev_ref` 收录后**不判红**——一刀切"新
+    checklist 即红"会误禁 rev 正当下令的守卫。baseline 该行 `rev_ref` 须指向判明
+    不可机械化的裁决，其 `note` 须写死不可机械化的理由。
   - `paths` 单元格含非 ASCII 字符（中文顿号 `、`、全角括号 `（）` 等）→ 红。
   - `type: script` 行的 `check` 空或不可执行 → 红（§F1 元检查同款）。
 - **red_when**：加一行 `type: checklist` 且不在 baseline → 红；`paths` 写
@@ -153,11 +160,14 @@ BUG-0067：69 条 bug 行中 27 条无详情页，而 `docs.py:519-535` 的孤�
 机器表单元格超限即红。BUG-0067 实测：summary 单元格 186–963 字符、root_cause
 1111 字符；`workflow/bugs.md` 点名 "3000-character table cells proved unreadable"。
 
-- **判据**：对 `doc/bugs.md`、`doc/testplan.md`、`doc/coverage-waivers.md` 三张机器表
-  的每个数据行单元格，`len(cell.encode('utf-8')) > CAP` → 红。**CAP 数值待 rev 裁**
-  （设计建议：普通列 CAP=2000 字节；`root_cause` 一列因其正当长度另设更高上限或
-  豁免——见 §取舍 2）。
-- **red_when**：把任一单元格填成 `"x" * (CAP+1)` → 红。
+- **判据（D-2 已裁，REV-038）**：对 `doc/bugs.md`、`doc/testplan.md`、
+  `doc/coverage-waivers.md` 三张机器表的每个数据行单元格，
+  `len(cell.encode('utf-8')) > 2000` → 红。**统一 CAP=2000 字节、全列一致、
+  `root_cause` 不设例外**——REV-038 §D-2/B.5 推翻了原"root_cause 例外"设计首选：
+  1111 字符的 `root_cause` 属详情页 `## rca`、不属汇总表，给它开表内例外等于重新
+  合法化框架已定性的反模式（`workflow/bugs.md`「3000-character table cells proved
+  unreadable」）。存量超限格走 §F10 baseline（`rev_ref`）+ 迁往详情页。
+- **red_when**：把任一单元格填成 `"x" * 2001` → 红。
 - **docs.py 复用**：`parse_table` / `row_cells`（取单元格）；`CFG.C` 提供各表列名。
 
 ## F7. 枚举快照禁写死（enum snapshot must not be hardcoded）
@@ -165,12 +175,16 @@ BUG-0067：69 条 bug 行中 27 条无详情页，而 `docs.py:519-535` 的孤�
 活文件中"当前已改 X、Y"型静态列表禁止，须指向 `make handoff`/`make next` 现算。
 背景：FB-25/BUG-0052 型——手写的"当前状态"枚举随框架改路径静默腐烂。
 
-- **判据**：活文件正文命中快照引导短语的**denylist**（如
-  `当前已(改|迁移|完成|修复).{0,40}[、,，]` 等，具体正则集在 §skill 层维护）且该
-  处无 `docsx:count`/`docsx:bidiff` 标记、也无 `make handoff`/`make next` 指向 →
-  红。**本族天生启发式、必不完备**（见 §取舍 3）。
-- **red_when**：向 `README.md` 加一行 `当前已改：workflow/a.md、workflow/b.md`
-  （无标记、无 make 指向）→ 红。
+- **判据（D-3 已裁，REV-038：首版降为 warning）**：活文件正文命中快照引导短语的
+  **denylist**（如 `当前已(改|迁移|完成|修复).{0,40}[、,，]` 等，具体正则集在
+  §skill 层维护）且该处无 `docsx:count`/`docsx:bidiff` 标记、也无
+  `make handoff`/`make next` 指向 → **warning（advisory，不阻塞退出码）**。本族是
+  十族中**唯一**启发式、可误伤正当正文（设计自陈"天生必不完备"）；一个高误报的
+  硬门会训练人去禁用门（反向违反"不得为让卡过而调门"），故首版为 warning。升级为
+  红是**将来**在观测到 N 次零误报后的 rev 决策。
+- **red_when（首版为 warning，非红）**：向 `README.md` 加一行
+  `当前已改：workflow/a.md、workflow/b.md`（无标记、无 make 指向）→ 触发 warning
+  行（不进退出码）。
 - **docs.py 复用**：无（正文扫描）。
 
 ## F8. 红线（red lines，enforce 不变量 1 与 4）
@@ -195,10 +209,14 @@ BUG-0067：69 条 bug 行中 27 条无详情页，而 `docs.py:519-535` 的孤�
 - **C12.1 唯一可执行面**：执行器只接收 `check=`/`left=`/`right=`/guards.md `check`
   列的值。`ref:` 被解析为**纯展示文本**，永不传入执行器。
 - **C12.2 allowlist + denylist**：命令走 `sh -c`（需管道），但先做词法审查——
-  - **allowlist**：每个管道段的**首个命令**须 ∈
+  - **allowlist（A-c1 收口）**：每个管道段的**首个命令**须 ∈
     {`grep`,`egrep`,`comm`,`wc`,`sort`,`uniq`,`sed`(仅 `-n` 打印),`awk`,`cut`,
     `tr`,`head`,`tail`,`cat`,`ls`,`find`(禁 `-exec`/`-delete`),`test`,`diff`,
-    `git`(仅 `ls-files`/`log`/`grep`/`show`/`rev-parse`),`python3 scripts/<x>.py`,`echo`}。
+    `git`(仅 `ls-files`/`log`/`grep`/`show`/`rev-parse`),`echo`}。**`python3` 只准
+    调一份显式、只读审计过的脚本白名单**（初始 = `scripts/docs.py`、
+    `scripts/svacheck.py`），**不得**是任意 `python3 scripts/<x>.py`——后者把 `check=`
+    的安全性重新绑定到每一个 `scripts/*.py` 的安全性上，是任意执行逃逸面，抵消 §12
+    存在的意义（REV-038 §A-c1）。白名单扩项须走 rev。
   - **denylist**：命令串任意位置出现下列**词**即拒绝 → 红：`rm`,`mv`,`cp`,`dd`,
     `chmod`,`chown`,`make`,`truncate`,`tee`,`curl`,`wget`,`xargs`,`ssh`,`>`,`>>`,
     `<>`,`git`+{`checkout`,`reset`,`clean`,`rm`,`mv`,`commit`,`push`,`add`}，
@@ -243,7 +261,7 @@ prune，prune 缺失进退出码。背景：`sim/lintdiff.py:59-67` 只在 `new`
   现只跑 `docs.py --check`）追加 `docsx.py --check`。同样记 FB 行。
 - **C13.3 `make guards` 改源（interface 后果，须 rev 裁）**：guards 迁到
   `doc/guards.md` 后，`make guards`（现 `Makefile:72-73` → `docs.py --guards`，读
-  42 份详情页的 `## regression_guard`）将读到空。须把 `guards:` target 改指
+  详情页的 `## regression_guard`，份数见 §F4）将读到空。须把 `guards:` target 改指
   `docsx.py --guards`（读 `guards.md`）——canon Makefile 改动、记 FB 行；
   `docs.py:1138` 的 `cmd_guards` 随之退役（不删、上游文件）。此为迁移的必然接线
   后果，列入 §开放风险。
@@ -259,32 +277,46 @@ prune，prune 缺失进退出码。背景：`sim/lintdiff.py:59-67` 只在 `new`
 
 ## 15. 交付形态与验收锚点
 
-- **产物**：`scripts/docsx.py`（project-owned）+ `doc/guards.md`（迁移 42 条）+
-  `doc/docsx-baseline.md`（存量豁免）+ `.claude/skills/doc-mechanization/SKILL.md`
-  + `Makefile`/`pre-commit` 接线（各记 FB 行）。**均由后续实现卡产出，本卡只定契约。**
+- **产物**：`scripts/docsx.py`（project-owned）+ `doc/guards.md`（迁移全部 guard，
+  份数见 §F4 的 `docsx:count`）+ `doc/docsx-baseline.md`（存量豁免）
+  + `.claude/skills/doc-mechanization/SKILL.md` + `Makefile`/`pre-commit` 接线
+  （各记 FB 行）。**均由后续实现卡产出，本卡只定契约。**
 - **验收判据**：
-  - 十族各自的 `red_when` 逐条可注入证伪（实现卡须逐族演示红→修→绿）。
+  - 十族各自的 `red_when` 逐条可注入证伪（实现卡须逐族演示红→修→绿；F7 首版为
+    warning，演示 warning→修→无 warning，D-3）。
   - §12 的两条注伤自证背书到位：含 `rm` 的 `check=` 被拒变红（`doc/bugs.md` 记
     `KILL` 行）；`ref:` 含 `make clean` 零执行由单元测试钉死。
   - `docsx.py --check` 挂进 `make check` 后全绿；`test_budgets.py` 仍绿（人读说明
     未进必读面）。
   - guards.md schema 满足 REV-035 §Q5 点 3：族级 guard 一行多 bug、`note` 各自
     归属 D1/D2/D3。
+- **实现卡须闭合的两条门禁前置（REV-038 §A，本卡未闭合）**：
+  - **A-c2（F4 迁移接线）**：`fl_schema_enforce=true`（`iverif.json:10`）令详情页
+    `## regression_guard` 段被 schema 要求非空，而 F4 把全部 guard 迁往
+    `doc/guards.md`。实现卡须先给出现存详情页 `## regression_guard` 段的去向方案
+    （删/改指 guards.md/冻结）与 `fl_schema_enforce` 的接线，否则 F4 落地当天与
+    fl_schema 检查冲突（REV-038 §A-c2）。
+  - **A-c3（不变量 5，两条 KILL 前置）**：§12 两条 KILL 自证（`rm` 注入被拒变红 →
+    `doc/bugs.md` 记 `KILL` 行；`ref:` 含 `make clean` 零执行由单测钉死）须在
+    **任何 docsx 族关闭任何 bug 之前**到位（REV-038 §A-c3）。
 
-## 16. 决策点待裁清单（open decisions for rev）
+## 16. 决策点终态（decided by REV-038）
 
-- **D-1 可执行命令的载体**（**待 rev 裁**）：选择 = 命令内联在正文标记的 `check=`；
-  反方形态 = 可执行面全部收敛进 `doc/guards.md`/baseline 结构化表、正文标记只引
-  guard id；选它的理由 = FB-23 的教训是复现命令须与它证明的数字同行 travel，安全
-  由 §12 执行器契约兜底而非靠藏命令。
-- **D-2 F6 CAP 数值与 `root_cause` 例外**（**待 rev 裁**，与 §F6 正文标记一致）：
-  选择 = 普通列 CAP=2000 字节、`root_cause` 一列另设更高上限或豁免；反方形态 =
-  全列一刀切单一 CAP；选它的理由 = BUG-0053 的 `root_cause` 实测 1111 字符是合法
-  长文，一刀切会误伤正当长内容。
-- **D-3 F7 启发式的去留**（**待 rev 裁**）：选择 = 以脆弱正则 ship，正则集关进
-  skill 层可迭代；反方形态 = 降级/deferred，等第二次实例触发再落地（discipline §2
-  deferred-ledger）；选它的理由 = 快照短语 denylist 天生不完备、且可能误伤正当
-  正文，够不够格 ship 由 rev 定夺。
+- **D-1 可执行命令的载体 —— 已裁（REV-038：准设计首选）。** 终态 = 命令内联在
+  正文标记的 `check=`。反方形态 = 可执行面全部收敛进 `doc/guards.md`/baseline
+  结构化表、正文标记只引 guard id；驳回，因把命令从数字身边挪走会重造 FB-23 的
+  失配形态（命令与数字分离、静默腐烂）。成立前提：A-c1（收窄 `python3
+  scripts/*.py`）+ A-c3（两条 KILL 自证到位），均已并入正文。
+- **D-2 F6 CAP 与 `root_cause` 例外 —— 已裁（REV-038：推翻设计首选）。** 终态 =
+  三张机器表全部数据单元格统一 CAP=2000 字节、`root_cause` **不设例外**，存量超限
+  格走 §F10 baseline + 迁往详情页。反方（原设计首选）= root_cause 另设更高上限或
+  豁免；被推翻，因 1111 字符 root_cause 属详情页 `## rca`、不属汇总表，开表内例外
+  等于重新合法化框架已定性的反模式，且超限大行其 summary 也 >2000B（例外救不了大
+  行）。§F6 正文已同步。
+- **D-3 F7 启发式的去留 —— 已裁（REV-038：准 ship，首版降 warning）。** 终态 =
+  ship（否决 deferred，触发器已响三次），但 F7 首版为 **warning（advisory，不阻塞）**
+  而非硬红——F7 是唯一启发式、可误伤正当正文的族，高误报硬门会训练人禁用门；升级
+  为红是将来观测 N 次零误报后的 rev 决策。§F7 正文已同步。
 
 ## 引用（authority basis）
 
