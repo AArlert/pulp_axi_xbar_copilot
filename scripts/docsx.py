@@ -148,6 +148,34 @@ DENY_SIMPLE = {"rm", "mv", "cp", "dd", "chmod", "chown", "make", "truncate",
 # re-bound to "every script under scripts/*.py is safe" — python3 may only
 # invoke this fixed, already-audited, read-only pair.
 
+# BUG-0072: shlex's exact-token-membership test only sees a QUOTED denylisted
+# word (or a quoted `$(rm ...)` substitution) as one opaque string token, so
+# it silently walks past both the DENY_SIMPLE flat scan and the
+# allowlist-head segment scan below. Two independent, deliberately redundant
+# defenses close this, both operating on token *content* rather than token
+# *identity* so quoting can no longer hide anything (`shlex(posix=True)`
+# already strips the quote characters themselves before we ever see the
+# token, so a word-boundary content scan treats bare/'single'/"double"
+# quoting identically — there is nothing left to distinguish):
+#   (1) command substitution (`$(`, backtick, `${`) is banned OUTRIGHT,
+#       anywhere in the raw command text, before tokenizing even happens —
+#       §12's threat model (C12.2: "针对'误写破坏性命令'威胁模型，非对抗性
+#       注入") never needs nested command substitution; every worked
+#       red_when/F3 example is a single pipeline of independent, simple
+#       commands. This is the "smaller, more provable" fix the bug page's
+#       own `## fix` note prefers over trying to recursively re-parse
+#       whatever a `$(...)` might contain.
+#   (2) DENY_SIMPLE membership becomes a word-boundary *content* scan over
+#       every token (not an exact `tok in DENY_SIMPLE` equality) — so a
+#       denylisted word sitting inside a quoted string with no `$(...)` at
+#       all (e.g. a hypothetical `test "rm -rf x" = y`) is caught too, not
+#       just the command-substitution shape BUG-0072 happened to report.
+CMDSUB_RE = re.compile(r'\$\(|`|\$\{')
+_DENY_WORDS = sorted(w for w in DENY_SIMPLE if w.isalnum())
+_DENY_SYMBOLS = sorted(w for w in DENY_SIMPLE if not w.isalnum())
+DENY_WORD_RE = re.compile(
+    r'\b(?:' + '|'.join(re.escape(w) for w in _DENY_WORDS) + r')\b')
+
 
 def _shell_tokens(cmd):
     lex = shlex.shlex(cmd, posix=True, punctuation_chars=True)
@@ -158,19 +186,37 @@ def _shell_tokens(cmd):
         return None
 
 
+def _deny_hit_in_token(tok):
+    """Returns the matched denylisted word/symbol if `tok`'s *content*
+    (quotes already stripped by shlex) carries one anywhere, else None.
+    Content-based, not identity-based — see BUG-0072 comment above."""
+    m = DENY_WORD_RE.search(tok)
+    if m:
+        return m.group(0)
+    for sym in _DENY_SYMBOLS:
+        if sym in tok:
+            return sym
+    return None
+
+
 def exec_gate(cmd):
     """Lexical review only — no subprocess call happens here. Returns
     (ok, reason). `reason` is empty when ok."""
     if not cmd or not cmd.strip():
         return False, "check=/left=/right= is empty"
+    if CMDSUB_RE.search(cmd):
+        return False, ("denylisted: command substitution ($(...), `...`, "
+                       "${...}) is not permitted in check=/left=/right= "
+                       "(BUG-0072)")
     tokens = _shell_tokens(cmd)
     if tokens is None:
         return False, "unparsable command (unbalanced quoting)"
     if not tokens:
         return False, "empty command"
     for i, tok in enumerate(tokens):
-        if tok in DENY_SIMPLE:
-            return False, "denylisted token: %s" % tok
+        hit = _deny_hit_in_token(tok)
+        if hit is not None:
+            return False, "denylisted token: %s" % hit
         if tok == "sed" and i + 1 < len(tokens) and \
                 tokens[i + 1].startswith("-i"):
             return False, "denylisted: sed -i"
@@ -700,7 +746,13 @@ def cmd_kill_proof(cfg):
     see the archived KILL-0001..0005 rows for the same convention).
     Spies on subprocess.run (module-level, so it also catches calls made
     from inside this file) to prove *zero* calls happen, not just that the
-    end result looks right."""
+    end result looks right.
+
+    KILL-C (BUG-0072, `doc/bugs.md` KILL-0007) extends the original two
+    proofs with the third, previously-uncovered attack shape: a denylisted
+    word wrapped in a QUOTED `$(...)` command substitution, which used to
+    read as a single opaque shlex token and sail past both defense layers
+    (`(True, '')`, would have reached `subprocess.run` for real)."""
     calls = []
     orig_run = subprocess.run
 
@@ -717,17 +769,24 @@ def cmd_kill_proof(cfg):
         check_f1_text(cfg, "synthetic.md", sample)
         check_f2_text(cfg, "synthetic.md", sample)
         proof_b = len(calls) == 0
+        calls.clear()
+        ok_c, _, _ = exec_check(
+            'test "$(cat doc/bugs.md; rm -rf sim/out)" = "x"', cfg)
+        proof_c = (not ok_c) and (len(calls) == 0)
     finally:
         subprocess.run = orig_run
-    if proof_a and proof_b:
+    if proof_a and proof_b and proof_c:
         print("[KILL-A] rm-injection rejected pre-exec, 0 subprocess calls")
         print("[KILL-B] ref: text never reaches the executor, 0 subprocess "
              "calls")
-        print("[KILL-DOCSX-12] both self-injury proofs hold — the executor "
-             "only ever receives docsx:count/docsx:bidiff check=/left=/"
-             "right= values, never a bug-page `ref:` field")
+        print("[KILL-C] quoted $(...) command-substitution rm-injection "
+             "rejected pre-exec, 0 subprocess calls (BUG-0072)")
+        print("[KILL-DOCSX-12] all three self-injury proofs hold — the "
+             "executor only ever receives docsx:count/docsx:bidiff "
+             "check=/left=/right= values, never a bug-page `ref:` field, "
+             "and quoting a denylisted word/substitution cannot hide it")
         return 0
-    print("[FAIL] KILL proof A=%s B=%s" % (proof_a, proof_b))
+    print("[FAIL] KILL proof A=%s B=%s C=%s" % (proof_a, proof_b, proof_c))
     return 1
 
 

@@ -508,6 +508,65 @@ class TestExecutorGate(unittest.TestCase):
         ok, _ = docsx.exec_gate("grep -l x doc/bugs/*.md | wc -l")
         self.assertTrue(ok)
 
+    # -- BUG-0072: quoted command-substitution bypass -----------------
+    def test_quoted_command_substitution_with_rm_is_denylisted(self):
+        """BUG-0072 red_when (## rerun): a denylisted word wrapped in a
+        DOUBLE-quoted `$(...)` command substitution used to sail through
+        as a single opaque shlex token — `exec_gate` returned `(True, '')`
+        even though `sh -c` would evaluate the substitution for real and
+        run the embedded `rm -rf sim/out`. Pre-fix, this assertion fails
+        (the bug's own repro command)."""
+        ok, reason = docsx.exec_gate(
+            'test "$(cat doc/bugs.md; rm -rf sim/out)" = "x"')
+        self.assertFalse(ok)
+        self.assertIn("command substitution", reason)
+
+    def test_single_quoted_command_substitution_is_also_denylisted(self):
+        """Same shape, single-quoted this time — command substitution is
+        banned outright regardless of which quote style wraps it (fix
+        direction endorsed by BUG-0072 ## fix: §12's threat model never
+        needs $(...)/backticks, so there is nothing to lose by banning
+        the construct wholesale rather than trying to recursively
+        re-parse whatever it contains)."""
+        ok, reason = docsx.exec_gate("test '$(rm -rf sim/out)' = y")
+        self.assertFalse(ok)
+        self.assertIn("command substitution", reason)
+
+    def test_backtick_command_substitution_is_denylisted(self):
+        ok, reason = docsx.exec_gate("echo `rm -rf sim/out`")
+        self.assertFalse(ok)
+        self.assertIn("command substitution", reason)
+
+    def test_nested_quoted_command_substitution_is_denylisted(self):
+        """'嵌套' shape named in the fixer card: a $(...) inside another
+        $(...) , still wrapped in quotes."""
+        ok, reason = docsx.exec_gate(
+            'echo "$(echo $(rm -rf sim/out))"')
+        self.assertFalse(ok)
+        self.assertIn("command substitution", reason)
+
+    def test_quoted_denylisted_word_without_substitution_is_still_caught(self):
+        """Second, independent defense: a denylisted word sitting inside a
+        quoted string with no command substitution at all must still be
+        rejected on its own merits — quoting alone must never hide a
+        denylisted word (the fixer card's 单引号内/双引号内 requirement is
+        broader than just the $(...) shape BUG-0072 happened to report)."""
+        ok, reason = docsx.exec_gate('test "rm -rf x" = y')
+        self.assertFalse(ok)
+        self.assertIn("rm", reason)
+        ok2, reason2 = docsx.exec_gate("test 'rm -rf x' = y")
+        self.assertFalse(ok2)
+        self.assertIn("rm", reason2)
+
+    def test_quoted_glob_without_denylisted_content_stays_accepted(self):
+        """Regression / no-allow-widening check: quoting by itself is not
+        being punished — only denylisted content and command substitution
+        are. A quoted glob with neither must remain green."""
+        ok, _ = docsx.exec_gate("grep -l x 'doc/bugs/*.md'")
+        self.assertTrue(ok)
+        ok2, _ = docsx.exec_gate('git ls-files "doc/bugs/*.md"')
+        self.assertTrue(ok2)
+
 
 class TestExecutorRun(TmpRootBase):
     def test_timeout_is_enforced(self):
@@ -564,7 +623,20 @@ class TestExecutorKillSelfInjury(TmpRootBase):
         # to interpret the ref: text as a marker).
         self.assertEqual(f1, [])
 
-    def test_kill_proof_cli_reports_both(self):
+    def test_kill_c_quoted_command_substitution_rejected_and_zero_subprocess_calls(self):
+        """KILL-C (BUG-0072, `doc/bugs.md` KILL-0007): the shape that
+        previously bypassed `exec_gate` — a denylisted word wrapped in a
+        quoted `$(...)` command substitution — must now be rejected before
+        `subprocess.run` is ever reached, same pre-exec proof shape as
+        KILL-A. This is the third self-injury proof BUG-0072's ## rca
+        found missing from KILL-0006's original two-proof coverage."""
+        with mock.patch.object(subprocess, "run") as spy:
+            ok, out, reason = docsx.exec_check(
+                'test "$(cat doc/bugs.md; rm -rf sim/out)" = "x"', self.cfg)
+        self.assertFalse(ok)
+        spy.assert_not_called()
+
+    def test_kill_proof_cli_reports_all_three(self):
         rc = docsx.cmd_kill_proof(self.cfg)
         self.assertEqual(rc, 0)
 
