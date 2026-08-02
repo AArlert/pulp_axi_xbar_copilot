@@ -84,8 +84,14 @@ check:
 
 # Registered regression_guards binding the given files (card assembly +
 # review.md spot-check 6). Usage: make guards FILES="tb/sva/foo.sv tb/bar.sv"
+# Reads doc/guards.md (F4's guard table), not doc/bugs/*.md pages —
+# doc_mechanization.md §13 C13.3 (guard migration's necessary wiring
+# consequence). scripts/docs.py's own cmd_guards is left in place, unused
+# by this target (upstream file, not deleted). Output contract (the
+# "== <bug id> guard (hit: ...) =="/"N guard(s) matched" lines every
+# existing consumer greps) is unchanged. 见 doc/fw-feedback.md FB-38.
 guards:
-	@python3 scripts/docs.py --guards $(FILES)
+	@python3 scripts/docsx.py --guards $(FILES)
 
 # VERSION + CHANGELOG skeleton + reminder to tag. make bump minor=1 for a
 # milestone bump (0.M+1.0); default is a patch bump (0.M.P+1).

@@ -9,10 +9,21 @@
 # in-repo path token, a hardcoded snapshot phrase) compared against a
 # mechanically recomputed fact. See doc_mechanization.md C0.3.
 #
-# Batch 1 (this file): F1 (number assertion), F2 (in-repo path existence),
-# F7 (hardcoded-snapshot heuristic, warning-only per REV-038 D-3), F10
-# (baseline, bidirectional) + the §12 executor safety contract shared by F1
-# and (in a later batch) F3/bidiff. F3-F6/F8/F9 land in later batches.
+# Batch 1: F1 (number assertion), F2 (in-repo path existence), F7
+# (hardcoded-snapshot heuristic, warning-only per REV-038 D-3), F10
+# (baseline, bidirectional) + the §12 executor safety contract.
+#
+# Batch 2 (this addition): F3 (bidirectional set assertion, docsx:bidiff
+# marker), F4 (doc/guards.md guard table), F5 (orphan bidirectional — bug
+# row <-> detail page, evidence file <-> bugs.md/testplan reference), and
+# a standalone tool-marker-leak checker for BUG-0053 (not an F-family — the
+# design contract's own §C disposition for BUG-0053 says "不属任何 docsx
+# 族"; it is a fixed, always-on, no-baseline-exemption check because the
+# markers it looks for (`</content>`/`</invoke>`) have zero legitimate
+# occurrence anywhere, ever — unlike F1/F2's grandfathered historical
+# debt). F6/F8/F9 remain out of scope for this file (F8/F9 land with F6 in
+# a later batch; F9/§12 the executor contract already exists from batch 1
+# and F3/F4 reuse it here).
 #
 # Reuses docs.py's table parser per doc_mechanization.md C0.2 — a second
 # markdown-table parser would let the two checkers read the same table
@@ -201,11 +212,17 @@ def exec_gate(cmd):
     return True, ""
 
 
-def _run(cmd, cwd, timeout=TIMEOUT_S):
+def _run(cmd, cwd, timeout=TIMEOUT_S, require_nonempty=True):
     """The one subprocess.run call site. Deliberately takes the raw text
     (not argv) since the whole point of the exercise is a pipe; the
     allowlist/denylist gate is what makes running it via sh -c safe, not
-    argv-splitting."""
+    argv-splitting.
+
+    `require_nonempty`: F1's meta-check demands "退出 0、stdout 非空" (a
+    count marker's command must print a number). F3's bidiff commands are
+    only held to "退出 0" (design_mechanization.md F3: "两侧命令均受 §12
+    执行器约束与 §F1 元检查（退出 0）") — an empty-set side (e.g. zero
+    orphans) is a legitimate, common result, not a failure."""
     try:
         proc = subprocess.run(["sh", "-c", cmd], cwd=str(cwd),
                               timeout=timeout, capture_output=True,
@@ -216,17 +233,18 @@ def _run(cmd, cwd, timeout=TIMEOUT_S):
         return False, proc.stdout, ("exit %d: %s"
                                     % (proc.returncode,
                                        proc.stderr.strip()[:200]))
-    if not proc.stdout.strip():
+    if require_nonempty and not proc.stdout.strip():
         return False, proc.stdout, "empty stdout"
     return True, proc.stdout, ""
 
 
-def exec_check(cmd, cfg, timeout=TIMEOUT_S):
+def exec_check(cmd, cfg, timeout=TIMEOUT_S, require_nonempty=True):
     """Gate then run. Returns (ok, stdout, reason)."""
     ok, reason = exec_gate(cmd)
     if not ok:
         return False, "", reason
-    return _run(cmd, cfg.root, timeout=timeout)
+    return _run(cmd, cfg.root, timeout=timeout,
+               require_nonempty=require_nonempty)
 
 
 # ---------------------------------------------------------------------------
@@ -298,6 +316,61 @@ def check_f2_text(cfg, rel, text):
 
 
 # ---------------------------------------------------------------------------
+# F3 — bidirectional set assertion (docsx:bidiff marker). Generic engine:
+# `left`/`right` each produce a line-based set; either direction's set
+# difference being non-empty is red. This is the common-mode "the F5
+# orphan pairs are conceptually a bidiff" primitive (doc_mechanization.md
+# F3:90) — F5 itself does not go through this marker parser (F5's pairs
+# are always-on structural checks over fixed data sources, not opt-in
+# prose annotations; see F5 section below), but shares the same
+# left-vs-right set-diff shape.
+# ---------------------------------------------------------------------------
+BIDIFF_MARKER_RE = re.compile(
+    r'<!--\s*docsx:bidiff\s+left="(?P<left>[^"]*)"\s+right="(?P<right>[^"]*)"'
+    r'\s*-->'
+)
+
+
+def _lineset(stdout):
+    return {l for l in (x.strip() for x in stdout.splitlines()) if l}
+
+
+def check_f3_text(cfg, rel, text):
+    """Returns [(locus, message), ...]. Each marker occurrence contributes
+    up to two loci (one per non-empty direction) so F10 baseline rows can
+    target either side independently (design contract: 'both directions
+    feed the exit code')."""
+    out = []
+    for m in BIDIFF_MARKER_RE.finditer(text):
+        line_no = text.count("\n", 0, m.start()) + 1
+        cmd_l, cmd_r = m.group("left"), m.group("right")
+        ok_l, out_l, reason_l = exec_check(cmd_l, cfg, require_nonempty=False)
+        if not ok_l:
+            out.append(("%s:%d:left" % (rel, line_no),
+                        "F3 meta-check failed for left=%r: %s"
+                        % (cmd_l, reason_l)))
+            continue
+        ok_r, out_r, reason_r = exec_check(cmd_r, cfg, require_nonempty=False)
+        if not ok_r:
+            out.append(("%s:%d:right" % (rel, line_no),
+                        "F3 meta-check failed for right=%r: %s"
+                        % (cmd_r, reason_r)))
+            continue
+        set_l, set_r = _lineset(out_l), _lineset(out_r)
+        lr = sorted(set_l - set_r)
+        rl = sorted(set_r - set_l)
+        if lr:
+            out.append(("%s:%d:L-R" % (rel, line_no),
+                        "F3 bidiff left-right non-empty (%d): %s"
+                        % (len(lr), ", ".join(lr[:5]))))
+        if rl:
+            out.append(("%s:%d:R-L" % (rel, line_no),
+                        "F3 bidiff right-left non-empty (%d): %s"
+                        % (len(rl), ", ".join(rl[:5]))))
+    return out
+
+
+# ---------------------------------------------------------------------------
 # F7 — hardcoded snapshot phrase (warning only, REV-038 D-3)
 # ---------------------------------------------------------------------------
 SNAPSHOT_RE = re.compile(r"当前已(?:改|迁移|完成|修复).{0,40}[、,，]")
@@ -316,6 +389,179 @@ def check_f7_text(rel, text):
                      "toward the exit code): %s:%d: %s"
                      % (rel, line_no, line.strip()[:100]))
     return warns
+
+
+# ---------------------------------------------------------------------------
+# F4 — doc/guards.md guard table (C1.1: "guard/baseline 走结构化表，不用内联
+# 标记" — no marker parsing here, this reads the structured table directly,
+# same as F10's baseline table).
+# ---------------------------------------------------------------------------
+GUARD_COLS = ("id", "bugs", "type", "paths", "check", "note")
+GUARD_TYPES = ("script", "checklist")
+
+
+def load_guards(cfg):
+    if not cfg.guards.exists():
+        return []
+    return parse_table(cfg.guards)
+
+
+def check_f4(cfg, guard_rows):
+    """Returns (viol, warns). `viol` is F10-governed (keyed by locus,
+    family "F4") — a new `type: checklist` row with no baseline row is red
+    (REV-035 §Q3(b): checklist is a mechanization TODO); the A-c5 exception
+    channel is simply "the checklist row's locus has a baseline row" (F10
+    already treats a baselined violation as suppressed — no separate A-c5
+    code path needed). Non-ASCII `paths` is likewise F10-governed (a
+    genuinely permanent exemption, if ever needed, is still expressed the
+    same way: a baseline row). `paths` glob with zero matches is a
+    *warning* only (design contract F4: "REV-037 的量化依据...作 warning
+    可以" — the id half of BUG-0061, applied per-guard here rather than
+    per-file as docs.py's cmd_guards does). Table-shape validity (column
+    count, dup ids) is `check_table_structure`'s job, called by cmd_check
+    directly — not duplicated here."""
+    viol, warns = {}, []
+    for row in guard_rows:
+        gid = row.get("id", "").strip()
+        gtype = row.get("type", "").strip()
+        paths_cell = row.get("paths", "")
+        check_cell = row.get("check", "").strip()
+        if gtype not in GUARD_TYPES:
+            viol["doc/guards.md:%s:type" % gid] = (
+                "F4 guard %s: type %r is not one of %s"
+                % (gid, gtype, "/".join(GUARD_TYPES)))
+        if any(ord(c) > 127 for c in paths_cell):
+            viol["doc/guards.md:%s:paths" % gid] = (
+                "F4 guard %s: paths cell contains non-ASCII: %r"
+                % (gid, paths_cell))
+        if gtype == "checklist":
+            viol["doc/guards.md:%s" % gid] = (
+                "F4 guard %s: type: checklist with no baseline row "
+                "(REV-035 §Q3(b) — new checklist guards must be type: "
+                "script unless rev-authorized via a baseline rev_ref, "
+                "A-c5)" % gid)
+        elif gtype == "script":
+            if not check_cell or check_cell == "-":
+                viol["doc/guards.md:%s:check" % gid] = (
+                    "F4 guard %s: type: script but check= is empty" % gid)
+            else:
+                ok, _, reason = exec_check(check_cell, cfg,
+                                           require_nonempty=False)
+                if not ok:
+                    viol["doc/guards.md:%s:check" % gid] = (
+                        "F4 guard %s: check= not executable: %s"
+                        % (gid, reason))
+        globs = [g for g in re.split(r"[,\s]+", paths_cell.strip()) if g]
+        for g in globs:
+            if any(ord(c) > 127 for c in g):
+                continue  # already flagged above; do not double-warn
+            if "*" not in g and not (cfg.root / g).exists():
+                warns.append("F4 guard %s: paths token has zero matches "
+                             "(no glob, path does not exist): %s"
+                             % (gid, g))
+            elif "*" in g and not list(cfg.root.glob(g)):
+                warns.append("F4 guard %s: paths token has zero matches "
+                             "(glob): %s" % (gid, g))
+    return viol, warns
+
+
+# ---------------------------------------------------------------------------
+# F5 — orphan bidirectional. Always-on structural checks over fixed data
+# sources (bug rows/pages, evidence files/references) — not opt-in prose
+# markers (see F3's docstring). docs.py already covers the page -> row
+# direction (a referenced-but-missing page errors); this adds the row ->
+# page direction (BUG-0067: a bug row with no page went unreported) and
+# both evidence directions (BUG-0060: an orphan .log written to
+# doc/evidence/ went unreported).
+# ---------------------------------------------------------------------------
+def check_f5_bug_pages(cfg):
+    """bug row (bugs.md + archive) -> doc/bugs/<id>.md must exist."""
+    viol = {}
+    if not (cfg.bugs.exists() and cfg.bugs_archive.exists()):
+        return viol
+    rows = parse_table(cfg.bugs) + parse_table(cfg.bugs_archive)
+    for r in rows:
+        bid = r.get(cfg.C["bug_id"], "").strip()
+        if not bid:
+            continue
+        if not (cfg.bug_pages / ("%s.md" % bid)).exists():
+            viol["bugs.md:%s" % bid] = (
+                "F5 bug row %s has no detail page doc/bugs/%s.md (BUG-0067)"
+                % (bid, bid))
+    return viol
+
+
+EVIDENCE_LOG_REF_RE = re.compile(r'doc/evidence/[\w./-]+\.log')
+
+
+def check_f5_evidence(cfg):
+    """doc/evidence/**/*.log <-> a reference somewhere in bugs.md(+archive)
+    or testplan.md, both directions (BUG-0060). No early return on a
+    missing evidence dir — an empty disk set still needs to be diffed
+    against refs, or a dangling reference (right-only) would go silently
+    unreported."""
+    viol = {}
+    disk = ({relpath(cfg, p) for p in cfg.evidence_dir.rglob("*.log")}
+           if cfg.evidence_dir.exists() else set())
+    ref_text = ""
+    for p in (cfg.bugs, cfg.bugs_archive, cfg.testplan):
+        if p.exists():
+            ref_text += p.read_text(encoding="utf-8")
+    refs = set(EVIDENCE_LOG_REF_RE.findall(ref_text))
+    for f in sorted(disk - refs):
+        viol["evidence:%s" % f] = (
+            "F5 evidence file not referenced by bugs.md(+archive)/"
+            "testplan.md: %s" % f)
+    for r in sorted(refs - disk):
+        viol["ref:%s" % r] = (
+            "F5 dangling evidence reference (file does not exist): %s" % r)
+    return viol
+
+
+# ---------------------------------------------------------------------------
+# BUG-0053 — tool-marker leak. Not an F-family (design contract §C: "不属
+# 任何 docsx 族"): a subagent's `</content>`/`</invoke>` tags leaking into
+# a committed record. Whole-line match only, fenced code blocks excluded
+# (a fenced block quoting the marker as an example — as this very file's
+# docstrings and doc/bugs/BUG-0053.md's own narrative do — must not
+# self-trip the check). No baseline path: unlike F1/F2's grandfathered
+# historical debt, this marker has zero legitimate occurrence anywhere, at
+# any time — REV-037/REV-038 both settled on "must not exist", never
+# "exists here for a reason".
+# ---------------------------------------------------------------------------
+TOOL_MARKER_LINES = ("</content>", "</invoke>")
+
+
+def check_tool_marker_leak(rel, text):
+    out = []
+    in_fence = False
+    for i, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if stripped in TOOL_MARKER_LINES:
+            out.append(("%s:%d" % (rel, i),
+                        "BUG-0053 tool-marker leak: whole line is %r"
+                        % stripped))
+    return out
+
+
+def check_tool_marker_leak_tree(cfg):
+    """paths: doc/**/*.md (doc/bugs/BUG-0053.md's own guard field, once
+    migrated) — deliberately every markdown file under doc/, including
+    the C1.3 frozen prefixes: the incident this guards (REV-033.md, a
+    doc/review/ file) *was* frozen, and a frozen file is not exempt from
+    "this should never have been written", only from "must be rewritten
+    to match a moving target"."""
+    out = []
+    for p in sorted(cfg.root.glob("doc/**/*.md")):
+        rel = relpath(cfg, p)
+        text = p.read_text(encoding="utf-8", errors="replace")
+        out.extend(check_tool_marker_leak(rel, text))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -380,9 +626,10 @@ def report(errors, warns):
 # ---------------------------------------------------------------------------
 def collect_violations(cfg):
     """Returns (viol_by_family, warns) by scanning the whole live file set
-    once. Split out from cmd_check so `--kill-proof` and tests can reuse it
-    without re-parsing argv."""
-    f1, f2, warns = {}, {}, []
+    once, plus the always-on structural families (F4/F5) that do not
+    depend on any one file's prose. Split out from cmd_check so
+    `--kill-proof` and tests can reuse it without re-parsing argv."""
+    f1, f2, f3, warns = {}, {}, {}, []
     for f in live_files(cfg):
         rel = relpath(cfg, f)
         text = read_scan_text(cfg, f)
@@ -390,8 +637,15 @@ def collect_violations(cfg):
             f1[locus] = msg
         for locus, msg in check_f2_text(cfg, rel, text):
             f2[locus] = msg
+        for locus, msg in check_f3_text(cfg, rel, text):
+            f3[locus] = msg
         warns.extend(check_f7_text(rel, text))
-    return {"F1": f1, "F2": f2}, warns
+    f4, f4_warns = check_f4(cfg, load_guards(cfg))
+    warns.extend(f4_warns)
+    f5 = {}
+    f5.update(check_f5_bug_pages(cfg))
+    f5.update(check_f5_evidence(cfg))
+    return {"F1": f1, "F2": f2, "F3": f3, "F4": f4, "F5": f5}, warns
 
 
 def cmd_check(cfg):
@@ -399,8 +653,42 @@ def cmd_check(cfg):
     errors = []
     if cfg.docsx_baseline.exists():
         check_table_structure(cfg.docsx_baseline, errors)
+    if cfg.guards.exists():
+        check_table_structure(cfg.guards, errors)
     errors.extend(check_f10(load_baseline(cfg), viol_by_family))
+    for locus, msg in check_tool_marker_leak_tree(cfg):
+        errors.append(msg + " (" + locus + ")")
     return report(errors, warns)
+
+
+def cmd_guards(cfg, paths):
+    """C13.3: `make guards` now reads `doc/guards.md` (F4's table) instead
+    of `docs.py`'s `## regression_guard` page scan — the table is the guard
+    load-bearing structure now that F4 has landed. Output *contract* is
+    kept identical to `docs.py`'s `cmd_guards` (design contract C13.3:
+    "make guards FILES=... 的输出契约保持"): `"== <label> guard (hit:
+    ...) =="` per match, a trailing `"N guard(s) matched"` line — every
+    existing `grep '== BUG-XXXX guard'`-shaped consumer (REV-037 S1-S3,
+    the dispatch SKILL self-check, milestone signoff records) keeps
+    working unchanged. `<label>` is the row's `bugs` cell (not its `id`)
+    so a single-bug row's header text is still `== BUG-0043 guard ==`,
+    byte-identical to the page-scan era. 见 doc/fw-feedback.md FB-38."""
+    import fnmatch
+    hits = 0
+    for row in load_guards(cfg):
+        label = row.get("bugs", "").strip()
+        globs = [g for g in re.split(r"[,\s]+", row.get("paths", "").strip())
+                if g]
+        matched = [p for p in paths if any(fnmatch.fnmatch(p, g)
+                                           for g in globs)]
+        if matched:
+            hits += 1
+            print("== %s guard (hit: %s) ==" % (label, " ".join(matched)))
+            print("id: %s | type: %s | check: %s"
+                 % (row.get("id", ""), row.get("type", ""),
+                    row.get("check", "")))
+            print(row.get("note", "") + "\n")
+    print("%d guard(s) matched" % hits)
 
 
 def cmd_kill_proof(cfg):
@@ -446,22 +734,33 @@ def cmd_kill_proof(cfg):
 def main():
     parser = argparse.ArgumentParser(
         description="docsx: prose-level document assertion checker "
-                   "(F1/F2/F7/F10 this batch)")
+                   "(F1/F2/F3/F4/F5/F7/F10 + BUG-0053 tool-marker leak)")
     parser.add_argument("--check", action="store_true",
-                        help="run the live file set through F1/F2/F7, "
-                             "reconcile against docsx-baseline.md (F10)")
+                        help="run the live file set through F1/F2/F3/F7, "
+                             "the structural F4/F5 checks and the "
+                             "BUG-0053 tool-marker scan, reconcile against "
+                             "docsx-baseline.md (F10)")
     parser.add_argument("--kill-proof", action="store_true",
                         help="§12 executor-safety self-injury proof "
                              "(doc/bugs.md KILL-0006's min_repro command)")
+    parser.add_argument("--guards", nargs="+", metavar="PATH",
+                        help="print doc/guards.md rows whose paths bind "
+                             "these files (C13.3 — replaces docs.py "
+                             "--guards as make guards' target)")
     args = parser.parse_args()
     cfg = load_config()
-    # docsx_baseline is not part of iverif_config.Config (docs.py owns that
-    # file); attach it here rather than editing the canon Config class.
+    # docsx_baseline/guards are not part of iverif_config.Config (docs.py
+    # owns that file); attach them here rather than editing the canon
+    # Config class.
     cfg.docsx_baseline = cfg.root / "doc" / "docsx-baseline.md"
+    cfg.guards = cfg.root / "doc" / "guards.md"
     if args.kill_proof:
         sys.exit(cmd_kill_proof(cfg))
     if args.check:
         sys.exit(cmd_check(cfg))
+    if args.guards:
+        cmd_guards(cfg, args.guards)
+        return
     parser.print_help()
 
 

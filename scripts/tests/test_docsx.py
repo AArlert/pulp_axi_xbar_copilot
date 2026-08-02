@@ -17,13 +17,19 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import docsx
+import docs as docs_module
 from fixture import make_project, run
 
 
 def fake_cfg(root):
     root = Path(root)
-    return SimpleNamespace(root=root, C={"tp_status": "status"},
-                           testplan=root / "doc" / "testplan.md")
+    doc = root / "doc"
+    return SimpleNamespace(
+        root=root, C={"tp_status": "status", "bug_id": "id"},
+        testplan=doc / "testplan.md", bugs=doc / "bugs.md",
+        bugs_archive=doc / "archive" / "bugs-archive.md",
+        bug_pages=doc / "bugs", evidence_dir=doc / "evidence",
+        guards=doc / "guards.md")
 
 
 class TmpRootBase(unittest.TestCase):
@@ -118,6 +124,247 @@ class TestF2(TmpRootBase):
         out = docsx.check_f2_text(self.cfg, "README.md", text)
         self.assertEqual(len(out), 1)
         self.assertIn("glob", out[0][1])
+
+
+# ---------------------------------------------------------------------------
+# F3 — bidirectional set assertion (docsx:bidiff marker)
+# ---------------------------------------------------------------------------
+class TestF3(TmpRootBase):
+    def test_equal_sets_both_directions_empty_is_green(self):
+        (self.tmp / "a.txt").write_text("x\ny\n", encoding="utf-8")
+        (self.tmp / "b.txt").write_text("y\nx\n", encoding="utf-8")
+        text = ('<!-- docsx:bidiff left="cat a.txt" right="cat b.txt" -->\n')
+        self.assertEqual(docsx.check_f3_text(self.cfg, "x.md", text), [])
+
+    def test_left_minus_right_nonempty_is_red(self):
+        """red_when (design contract F3): a phantom line on the left side
+        with nothing matching on the right -> left-right red."""
+        (self.tmp / "a.txt").write_text("x\nghost\n", encoding="utf-8")
+        (self.tmp / "b.txt").write_text("x\n", encoding="utf-8")
+        text = ('<!-- docsx:bidiff left="cat a.txt" right="cat b.txt" -->\n')
+        out = docsx.check_f3_text(self.cfg, "x.md", text)
+        self.assertEqual(len(out), 1)
+        self.assertIn("left-right", out[0][1])
+        self.assertIn("ghost", out[0][1])
+
+    def test_right_minus_left_nonempty_is_red(self):
+        """red_when's other direction (design contract F3: "两个方向都进
+        退出码", the BUG-0058 single-direction lesson applied here): a row
+        deleted from the right side with nothing matching on the left."""
+        (self.tmp / "a.txt").write_text("x\n", encoding="utf-8")
+        (self.tmp / "b.txt").write_text("x\nextra\n", encoding="utf-8")
+        text = ('<!-- docsx:bidiff left="cat a.txt" right="cat b.txt" -->\n')
+        out = docsx.check_f3_text(self.cfg, "x.md", text)
+        self.assertEqual(len(out), 1)
+        self.assertIn("right-left", out[0][1])
+        self.assertIn("extra", out[0][1])
+
+    def test_empty_set_on_either_side_is_not_a_meta_check_failure(self):
+        """F3's meta-check is narrower than F1's (design contract: "两侧
+        命令均受 §12 执行器约束与 §F1 元检查（退出 0）") — only exit 0 is
+        required, not non-empty stdout: an empty result set (e.g. zero
+        orphans) is a legitimate, common outcome, not a failure."""
+        (self.tmp / "a.txt").write_text("", encoding="utf-8")
+        (self.tmp / "b.txt").write_text("", encoding="utf-8")
+        text = ('<!-- docsx:bidiff left="cat a.txt" right="cat b.txt" -->\n')
+        self.assertEqual(docsx.check_f3_text(self.cfg, "x.md", text), [])
+
+    def test_denylisted_side_is_a_meta_check_failure(self):
+        text = ('<!-- docsx:bidiff left="cat a.txt; rm -rf sim/out" '
+               'right="cat a.txt" -->\n')
+        out = docsx.check_f3_text(self.cfg, "x.md", text)
+        self.assertEqual(len(out), 1)
+        self.assertIn("meta-check failed", out[0][1])
+
+
+# ---------------------------------------------------------------------------
+# F4 — doc/guards.md guard table
+# ---------------------------------------------------------------------------
+class TestF4(TmpRootBase):
+    def test_script_row_with_working_check_is_green(self):
+        (self.tmp / "f.txt").write_text("hi\n", encoding="utf-8")
+        rows = [{"id": "G-0001", "bugs": "BUG-0001", "type": "script",
+                "paths": "f.txt", "check": "grep -q hi f.txt",
+                "note": "n"}]
+        viol, warns = docsx.check_f4(self.cfg, rows)
+        self.assertEqual(viol, {})
+
+    def test_new_checklist_row_is_red(self):
+        """red_when (design contract F4): a new type: checklist row is red
+        unless a baseline row exempts it (A-c5 exception channel == "the
+        row's locus has a baseline row", checked by F10, not here)."""
+        rows = [{"id": "G-0002", "bugs": "BUG-0002", "type": "checklist",
+                "paths": "f.txt", "check": "-", "note": "n"}]
+        viol, warns = docsx.check_f4(self.cfg, rows)
+        self.assertIn("doc/guards.md:G-0002", viol)
+
+    def test_non_ascii_paths_is_red(self):
+        """red_when (design contract F4): paths cell with full-width
+        parens (BUG-0061's exact pollution shape) -> red."""
+        (self.tmp / "f.txt").write_text("hi\n", encoding="utf-8")
+        rows = [{"id": "G-0003", "bugs": "BUG-0003", "type": "script",
+                "check": "grep -q hi f.txt",
+                "paths": "doc/milestone.md（M4/M5 节）", "note": "n"}]
+        viol, warns = docsx.check_f4(self.cfg, rows)
+        self.assertIn("doc/guards.md:G-0003:paths", viol)
+
+    def test_script_row_with_empty_check_is_red(self):
+        rows = [{"id": "G-0004", "bugs": "BUG-0004", "type": "script",
+                "paths": "f.txt", "check": "-", "note": "n"}]
+        viol, warns = docsx.check_f4(self.cfg, rows)
+        self.assertIn("doc/guards.md:G-0004:check", viol)
+
+    def test_zero_match_paths_token_is_a_warning_not_an_error(self):
+        (self.tmp / "f.txt").write_text("hi\n", encoding="utf-8")
+        rows = [{"id": "G-0005", "bugs": "BUG-0005", "type": "script",
+                "check": "grep -q hi f.txt", "paths": "no/such/file.sv",
+                "note": "n"}]
+        viol, warns = docsx.check_f4(self.cfg, rows)
+        self.assertEqual(viol, {})
+        self.assertEqual(len(warns), 1)
+        self.assertIn("zero matches", warns[0])
+
+
+# ---------------------------------------------------------------------------
+# F5 — orphan bidirectional (bug row <-> page, evidence file <-> reference)
+# ---------------------------------------------------------------------------
+class TestF5(TmpRootBase):
+    def setUp(self):
+        super().setUp()
+        (self.tmp / "doc" / "archive").mkdir(parents=True, exist_ok=True)
+        (self.tmp / "doc" / "bugs").mkdir(exist_ok=True)
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status |\n| --- | --- |\n", encoding="utf-8")
+        (self.tmp / "doc" / "archive" / "bugs-archive.md").write_text(
+            "| id | status |\n| --- | --- |\n", encoding="utf-8")
+        (self.tmp / "doc" / "testplan.md").write_text("# tp\n",
+                                                       encoding="utf-8")
+
+    def test_bug_row_with_page_is_green(self):
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status |\n| --- | --- |\n| BUG-0001 | OPEN |\n",
+            encoding="utf-8")
+        (self.tmp / "doc" / "bugs" / "BUG-0001.md").write_text(
+            "# BUG-0001\n", encoding="utf-8")
+        self.assertEqual(docsx.check_f5_bug_pages(self.cfg), {})
+
+    def test_bug_row_without_page_is_red(self):
+        """red_when (design contract F5 == BUG-0067's own defect): a bug
+        row with no doc/bugs/<id>.md page."""
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status |\n| --- | --- |\n| BUG-0002 | OPEN |\n",
+            encoding="utf-8")
+        viol = docsx.check_f5_bug_pages(self.cfg)
+        self.assertIn("bugs.md:BUG-0002", viol)
+
+    def test_evidence_file_referenced_is_green(self):
+        ev = self.tmp / "doc" / "evidence" / "v0.1.0"
+        ev.mkdir(parents=True)
+        (ev / "BUG-0001.log").write_text("log\n", encoding="utf-8")
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status |\n| --- | --- |\n"
+            "| BUG-0001 | CLOSED | doc/evidence/v0.1.0/BUG-0001.log |\n",
+            encoding="utf-8")
+        self.assertEqual(docsx.check_f5_evidence(self.cfg), {})
+
+    def test_orphan_evidence_file_is_red(self):
+        """red_when (design contract F5 == BUG-0060's own defect): a .log
+        under doc/evidence/ that no bugs.md/testplan.md row cites."""
+        ev = self.tmp / "doc" / "evidence" / "v0.1.0"
+        ev.mkdir(parents=True)
+        (ev / "orphan.log").write_text("log\n", encoding="utf-8")
+        viol = docsx.check_f5_evidence(self.cfg)
+        self.assertIn("evidence:doc/evidence/v0.1.0/orphan.log", viol)
+
+    def test_dangling_evidence_reference_is_red(self):
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status |\n| --- | --- |\n"
+            "| BUG-0003 | CLOSED | doc/evidence/v9.9.9/ghost.log |\n",
+            encoding="utf-8")
+        viol = docsx.check_f5_evidence(self.cfg)
+        self.assertIn("ref:doc/evidence/v9.9.9/ghost.log", viol)
+
+
+# ---------------------------------------------------------------------------
+# BUG-0053 — tool-marker leak (not an F-family; no baseline exemption)
+# ---------------------------------------------------------------------------
+class TestBug0053ToolMarkerLeak(unittest.TestCase):
+    def test_clean_text_is_green(self):
+        text = "normal prose, no markers here\n"
+        self.assertEqual(docsx.check_tool_marker_leak("x.md", text), [])
+
+    def test_whole_line_marker_is_red(self):
+        """red_when #1 (REV-037/REV-038 §C two-use-case KILL): appending
+        the marker as its own whole line -> red."""
+        text = "some record text\n</invoke>\n"
+        out = docsx.check_tool_marker_leak("x.md", text)
+        self.assertEqual(len(out), 1)
+        self.assertIn("</invoke>", out[0][1])
+
+    def test_content_marker_whole_line_is_red(self):
+        text = "some record text\n</content>\n"
+        out = docsx.check_tool_marker_leak("x.md", text)
+        self.assertEqual(len(out), 1)
+
+    def test_marker_inside_fenced_code_block_stays_green(self):
+        """red_when #2 (the two-use-case KILL's other half): the exact
+        same string, quoted inside a fenced code block (as this file's
+        own docstrings and doc/bugs/BUG-0053.md's narrative do), must NOT
+        trip the check — substring/example quoting is not a leak."""
+        text = "example:\n```\n</invoke>\n```\n"
+        self.assertEqual(docsx.check_tool_marker_leak("x.md", text), [])
+
+    def test_marker_as_substring_not_whole_line_is_green(self):
+        """note: 判据是'行首起、整行仅由该标记构成'而非子串匹配— a line that
+        merely mentions the marker as part of a longer sentence must not
+        fire (REV-035's own text quotes these markers when discussing
+        BUG-0053)."""
+        text = "the tag `</invoke>` leaked into a record\n"
+        self.assertEqual(docsx.check_tool_marker_leak("x.md", text), [])
+
+
+# ---------------------------------------------------------------------------
+# A-c2 — F4 migration leaves docs.py's fl_schema_enforce satisfied. Proven
+# against the real `docs.check_fl_page` (canon, zero edits — this is the
+# "give a zero-docs.py-changes compatible wiring" requirement itself,
+# verified rather than merely asserted).
+# ---------------------------------------------------------------------------
+class TestAc2FlSchemaCompat(unittest.TestCase):
+    def test_pointer_only_guard_section_satisfies_fl_schema(self):
+        """A terminal-status detail page whose `## regression_guard` body
+        is nothing but the one-line pointer this migration writes must
+        still pass `check_fl_page`'s "section present and non-empty for
+        terminal bugs" rule (docs.py:293-300) — the schema only checks
+        non-empty, never the section's internal shape."""
+        with tempfile.TemporaryDirectory() as d:
+            page = Path(d) / "BUG-9001.md"
+            page.write_text(
+                "# BUG-9001\n\n"
+                "## symptom\nx\n\n## first_anomaly\nx\n\n"
+                "## taxonomy\nTB_BUG\n\n## rca\nx\n\n## fix\nx\n\n"
+                "## rerun\nx\n\n"
+                "## regression_guard\n\n"
+                "见 `doc/guards.md` G-9001（BUG-9001）。\n\n"
+                "## similar\nx\n", encoding="utf-8")
+            errors = []
+            docs_module.check_fl_page(page, "CLOSED", errors)
+            self.assertEqual(errors, [])
+
+    def test_empty_guard_section_still_fails_fl_schema(self):
+        """Negative control: an actually-empty section must still fail —
+        proves the green case above is the pointer text doing the work,
+        not a blanket pass-through."""
+        with tempfile.TemporaryDirectory() as d:
+            page = Path(d) / "BUG-9002.md"
+            page.write_text(
+                "# BUG-9002\n\n"
+                "## symptom\nx\n\n## first_anomaly\nx\n\n"
+                "## taxonomy\nTB_BUG\n\n## rca\nx\n\n## fix\nx\n\n"
+                "## rerun\nx\n\n"
+                "## regression_guard\n\n## similar\nx\n", encoding="utf-8")
+            errors = []
+            docs_module.check_fl_page(page, "CLOSED", errors)
+            self.assertTrue(any("regression_guard" in e for e in errors))
 
 
 # ---------------------------------------------------------------------------
@@ -369,6 +616,52 @@ class TestCheckIntegration(unittest.TestCase):
         cp = run(self.tmp, "docsx.py", "--check")
         self.assertEqual(cp.returncode, 1)
         self.assertIn("rev_ref is empty", cp.stdout)
+
+    def test_bug0053_tool_marker_two_use_case_end_to_end(self):
+        """REV-037/REV-038 §C's two-use-case KILL for BUG-0053, run through
+        the real `--check` CLI (not just the unit-level check function):
+        appending the marker as a whole line -> red; the exact same string
+        quoted inside a fenced code block -> stays green."""
+        target = self.tmp / "doc" / "some_record.md"
+        target.write_text("# a record\n\nnormal text\n", encoding="utf-8")
+        cp0 = run(self.tmp, "docsx.py", "--check")
+        self.assertEqual(cp0.returncode, 0, cp0.stdout + cp0.stderr)
+        target.write_text("# a record\n\nnormal text\n</invoke>\n",
+                          encoding="utf-8")
+        cp1 = run(self.tmp, "docsx.py", "--check")
+        self.assertEqual(cp1.returncode, 1)
+        self.assertIn("tool-marker leak", cp1.stdout)
+        target.write_text(
+            "# a record\n\nnormal text\n```\n</invoke>\n```\n",
+            encoding="utf-8")
+        cp2 = run(self.tmp, "docsx.py", "--check")
+        self.assertEqual(cp2.returncode, 0, cp2.stdout + cp2.stderr)
+
+    def test_guards_cli_output_contract(self):
+        """C13.3: `docsx.py --guards` must keep the exact output shape
+        `docs.py --guards` used (design contract's own requirement) — a
+        `\"== <bugs> guard (hit: ...) ==\"` header per match and a trailing
+        count line — so every existing `grep '== BUG-XXXX guard'` consumer
+        (REV-037 S1-S3, the dispatch SKILL self-check) keeps working."""
+        (self.tmp / "doc" / "guards.md").write_text(
+            "# guards\n\n| id | bugs | type | paths | check | note |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| G-0001 | BUG-0001 | checklist | tb/foo.sv | - | n |\n",
+            encoding="utf-8")
+        cp = run(self.tmp, "docsx.py", "--guards", "tb/foo.sv")
+        self.assertEqual(cp.returncode, 0, cp.stdout + cp.stderr)
+        self.assertIn("== BUG-0001 guard (hit: tb/foo.sv) ==", cp.stdout)
+        self.assertIn("1 guard(s) matched", cp.stdout)
+
+    def test_f4_new_checklist_row_fails_check(self):
+        (self.tmp / "doc" / "guards.md").write_text(
+            "# guards\n\n| id | bugs | type | paths | check | note |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| G-0002 | BUG-0002 | checklist | tb/foo.sv | - | n |\n",
+            encoding="utf-8")
+        cp = run(self.tmp, "docsx.py", "--check")
+        self.assertEqual(cp.returncode, 1)
+        self.assertIn("doc/guards.md:G-0002", cp.stdout)
 
 
 if __name__ == "__main__":
