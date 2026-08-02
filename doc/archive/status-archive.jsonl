@@ -1,3 +1,4 @@
+{"date": "2026-08-02", "version": "0.4.33", "summary": "REV-029裁决：addr_decode_dync Branch 83.33%（IF-146 else，唯一致因）登记Kind-A CW-008——与REV-028对config_ongoing_i的驳回决定性轴不同（此处门真失败）。订正REV-024行6的Branch误归因（Toggle结论不变）。下一步#16（demux COND残余）"}
 {"date": "2026-08-02", "version": "0.4.32", "summary": "REV-028裁决：config_ongoing_i覆盖率缺口驳回登记（该(模块,Toggle)已92%≥90%过门，非登记面内）。顺带发现并订正REV-024一处Branch误归因——addr_decode_dync真正83.33%残余是IF-146 addr_map-X断言守卫else，与config_ongoing_i无关。新任务：IF-146独立裁决卡"}
 {"date": "2026-08-02", "version": "0.4.31", "summary": "REV-026加固卡C-2落地：M2-AT01 ATOP[3:0]编码多样性遍历atomic-load子集16值，三模块aw.atop[3:0]转Yes/Yes/Yes全闭合（独立urg核对），残余归属既有BUG-0044不重复登记。REV-026十项加固卡清单全部收官。下一步Kind-A豁免rev卡#19+新加固卡#16-18"}
 {"date": "2026-08-01", "version": "0.4.30", "summary": "REV-026加固卡B-3落地：M2-CFG01新增default-port双向重配，addr_decode_dync Toggle转正92%。副作用顺带闭合F-1目标（axi_xbar default_mst_port_i全闭合）。发现真Kind-A候选（config_ongoing_i硬接0），登记rev卡。仅剩C-2待派"}

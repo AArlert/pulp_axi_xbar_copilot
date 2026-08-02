@@ -2,6 +2,31 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.5.0] 2026-08-03 M4 签核 APPROVED 关门 + 文档体系机械化整轮，进 M5
+
+**Done**
+- **M4 APPROVED 关门**（REV-039，推翻旧 v0.4.13 REJECTED——旧「六类≥90%」口径随 0.4.37 里程碑重构作废）。`make check MILESTONE=4` 四条机器条件全 PASS，新口径出口（覆盖测量基建 + 全闭包三态扫描 + 每格具名归属 UNOWNED=∅ + KILL 覆盖）全部满足。
+- **文档体系机械化落地**（本轮主线，回应用户「管住文档膨胀与数据漂移」）：新建 `scripts/docsx.py`（project-owned）七族检查——F1 数字断言（含元检查：复现命令自身须可执行非空，源自 FB-23 自带伪造复现命令的教训）/ F2 仓内路径存在性 / F3 双向集合 / F4 `doc/guards.md` 单表 / F5 孤儿双向 / F7 枚举快照(warning) / F10 存量 baseline；§12 词法执行器（allowlist + 拒命令替换 + 秒级超时 + cwd 锁根）。接 `make check` + `.githooks/pre-commit` 双门禁。selftest 72→143。
+- **22 条 bug 全部 terminal**：BUG-0052~0069（REV-037 批量裁决面十六条）+ 期间新登 0070~0073，经 docsx 各族 fixer（卡2a/2b/2c/2g）+ 散文订正（2d）+ 独立族 closer（2e）批量关闭 + 签核裁（0070/0071 CLOSED、0073 ACCEPTED@M5）。P0 先拆两颗实雷（0066/0056：`regress.py` 默认不再摧毁覆盖库）。
+- **guard 载体迁移**：49 页详情页 `## regression_guard` 段迁 `doc/guards.md` 单表（族级 guard 载体，满足 REV-035 §Q5）；BUG-0061 中文标点污染 paths 清 ASCII、恢复 3 处真丢失路径。
+
+**Not done**
+- **BUG-0073 ACCEPTED@M5**：make 嵌套调用 banner 污染 `tail` 的证据工具隐患，M5 排 fixer（可证伪解锁=evidence.py 清 MAKEFLAGS 后该形态转 PASS）。
+- **轻量化 P5 未做**：review 常驻轮转留 3 份、evidence 叙事归档、字节棘轮——移 M5 期间穿插（常驻语料仍约 2.7MB，机制已建、批量搬运待做）。
+- **vm.md 决策点 2-4 未过 rev**：M5 启动前置（约束随机/多种子回归/soak 三决策点仍「提案草案」），是下一步。
+
+**Next**
+- 派 rev 评审卡：`doc/design-prompt/verification_maturity.md` 决策点 2/3/4 过门（M5 三支柱架构输入）。通过后 orch 应用批注、更新 vm.md 抬头状态。
+- 首批 M5 场景行随第一张 M5 DV 卡登记（登记先于编码，records 契约）。
+- P5 轻量化搬运 M5 期间穿插；BUG-0073 M5 fixer。
+
+**How verified**
+- `make check MILESTONE=4` 四条全 PASS + `signoff-M4.md` 判词 APPROVED（本 closeout 亲跑）。
+- docs+docsx 双门禁绿；`make selftest` 143 OK；KILL-0004~0007 覆盖功能 oracle + docsx 执行器。
+- 机械化三则自证（机制真在干活）：pre-commit F2 拦下 orch 自己写入的死路径字面量 · BUG-0072 执行器引号内命令替换逃逸被 fixer 主动实测暴露并堵死（KILL-0007）· F10 反向 prune 在 BUG-0052 归档后自动删除其 stale baseline 行。
+- 回源纪律三向兑现：下游拦上游（2d 拦 REV-037 台账 S 失实）、拦卡面（2c 拦「解析判词」误导）、拦机制自身（0072）。逐卡 fixer→独立 closer 两次派发，orch 收卡一律走集合差完备性核对。
+
+
 ## [0.4.40] 2026-08-02 REV-037 批量裁决 14 条（14/14 判「修」）+ C1 全链闭合（BUG-0065/0055 CLOSED）——回源纪律在四个环节各拦下一处错误
 
 **背景**：M4 出口条件 3 因 14 条 OPEN 恒红，签核卡无法派。本周期先用一张 rev
@@ -176,68 +201,4 @@ fixer 无关的全新实例），并在每一环强制"不得照抄上游结论�
   `make check` 仍 `docs-check passed`。
 - `make check` docs-check passed（`make archive` 归档三条终态行后）；
   `make selftest` 61/61 OK；7 个 `cov.vdb` 全程完好（三条链均未 `make clean`）。
-
-## [0.4.38] 2026-08-02 BUG-0049 关闭（UNOWNED=∅ 经两条独立链确认）——并由复验反手挖出四条新账目缺陷 BUG-0050~0053
-
-**背景**：M4 关门前置。BUG-0049 的修复面（REV-033 裁 CW-014 + arch 返工 + orch 应用）
-已在 0.4.37 落地，本闭环只做**关闭**——按不变量 3（closer ≠ fixer）派全新 rev 实例
-独立复验。orch 侧**同时**另跑四路互不知情的独立复算作收卡对抗验证：这是对
-BUG-0049 根因之三（"orch 复验只抽查数字未做完备性交叉核对"）的直接反制。
-
-**Done**
-- **REV-034（closer 卡，rev·L3）**：从原始 urg 报告 `sim/out/urgText6/modlist.txt`
-  独立重做 132 格三态（N/A 59 + PASS 43 + <90% 30）与 30 格四表集合差，**UNOWNED=∅**；
-  例化闭包 22 成员经 RTL BFS 独立重建、与 urg 模块页集合双向差集为空；CW-014 逐 bin
-  账平（39=4+1+26+8）、所引 RTL 事实逐条回源；D1 已录 §6.1 DV-A 且两侧措辞不矛盾。
-  产物：`doc/review/REV-034.md`（含 30 格集合差附表，未来签核核读 UNOWNED=∅ 的底板）。
-- **BUG-0049 CLOSED（机器背书）**：closer 跑
-  `make evidence BUG=BUG-0049 CMD=… EXPECT='RESULT CELLS=132 LT90=30 UNOWNED=0'`
-  一次跑通，脚本自行翻状态并写 `doc/evidence/v0.4.37/BUG-0049.log`（首行即 `CMD:`）。
-  配套实质记录 `doc/evidence/v0.4.37/BUG-0049-closure.md`（BUG-0029 guard 要求的位置），
-  两份文件的形式件/实质件分工已写进其抬头。orch 前置填 `fix_commit=861c7f8`
-  （`BUG_STATES_NEED_COMMIT` 含 CLOSED）。
-- **orch 四路独立复算（收卡对抗验证）**：正向枚举（从 §2.3 实测表）/ 反向枚举（从四个
-  归属面）/ 直查覆盖库原始事实（绕过全部 markdown）/ 从 RTL 重推例化闭包，四路互不
-  知情，再由第五个裁决者比对分歧。三路作答者的 30 格 below90 集合**逐格完全一致**，
-  裁决者独立复算同得 `CELLS=132 LT90=30 UNOWNED=0` —— 与 REV-034 逐格吻合。
-  **UNOWNED=∅ 由两条完全独立的证据链确认。**
-- **新登记四条（无条件登记；三条系复验反手挖出，一条系 closer 报出）**：
-  - **BUG-0050**（引用越界族，与 BUG-0049 互为镜像）：CW-010 认领 `fifo_v3` Cond 的
-    flush 分量，而该 bin **物理不存在**（`fifo_v3.sv:122` 单项条件，26 个实例的
-    Condition 段行号恒为 {73,88,101}）；CW-002/CW-007 被引用于其登记文本之外的模块页；
-    BUG-0044 承接两格 Toggle 的链接只在 REV-030、未回写债务行本体。四条均为"过度引用"
-    而非"无人认领"，**剥离后 UNOWNED 仍为 ∅**，故不影响 BUG-0049 的关闭。
-  - **BUG-0051**（证据事实错抄族）：final-sweep §2.3 `counter` 实例数写 108（真值 12，
-    系 `delta_counter` 之数误抄，已被 §6.3 继承）；脚注 3 对 `lzc` 的 Line/Cond/Branch
-    N/A 陈述与同表 Cond=97.73/Branch=97.73 自相矛盾；脚注 6 对 `stream_register` Cond
-    的成因被同一份 modinfo 证伪。**M4 出口第二条要求"附已核实成因"，成因写错等同未满足。**
-  - **BUG-0052**（框架路径漂移）：`.claude/agents/{rev,dv}.md`、`dispatch/SKILL.md`、
-    `doc/bugs.md:3` 表头共四处引用 0.8.0 已合并掉的 `workflow/review/*`、`workflow/fail/*`
-    路径，`test -e` 逐条实测全 MISSING。REV-034 实例是第一个撞上并靠卡内订正绕过的。
-  - **BUG-0053**（记录卫生）：`REV-033.md` 尾部工具标记随 `861c7f8` 入库；REV-034 实例
-    写自己记录时**当场复现同一泄漏**（自检删除）——系统性写作陷阱，非一次性疏忽。
-
-**Not done**
-- 卡E（M4 签核重开）未派——`make check MILESTONE=4` 条件 3 尚红。
-- BUG-0048（lint baseline 漂移）仍 OPEN，下一闭环主件（fixer + 独立 closer 两次派发）。
-- BUG-0050~0053 均 OPEN：0050/0053 待 rev 裁决处置面，0051/0052 待派 fixer。**四条都压在
-  M4 签核之前**——0050/0051 直接触及 M4 出口第二、三条的诚实性，0052/0053 是记录卫生。
-
-**Next**
-- 闭环2：BUG-0048 fixer（DV，逐站点分诊 62 个新 lint 站点 + 重同步基线；硬约束不得
-  `make clean` 毁 `sim/out` 覆盖库）+ 独立 closer。
-- 闭环3：BUG-0050~0053 处置（rev 裁决 + fixer）。
-- 闭环4：卡E M4 签核（rev·L3 全 rubric），通过后 `make bump minor=1` + tag v0.5.0。
-
-**How verified**
-- `make evidence BUG=BUG-0049 …` 退出 0、签名命中，脚本自行回填 CLOSED + verify_evidence
-  （非手改）；`doc/evidence/v0.4.37/BUG-0049.log` 首行为 `CMD:`。
-- 四路复算的关键事实 orch 侧逐条机核复现：`grep -c i_counter_open_w/i_r_counter
-  sim/out/urgText6/hierarchy.txt` 各得 6（counter=12，非 108）；`grep -n flush_i
-  vendor/common_cells/src/fifo_v3.sv` 只得 :25/:122，遍历 26 个 fifo 实例 Condition 段
-  无 LINE 122；`modlist.txt:48` lzc 行 Cond/Branch=97.73 与脚注 3 正文矛盾；四条 workflow
-  死路径 `test -e` 全 MISSING；`tail -3 doc/review/REV-033.md` 见工具标记。
-- `make check` docs-check passed、chain audit 无新增 gap 形状；`make selftest` 见本块提交。
-- 本闭环零 RTL/TB 改动，未跑 sim、未 `make clean`、`sim/out/` 全程只读（覆盖库另备份至
-  scratchpad 防误删）。
 
