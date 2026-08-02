@@ -2,6 +2,76 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.4.39] 2026-08-02 BUG-0048/0050/0051 三条 CLOSED——M4 出口第二/三(b)条转为成立；复验链反手挖出十条存量缺陷（BUG-0052~0065）
+
+**背景**：M4 关门前置。本周期跑了三条独立的 fixer→closer 链（每条 closer 都是与
+fixer 无关的全新实例），并在每一环强制"不得照抄上游结论、每个数字自己回源"。
+结果：三条目标缺陷全部关闭，**同时**这条纪律本身在三处拦下了会继续繁殖的错误。
+
+**Done**
+- **BUG-0048 CLOSED**（lint 基线重同步）：`doc/lint-baseline.md` 236→264 唯一站点，
+  83 条新站点逐站点分诊 **83/83 风格、0 真缺陷**（51 条 difflib 行映射对上旧表、
+  32 条按 BUG-0021 判据重推；ULCO 用 `xbit` 实算零扩展边界）。判据零放宽
+  （`sim/Makefile`/`sim/lintdiff.py` 逐字未改）。独立 closer 另写解析器做**双向**
+  集合差 0/0，并设计出比 fixer 更强的关闭签名——`exit 0` 蕴含 `实测 ⊆ 基线`，
+  签名钉死 `|实测|=|基线|=264` ⇒ 集合相等 ⇒ 幽灵站点 = ∅，**用算术补上了
+  `lintdiff.py` 只打印从不判红的那个方向**。
+- **BUG-0050 + BUG-0051 CLOSED**（引用越界 + 证据事实错抄）：CW-002 登记列扩至三模块
+  （bin 锁死 `test_i` 单一位）+ rev 记录列双引填实；CW-010 去掉 `fifo_v3` **Cond**
+  （该 bin 物理不存在，Branch IF-117 实存故 Branch 认领有效）；§6.3 删三处越权 token、
+  counter 例列 108→12、两格 N/A 成因就地重写。证据文件按 FB-23 边界处理：**字节级
+  零覆写零删除**（closer 逐行验证 391/395 行逐字存在，4 处均为加法）。
+- **M4 出口条件第二条与第三条 (b) 由 REV-035 判定的"不成立"转为 REV-036 判定的
+  "成立"**：两处 N/A 成因已各补一条被原始 urg **正向支持**的表述；waivers 全表
+  14 行零占位、全 Kind-A、所引 11 份 REV/signoff 文件逐个 `test -f` 实存。
+  UNOWNED=∅ 经第三次独立复算仍成立。
+- **隔离纪律的三次现场兑现**（本周期最值得记的部分）：
+  1. arch fixer 拒绝照抄 REV-035 —— 实测 `lzc.sv:56 always_comb` 存在，
+     推翻其"无一个 `always` 块（亲读）"的论证理由（结论对、理由错）。**若照抄，
+     等于把一个未核实成因洗成"已核实"，即 BUG-0051 换个载体第三次复发。**
+  2. DV closer 拒绝沿用 BUG-0040 的签名体例（自印口令），改为把数字钉进签名。
+     而 BUG-0048 的 fixer 原本正是照那份先例设计的——**坏先例在被发现前已繁殖一代。**
+  3. rev closer 拒绝采信"已提交"的交接，动手前先 `diff` 确认被审对象未变。
+- **新登记十条存量缺陷**（无条件登记，均非本周期引入）：BUG-0052 `workflow/` 死路径 ·
+  0053 工具标记入库 · 0054 `make next` 把 REJECTED 签核书读成"可进下一里程碑" ·
+  0055 tag 命名空间与上游冲突（`v0.5.0` 已被占用）· 0056 guard ref 含破坏性
+  `make clean` · 0057 BUG-0040 关闭证据不可重放且签名自印 · 0058 `lintdiff.py`
+  幽灵方向不判红 · 0059 子代理 scratchpad 未按实例隔离 · 0060 `evidence.py`
+  先写盘后校验留孤儿工件（`make check` 检不出，经受控实验证实静默）·
+  0061 四条 guard 的 `paths:` 被中文标点污染从未匹配（含专为 M4 签核卡写的
+  BUG-0047 那条）· 0063~0065 订正段自述数字失准 / 同构缺陷处置不对称 /
+  `docs.py` 提示不存在的 make target。
+- **缺陷族谱成形**：BUG-0049（漏账）→ 0050（超额认领）→ 0051（事实错抄）→
+  0058（lint 基线同形）→ 0060（证据孤儿）→ 0063（订正段自身错抄），六者同根——
+  **声明面与事实面之间没有机器核对**。REV-035 §Q5 已裁"值得一条族级 guard
+  （三个差集 D1/D2/D3 + 输入白名单），承载而非叠加于各自 guard"。
+
+**Not done**
+- 卡E（M4 签核）未派——`make check MILESTONE=4` 条件 3 尚红（14 条 active）。
+- BUG-0052~0065 共 **14 条 OPEN**，全部阻塞条件 3。其中 **BUG-0055（tag 冲突）
+  须用户裁决**：处置涉及已入库 tag 的去留（删除不可逆），orch 不自行决定。
+- 族级 guard（REV-035 §Q5）未落地；BUG-0062（REV-035 自身的事实错误）未裁。
+
+**Next**
+- 请用户裁 tag 处置面（加前缀 / 跳号 / 删本地上游 tag + `--no-tags` / 移入独立
+  refs 命名空间）。
+- 一张 rev 批量裁决卡定 14 条的终态（修 / `ACCEPTED@M<n>` / WONTFIX），再派
+  fixer + 独立 closer。多数是几行订正，宜合并。
+- 之后卡E M4 签核（全 rubric），通过后关门。
+
+**How verified**
+- 三条 bug 均由 `make evidence BUG=… CMD=… EXPECT=…` 机器背书翻列（非手改）：
+  `BUG-0048.log` / `BUG-0050.log` / `BUG-0051.log` 落 `doc/evidence/v0.4.38/`，
+  首行均为 `CMD:` 且从仓库根可重放（不同于 BUG-0057 那种死链接）。
+- 三条签名均先证伪后采用：BUG-0048 一次（删基线一行 → 精确点名变红）、
+  BUG-0050/0051 共八次（scratch 镜像，仓内零改动，每次红点与注入缺陷一一对应）。
+- UNOWNED=∅ 至此有**三条互相独立的证据链**：REV-034 closer、orch 四路复算 +
+  裁决者、REV-036 closer 自写脚本。
+- orch 侧受控实验证实 BUG-0060 的静默性：放一份构造的孤儿 `.log` 后
+  `make check` 仍 `docs-check passed`。
+- `make check` docs-check passed（`make archive` 归档三条终态行后）；
+  `make selftest` 61/61 OK；7 个 `cov.vdb` 全程完好（三条链均未 `make clean`）。
+
 ## [0.4.38] 2026-08-02 BUG-0049 关闭（UNOWNED=∅ 经两条独立链确认）——并由复验反手挖出四条新账目缺陷 BUG-0050~0053
 
 **背景**：M4 关门前置。BUG-0049 的修复面（REV-033 裁 CW-014 + arch 返工 + orch 应用）

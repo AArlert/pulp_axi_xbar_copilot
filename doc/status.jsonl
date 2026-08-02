@@ -1,3 +1,4 @@
+{"date": "2026-08-02", "version": "0.4.39", "summary": "BUG-0048/0050/0051 三条 CLOSED（独立 closer 机器背书，签名先证伪后采用）。M4 出口第二/三(b)条由 REV-035 判不成立转 REV-036 判成立，UNOWNED=∅ 已有三条独立证据链。复验反手挖出十条存量缺陷 BUG-0052~0065。条件 3 尚红 14 条；tag 冲突待用户裁决"}
 {"date": "2026-08-02", "version": "0.4.38", "summary": "BUG-0049 CLOSED（机器背书）：REV-034 closer 与 orch 四路独立复算两条链同得 CELLS=132 LT90=30 UNOWNED=0。复验反手挖出四条新缺陷：BUG-0050 引用越界（含 fifo_v3 Cond 幽灵 bin）/0051 证据事实错抄/0052 workflow 死路径/0053 工具标记入库。下一步 BUG-0048 fixer+closer"}
 {"date": "2026-08-02", "version": "0.4.37", "summary": "里程碑重构落地：spec §0#4重pin（sha dad62e08），M4出口改测量+分诊+每格归属（UNOWNED=∅），新增M6承接六类≥90%门（random-first），M5纯方法论。门禁首判REJECTED抓出stream_register三格漏账→BUG-0049登记→REV-033裁CW-014→返工复审APPROVED。下一步卡E：M4签核重开"}
 {"date": "2026-08-02", "version": "0.4.36", "summary": "卡A全闭包覆盖率复测（REV-024两悬案自然消解：xbar Toggle 94.44/unmuxed Assert 100均PASS）+REV-031分诊9个UNOWNED格：登记CW-010~013（零Kind-B），路由DV-F/G，CW-001订正、REV-024行9勘误。M4残余首次每格有归属。下一步arch里程碑重构提案卡B（M5+M6，M6承接≥90%门）"}
