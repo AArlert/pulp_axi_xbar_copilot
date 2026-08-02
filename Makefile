@@ -4,7 +4,7 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help handoff next run evidence regress check guards bump commit \
-        archive selftest
+        archive docs-archive selftest
 
 # Bare `make` (no target) lands here. Keep in sync with the target comments
 # below — this is a manual list, not comment-scraped, so a new target needs
@@ -84,6 +84,11 @@ commit:
 
 archive:
 	@python3 scripts/docs.py --archive
+
+# `archive` is the real target; `docs-archive` is a compat alias because
+# scripts/docs.py (upstream file, not touched) hardcodes the string
+# `make docs-archive` in four remediation hints (BUG-0065).
+docs-archive: archive
 
 selftest:
 	cd scripts/tests && python3 -m unittest discover -v

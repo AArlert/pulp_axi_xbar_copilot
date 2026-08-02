@@ -106,10 +106,12 @@ make check               # 关闭任何卡前必做
   `git push`（`make commit` 只到本地，本仓库原则是“小步快跑”，即长任务切片为可闭环的小任务，每次任务都推送到 github）。
 - 每次 clone 后执行两条一次性设置（`.git/config` 不随仓库走）：
   `git config core.hooksPath .githooks` ·
-  `git remote add upstream https://github.com/AArlert/iverif-workflow.git`
+  `git remote add --no-tags upstream https://github.com/AArlert/iverif-workflow.git`
+  （旧 clone 补 `git config remote.upstream.tagOpt --no-tags`；见 BUG-0055）
 - **上游关系（0.8.0 起变更）**：`workflow/`、`scripts/`、`.claude/agents/` 是
   上游文件，但**不再有 fwsync/manifest/divergence 三态**——本地怎么改是自己的
-  事，不红。跟进上游：`git fetch upstream` 后 `git cherry-pick` 想要的提交。
+  事，不红。跟进上游：`git fetch upstream --no-tags` 后 `git cherry-pick` 想要
+  的提交。
   **本仓库的移植基线 = upstream `e23d938`（2026-07-29 跟进；0.8.0 未变）**；
   "上游比我们多了什么"因此可机械回答：
   `git log e23d938..upstream/master --oneline`。每次跟进后更新此基线 sha 与
@@ -120,9 +122,7 @@ make check               # 关闭任何卡前必做
   的反馈台账，而是**我们做了什么改动、为什么**——自己先实践，做好了让上游来
   cherry-pick。**硬要求**：既然已无 manifest 记录我们动过哪些上游文件，
   **该台账就是那份记录本身**。任何对 `workflow/`/`scripts/`/`.claude/` 的本地
-  改动必须在此留行 + 代码旁注明 `见 doc/fw-feedback.md FB-xx`。当前已改：
-  FB-27（`.claude/agents/{arch,rev}.md` 各一处死命令）、FB-28（删除
-  `.claude/agents/orch.md`，内容并入 `/dispatch` 与本页 §0）。
+  改动必须在此留行 + 代码旁注明 `见 doc/fw-feedback.md FB-xx`。
 
 ## §6 项目专属
 
