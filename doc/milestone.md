@@ -1,5 +1,10 @@
 # Milestones
 
+<!-- docsx:skip scripts/cov_loop.py -->
+（M6 两处 `scripts/cov_loop.py` 提及是决策点 5 的前瞻引用——脚本随 M6 落地时才
+交付，见 `doc/design-prompt/verification_maturity.md` §5、`doc/fw-feedback.md`
+FB-40。）
+
 版本号 0.M.P，M 即里程碑号。出口条件由 `make check MILESTONE=<n>` 机器核验（全场景 ✅ · regress 摘要入证据 · bugs 终态或未到期 ACCEPTED · **KILL 覆盖**）加 rev 签核记录 `doc/evidence/v0.M.*/signoff-M<n>.md`，二者缺一不可。
 
 > **KILL 覆盖（不变量 5）自 M3 起生效。** 
@@ -22,7 +27,7 @@
 
 Exit criteria:
 
-- [x] 仿真基建可跑：flist 分层（vendor/dut/tb_upstream）、`sim/Makefile` 入口、VCS-MX O-2018 跑通上游 tb sanity
+- [x] 仿真基建可跑：flist 分层（vendor → dut → tb_upstream 三层）、`sim/Makefile` 入口、VCS-MX O-2018 跑通上游 tb sanity
 - [x] `doc/spec.md` v0 由 arch 从许可来源蒸馏，经 rev 评审后 sha256 钉死
 - [x] 签核：`doc/evidence/v0.0.2/signoff-M0.md`
 

@@ -1,5 +1,20 @@
 # Design prompt — `doc_mechanization`（`scripts/docsx.py`，project-owned 文档断言机械化检查器）
 
+<!-- docsx:skip workflow/nonexistent.md workflow/a.md workflow/b.md .claude/skills/doc-mechanization/SKILL.md scripts/docsx.py doc/docsx-baseline.md scripts/tests/test_docsx.py -->
+> **状态（2026-08-03，FB-39/FB-40 裁决）**：F1（数字断言）、F3（双向集合断言）、
+> F7（快照启发式）、F10（baseline 双向）与 §12 词法执行器已退役——`scripts/docsx.py`
+> 溶解入 `scripts/docs.py`，幸存族 F2/F4/F5 + BUG-0053 tool-marker-leak 并入其
+> `cmd_check()`。详见 `doc/fw-feedback.md` FB-40。**本页正文以下按冻结惯例不
+> 回改**（历史设计契约，F1/F3/F7/F10 章节描述的是它们退役前的判据）。上面这行
+> `<!-- docsx:skip -->` 标记是本次退役唯一动的一行：把本页 F2/F7 两族自身的
+> worked-example 假路径（§F2 red_when 的 `workflow/nonexistent.md`、§F7 的
+> `workflow/a.md`/`workflow/b.md`）、§14/§15 对尚未交付的
+> `.claude/skills/doc-mechanization/SKILL.md` 的前向引用、以及本页正文里对
+> 已删除的 `scripts/docsx.py`/`doc/docsx-baseline.md`/
+> `scripts/tests/test_docsx.py` 的历史性提及（本文档就是它们的设计契约，
+> 通篇如实指名，删档后自然全部变"死引用"）一并标记为已知、经审阅的 F2
+> 豁免——不是对判据本身的改写。
+>
 > **约束层声明**：本文只规定 `scripts/docsx.py` 的**判据与接口**，不写实现代码。
 > 这是一份**元工具**设计契约，不是 DUT 模块设计契约——它的判据不从 `doc/spec.md`
 > 推导（那是 DUT 的 spec），也**不得**编码任何 DUT 行为。它的权威基础是：

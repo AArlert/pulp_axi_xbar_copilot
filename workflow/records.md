@@ -2,6 +2,14 @@
 
 <!-- Upstream file — local edits are your own to maintain. -->
 
+## Derived facts are never hand-copied
+
+If a number, count or path can be recomputed by a script, prose
+(status.jsonl, log.md, REV records) references the command that prints it
+(`make handoff`, `make check MILESTONE=<n>`) or lives in a script-owned
+backfill region (the evidence.py-owned testplan columns are the pattern).
+Hand-copied derivables rot (M4 data: doc/fw-feedback.md FB-39).
+
 ## Evidence record
 
 An evidence record is a **machine-generated excerpt** of a simulation log,

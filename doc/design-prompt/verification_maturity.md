@@ -302,8 +302,14 @@ runner 机制零 schema 改动，**未覆盖**"`regress.list ⊇ testplan ✅ �
 > spec §0#4**——§0#4 六类测量口径本身不变（M4 测量、M6 收敛），故 C5.x 功能规格
 > **无需逐行改动**。见 `doc/design-prompt/milestone_restructure.md` §2/§3.4。
 
-`scripts/` 本仓库自有资产（CLAUDE.md §5，不受上游同步约束）。建议新增
-`scripts/cov_loop.py`。**只给功能规格，不写 Python。**
+`scripts/` 本仓库自有资产（CLAUDE.md §5，不受上游同步约束）。建议新增下列脚本
+（M6 前瞻引用，尚未交付——见 doc/fw-feedback.md FB-40）：
+
+```
+scripts/cov_loop.py
+```
+
+**只给功能规格，不写 Python。**
 
 ### 5.1 输入
 

@@ -1,12 +1,24 @@
 """Guard tests for docs.py — including the fuse test for the
 milestone-signoff bug that drifted once (ppa BUG-011: `any(generator)` is
-always truthy, so the signoff-file check silently passed)."""
+always truthy, so the signoff-file check silently passed).
+
+F2/F4/F5 + BUG-0053 tool-marker-leak unit tests below (TestF2.. through
+TestToolMarkerLeak) migrated from the retired scripts/docsx.py's
+scripts/tests/test_docsx.py per doc/fw-feedback.md FB-40 — F1/F3/F7/F10 +
+the §12 executor's tests were deleted outright (the checked object no
+longer exists), F2/F4/F5/BUG-0053's tests survive, adapted to call docs.py
+directly."""
 import json
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import docs as docs_module
 
 from fixture import (make_project, run, set_scenario_green, pin_spec, _table,
                      EN, ZH)
@@ -272,6 +284,9 @@ class TestAcceptedState(DocsBase):
                         + "| BUG-0009 | %s | TB | corner x | TEST=x SEED=1 "
                         "| %s | - | - |\n" % (status, root),
                         encoding="utf-8")
+        # F5/BUG-0067 (FB-40): every bug row needs a detail page.
+        (self.doc("bugs") / "BUG-0009.md").write_text(
+            "# BUG-0009\n", encoding="utf-8")
 
     def test_accepted_unexpired_passes_and_due_surfaces(self):
         self.add_bug("ACCEPTED@M2")   # fixture milestone is M1: unexpired
@@ -379,14 +394,19 @@ class TestChainAudit(DocsBase):
 
 
 class TestGuards(DocsBase):
+    """FB-40: `--guards` reads doc/guards.md (F4's table), not doc/bugs/
+    *.md pages' `## regression_guard` sections (BUG-0015's era) — the
+    output *contract* (the "== <bugs> guard (hit: ...) ==" header + "N
+    guard(s) matched" trailer every grep-based consumer relies on,
+    REV-037 S1-S3 / the dispatch SKILL self-check) is unchanged."""
     def test_guards_query_matches_paths(self):
         # pulp BUG-0015判例 fuse: a guard that names its victim files must
         # surface when those files are about to be touched.
-        page = self.doc("bugs") / "BUG-0001.md"
-        page.write_text(
-            "# BUG-0001\n\n## regression_guard\ntype: checklist\n"
-            "paths: tb/sva/*.sv, sim/Makefile\n"
-            "note: fold tracked-state reads before property use\n",
+        (self.doc("guards.md")).write_text(
+            "# guards\n\n| id | bugs | type | paths | check | note |\n"
+            "| --- | --- | --- | --- | --- | --- |\n"
+            "| G-0001 | BUG-0001 | checklist | tb/sva/*.sv, sim/Makefile "
+            "| - | fold tracked-state reads before property use |\n",
             encoding="utf-8")
         cp = run(self.tmp, "docs.py", "--guards", "tb/sva/stall_sva.sv",
                  "rtl/core.sv", check=True)
@@ -545,6 +565,375 @@ class TestRiskGradeContract(unittest.TestCase):
                 ).read_text(encoding="utf-8")
         self.assertIn("Spec-gap sweep", arch)
         self.assertIn("make explore", arch)
+
+
+# ---------------------------------------------------------------------------
+# FB-40 migration: F2/F4/F5 + BUG-0053 tool-marker-leak, formerly
+# scripts/docsx.py + scripts/tests/test_docsx.py. Per family: at least one
+# red_when injection + its green counterpart (doc_mechanization.md §15's
+# original rule, still honored for the survivor families).
+# ---------------------------------------------------------------------------
+def _fake_cfg(root):
+    root = Path(root)
+    doc = root / "doc"
+    return SimpleNamespace(
+        root=root, C={"tp_status": "status", "bug_id": "id",
+                     "bug_suspect": "suspect"},
+        testplan=doc / "testplan.md", bugs=doc / "bugs.md",
+        bugs_archive=doc / "archive" / "bugs-archive.md",
+        bug_pages=doc / "bugs", evidence_dir=doc / "evidence",
+        guards=doc / "guards.md")
+
+
+class TmpRootBase(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="docs_f2f4f5_test_"))
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.cfg = _fake_cfg(self.tmp)
+
+
+class TestF2Merged(TmpRootBase):
+    def test_existing_path_is_green(self):
+        (self.tmp / "doc").mkdir()
+        (self.tmp / "doc" / "spec.md").write_text("x", encoding="utf-8")
+        text = "see `doc/spec.md` for details\n"
+        self.assertEqual(docs_module.check_f2_text(self.cfg, "README.md",
+                                                    text), [])
+
+    def test_dead_path_is_red(self):
+        """red_when (design contract F2): README.md gains a reference to a
+        nonexistent workflow/ path."""
+        text = "see `workflow/nonexistent.md` for details\n"
+        out = docs_module.check_f2_text(self.cfg, "README.md", text)
+        self.assertEqual(len(out), 1)
+        self.assertIn("workflow/nonexistent.md", out[0][1])
+
+    def test_frozen_prefix_reference_does_not_misfire(self):
+        """red_when's counter-example: a doc/evidence/ reference must NOT
+        turn red even though the target file does not exist (FB-23)."""
+        text = "see `doc/evidence/vX/gone.md` for details\n"
+        self.assertEqual(docs_module.check_f2_text(self.cfg, "README.md",
+                                                    text), [])
+
+    def test_glob_token_with_matches_is_green(self):
+        (self.tmp / "doc" / "bugs").mkdir(parents=True)
+        (self.tmp / "doc" / "bugs" / "BUG-0001.md").write_text(
+            "x", encoding="utf-8")
+        text = "see `doc/bugs/*.md`\n"
+        self.assertEqual(docs_module.check_f2_text(self.cfg, "README.md",
+                                                    text), [])
+
+    def test_glob_token_with_no_matches_is_red(self):
+        text = "see `scripts/no_such_dir/*.py`\n"
+        out = docs_module.check_f2_text(self.cfg, "README.md", text)
+        self.assertEqual(len(out), 1)
+        self.assertIn("glob", out[0][1])
+
+    def test_fenced_code_block_token_is_exempt(self):
+        """FB-40's new F2 exemption channel (replaces the retired F10
+        baseline table): a dead path quoted inside a fenced code block is
+        a worked example, not a live reference — auto-skipped, no marker
+        needed. Same string outside a fence is still red (proves this is
+        fence-awareness, not a blanket path-token pass-through)."""
+        fenced = "see:\n```\nworkflow/nonexistent.md\n```\n"
+        self.assertEqual(docs_module.check_f2_text(self.cfg, "README.md",
+                                                    fenced), [])
+        unfenced = "see workflow/nonexistent.md\n"
+        out = docs_module.check_f2_text(self.cfg, "README.md", unfenced)
+        self.assertEqual(len(out), 1)
+
+    def test_docsx_skip_marker_exempts_named_token_file_wide(self):
+        """The narrower, budget-capped fallback exemption for a token that
+        cannot be fenced (e.g. sits inside a markdown table cell): the
+        marker names the exact literal token(s); every occurrence of that
+        token in the *same file* is exempt, not the whole file/line."""
+        text = ("<!-- docsx:skip workflow/nonexistent.md -->\n"
+               "first mention: workflow/nonexistent.md\n"
+               "second mention: workflow/nonexistent.md\n")
+        self.assertEqual(docs_module.check_f2_text(self.cfg, "README.md",
+                                                    text), [])
+        # A *different* dead token on the same file is not covered by a
+        # marker that named something else.
+        text2 = ("<!-- docsx:skip workflow/nonexistent.md -->\n"
+                "workflow/other-ghost.md\n")
+        out = docs_module.check_f2_text(self.cfg, "README.md", text2)
+        self.assertEqual(len(out), 1)
+        self.assertIn("other-ghost.md", out[0][1])
+
+
+class TestF4Merged(TmpRootBase):
+    def test_script_row_with_check_present_is_green(self):
+        rows = [{"id": "G-0001", "bugs": "BUG-0001", "type": "script",
+                "paths": "f.txt", "check": "grep -q hi f.txt",
+                "note": "n"}]
+        viol, warns = docs_module.check_f4(self.cfg, rows)
+        self.assertEqual(viol, {})
+
+    def test_checklist_row_is_not_red_by_default(self):
+        """Behavior change from the pre-FB-40 docsx.py rule (red_when there:
+        'a new type: checklist row is red unless a baseline row exempts
+        it'): that rule was entirely F10-dependent — every checklist row
+        was unconditionally 'in violation' until the (now-retired) baseline
+        table's cross-reference silenced it. There is no successor
+        authorization channel (re-litigating 49 already rev-approved rows
+        is out of this migration's scope, doc/fw-feedback.md FB-40) — a
+        checklist row is simply legal on its own now, same as `type` being
+        any other GUARD_TYPES value."""
+        rows = [{"id": "G-0002", "bugs": "BUG-0002", "type": "checklist",
+                "paths": "f.txt", "check": "-", "note": "n"}]
+        viol, warns = docs_module.check_f4(self.cfg, rows)
+        self.assertEqual(viol, {})
+
+    def test_non_ascii_paths_is_red(self):
+        """red_when (design contract F4): paths cell with full-width
+        parens (BUG-0061's exact pollution shape) -> red."""
+        (self.tmp / "f.txt").write_text("hi\n", encoding="utf-8")
+        rows = [{"id": "G-0003", "bugs": "BUG-0003", "type": "script",
+                "check": "grep -q hi f.txt",
+                "paths": "doc/milestone.md（M4/M5 节）", "note": "n"}]
+        viol, warns = docs_module.check_f4(self.cfg, rows)
+        self.assertIn("doc/guards.md:G-0003:paths", viol)
+
+    def test_script_row_with_empty_check_is_red(self):
+        rows = [{"id": "G-0004", "bugs": "BUG-0004", "type": "script",
+                "paths": "f.txt", "check": "-", "note": "n"}]
+        viol, warns = docs_module.check_f4(self.cfg, rows)
+        self.assertIn("doc/guards.md:G-0004:check", viol)
+
+    def test_zero_match_paths_token_is_a_warning_not_an_error(self):
+        (self.tmp / "f.txt").write_text("hi\n", encoding="utf-8")
+        rows = [{"id": "G-0005", "bugs": "BUG-0005", "type": "script",
+                "check": "grep -q hi f.txt", "paths": "no/such/file.sv",
+                "note": "n"}]
+        viol, warns = docs_module.check_f4(self.cfg, rows)
+        self.assertEqual(viol, {})
+        self.assertEqual(len(warns), 1)
+        self.assertIn("zero matches", warns[0])
+
+
+class TestF5Merged(TmpRootBase):
+    def setUp(self):
+        super().setUp()
+        (self.tmp / "doc" / "archive").mkdir(parents=True, exist_ok=True)
+        (self.tmp / "doc" / "bugs").mkdir(exist_ok=True)
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status | suspect |\n| --- | --- | --- |\n",
+            encoding="utf-8")
+        (self.tmp / "doc" / "archive" / "bugs-archive.md").write_text(
+            "| id | status | suspect |\n| --- | --- | --- |\n",
+            encoding="utf-8")
+        (self.tmp / "doc" / "testplan.md").write_text("# tp\n",
+                                                       encoding="utf-8")
+
+    def test_bug_row_with_page_is_green(self):
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status | suspect |\n| --- | --- | --- |\n"
+            "| BUG-0001 | OPEN | TB |\n", encoding="utf-8")
+        (self.tmp / "doc" / "bugs" / "BUG-0001.md").write_text(
+            "# BUG-0001\n", encoding="utf-8")
+        self.assertEqual(docs_module.check_f5_bug_pages(self.cfg), {})
+
+    def test_bug_row_without_page_is_red(self):
+        """red_when (design contract F5 == BUG-0067's own defect): a bug
+        row with no doc/bugs/<id>.md page."""
+        # BUG-9002 (not a real id): the low-numbered ids are deliberately
+        # avoided here — they collide with F5_LEGACY_BUG_IDS, the fixed
+        # REV-038 §B.1 pre-existing-debt allowlist (see check_f5_bug_pages).
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status | suspect |\n| --- | --- | --- |\n"
+            "| BUG-9002 | OPEN | TB |\n", encoding="utf-8")
+        viol = docs_module.check_f5_bug_pages(self.cfg)
+        self.assertIn("bugs.md:BUG-9002", viol)
+
+    def test_suspect_doc_row_without_page_is_green(self):
+        """FB-39's suspect=doc lane (workflow/bugs.md: 'no detail page
+        unless the RCA is non-obvious') — F5's row->page requirement does
+        not apply to it."""
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status | suspect |\n| --- | --- | --- |\n"
+            "| BUG-0003 | CLOSED | doc |\n", encoding="utf-8")
+        self.assertEqual(docs_module.check_f5_bug_pages(self.cfg), {})
+
+    def test_evidence_file_referenced_is_green(self):
+        ev = self.tmp / "doc" / "evidence" / "v0.1.0"
+        ev.mkdir(parents=True)
+        (ev / "BUG-0001.log").write_text("log\n", encoding="utf-8")
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status | suspect |\n| --- | --- | --- |\n"
+            "| BUG-0001 | CLOSED | TB | doc/evidence/v0.1.0/"
+            "BUG-0001.log |\n", encoding="utf-8")
+        self.assertEqual(docs_module.check_f5_evidence(self.cfg), {})
+
+    def test_orphan_evidence_file_is_red(self):
+        """red_when (design contract F5 == BUG-0060's own defect): a .log
+        under doc/evidence/ that no bugs.md/testplan.md row cites."""
+        ev = self.tmp / "doc" / "evidence" / "v0.1.0"
+        ev.mkdir(parents=True)
+        (ev / "orphan.log").write_text("log\n", encoding="utf-8")
+        viol = docs_module.check_f5_evidence(self.cfg)
+        self.assertIn("evidence:doc/evidence/v0.1.0/orphan.log", viol)
+
+    def test_dangling_evidence_reference_is_red(self):
+        (self.tmp / "doc" / "bugs.md").write_text(
+            "| id | status | suspect |\n| --- | --- | --- |\n"
+            "| BUG-0003 | CLOSED | TB | doc/evidence/v9.9.9/ghost.log |\n",
+            encoding="utf-8")
+        viol = docs_module.check_f5_evidence(self.cfg)
+        self.assertIn("ref:doc/evidence/v9.9.9/ghost.log", viol)
+
+
+class TestToolMarkerLeak(unittest.TestCase):
+    def test_clean_text_is_green(self):
+        text = "normal prose, no markers here\n"
+        self.assertEqual(docs_module.check_tool_marker_leak("x.md", text),
+                         [])
+
+    def test_whole_line_marker_is_red(self):
+        """red_when #1 (REV-037/REV-038 §C two-use-case KILL): appending
+        the marker as its own whole line -> red."""
+        text = "some record text\n</invoke>\n"
+        out = docs_module.check_tool_marker_leak("x.md", text)
+        self.assertEqual(len(out), 1)
+        self.assertIn("</invoke>", out[0])
+
+    def test_marker_inside_fenced_code_block_stays_green(self):
+        """red_when #2 (the two-use-case KILL's other half): the exact
+        same string, quoted inside a fenced code block, must NOT trip the
+        check — substring/example quoting is not a leak."""
+        text = "example:\n```\n</invoke>\n```\n"
+        self.assertEqual(docs_module.check_tool_marker_leak("x.md", text),
+                         [])
+
+    def test_marker_as_substring_not_whole_line_is_green(self):
+        text = "the tag `</invoke>` leaked into a record\n"
+        self.assertEqual(docs_module.check_tool_marker_leak("x.md", text),
+                         [])
+
+
+class TestGuardPointerFlSchemaCompat(unittest.TestCase):
+    """A-c2 carryover: a terminal-status detail page whose `##
+    regression_guard` body is nothing but the one-line pointer the F4
+    migration writes must still satisfy check_fl_page's "section present
+    and non-empty" rule."""
+
+    def test_pointer_only_guard_section_satisfies_fl_schema(self):
+        with tempfile.TemporaryDirectory() as d:
+            page = Path(d) / "BUG-9001.md"
+            page.write_text(
+                "# BUG-9001\n\n"
+                "## symptom\nx\n\n## first_anomaly\nx\n\n"
+                "## taxonomy\nTB_BUG\n\n## rca\nx\n\n## fix\nx\n\n"
+                "## rerun\nx\n\n"
+                "## regression_guard\n\n"
+                "见 `doc/guards.md` G-9001（BUG-9001）。\n\n"
+                "## similar\nx\n", encoding="utf-8")
+            errors = []
+            docs_module.check_fl_page(page, "CLOSED", errors)
+            self.assertEqual(errors, [])
+
+    def test_empty_guard_section_still_fails_fl_schema(self):
+        with tempfile.TemporaryDirectory() as d:
+            page = Path(d) / "BUG-9002.md"
+            page.write_text(
+                "# BUG-9002\n\n"
+                "## symptom\nx\n\n## first_anomaly\nx\n\n"
+                "## taxonomy\nTB_BUG\n\n## rca\nx\n\n## fix\nx\n\n"
+                "## rerun\nx\n\n"
+                "## regression_guard\n\n## similar\nx\n", encoding="utf-8")
+            errors = []
+            docs_module.check_fl_page(page, "CLOSED", errors)
+            self.assertTrue(any("regression_guard" in e for e in errors))
+
+
+class TestMergedCheckIntegration(DocsBase):
+    """End-to-end `--check` (subprocess) over the standard fixture, proving
+    F2/F5's red->green through the real CLI, not just the unit functions."""
+
+    def test_dead_reference_in_readme_fails_and_fix_restores_green(self):
+        readme = self.tmp / "README.md"
+        readme.write_text(
+            "# fixture\n\nsee `workflow/nonexistent.md`\n", encoding="utf-8")
+        cp = run(self.tmp, "docs.py", "--check")
+        self.assertEqual(cp.returncode, 1)
+        self.assertIn("workflow/nonexistent.md", cp.stdout)
+        readme.write_text("# fixture\n", encoding="utf-8")
+        cp2 = run(self.tmp, "docs.py", "--check")
+        self.assertEqual(cp2.returncode, 0, cp2.stdout + cp2.stderr)
+
+    def test_bug0053_tool_marker_two_use_case_end_to_end(self):
+        target = self.doc("some_record.md")
+        target.write_text("# a record\n\nnormal text\n", encoding="utf-8")
+        cp0 = run(self.tmp, "docs.py", "--check")
+        self.assertEqual(cp0.returncode, 0, cp0.stdout + cp0.stderr)
+        target.write_text("# a record\n\nnormal text\n</invoke>\n",
+                          encoding="utf-8")
+        cp1 = run(self.tmp, "docs.py", "--check")
+        self.assertEqual(cp1.returncode, 1)
+        self.assertIn("tool-marker leak", cp1.stdout)
+        target.write_text(
+            "# a record\n\nnormal text\n```\n</invoke>\n```\n",
+            encoding="utf-8")
+        cp2 = run(self.tmp, "docs.py", "--check")
+        self.assertEqual(cp2.returncode, 0, cp2.stdout + cp2.stderr)
+
+    def test_orphan_detail_page_fails_and_row_restores_green(self):
+        """Merged F5 direction (docs.py's pre-existing orphan-page check,
+        now sharing one home with F5's row->page direction — 'two loci in
+        the same domain, merged into one' per FB-40)."""
+        page = self.doc("bugs") / "BUG-9999.md"
+        page.write_text("# BUG-9999\n", encoding="utf-8")
+        cp = run(self.tmp, "docs.py", "--check")
+        self.assertEqual(cp.returncode, 1)
+        self.assertIn("orphan detail page", cp.stdout)
+        bugs = self.doc("bugs.md")
+        bugs.write_text(bugs.read_text(encoding="utf-8")
+                        + "| BUG-9999 | OPEN | TB | x | TEST=t SEED=1 | y "
+                        "| - | - |\n", encoding="utf-8")
+        cp2 = run(self.tmp, "docs.py", "--check")
+        self.assertEqual(cp2.returncode, 0, cp2.stdout + cp2.stderr)
+
+
+class TestSuspectDoc(DocsBase):
+    """FB-39/FB-40: suspect=doc — the doc-bookkeeping fix-in-passing lane
+    workflow/bugs.md already documents (`suspect` in `TB / DUT / spec /
+    doc`), mechanized here for the parts docs.py's --check actually gates
+    on: no detail page required, and CLOSED still needs verify_evidence."""
+
+    def test_suspect_doc_row_without_detail_page_does_not_fail_check(self):
+        bugs = self.doc("bugs.md")
+        bugs.write_text(bugs.read_text(encoding="utf-8")
+                        + "| BUG-0010 | WONTFIX | doc | stale example path "
+                        "fixed in passing | CMD: true | "
+                        "n/a | - | - |\n", encoding="utf-8")
+        cp = run(self.tmp, "docs.py", "--check")
+        self.assertEqual(cp.returncode, 0, cp.stdout + cp.stderr)
+        self.assertNotIn("BUG-0010", cp.stdout)
+
+    def test_suspect_doc_row_cmd_form_min_repro_does_not_fail_check(self):
+        """min_repro's `CMD: ...` form (workflow/bugs.md: 'suspect=doc
+        rows: CMD: form instead' of TEST=/SEED=) is not flagged — docs.py
+        does not validate bugs.md's min_repro column format at all (only
+        testplan's repro cell is checked for SEED), so this is simply the
+        least-surprising behavior: a CMD-form min_repro on a suspect=doc
+        row must not become newly red as a side effect of this migration."""
+        bugs = self.doc("bugs.md")
+        bugs.write_text(bugs.read_text(encoding="utf-8")
+                        + "| BUG-0011 | WONTFIX | doc | n/a | "
+                        "CMD: make selftest | n/a | - | - |\n",
+                        encoding="utf-8")
+        cp = run(self.tmp, "docs.py", "--check")
+        self.assertEqual(cp.returncode, 0, cp.stdout + cp.stderr)
+
+    def test_suspect_doc_closed_without_verify_evidence_still_fails(self):
+        """CLOSED still requires verify_evidence non-empty regardless of
+        suspect — check_evidence() is not suspect-conditional."""
+        bugs = self.doc("bugs.md")
+        bugs.write_text(bugs.read_text(encoding="utf-8")
+                        + "| BUG-0012 | CLOSED | doc | stale link fixed | "
+                        "CMD: true | n/a | abc123 | - |\n", encoding="utf-8")
+        cp = run(self.tmp, "docs.py", "--check")
+        self.assertEqual(cp.returncode, 1)
+        self.assertIn("closure", cp.stdout)
 
 
 if __name__ == "__main__":

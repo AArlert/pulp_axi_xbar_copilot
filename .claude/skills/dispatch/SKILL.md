@@ -3,6 +3,7 @@ name: dispatch
 description: Dispatch-card assembly (copilot profile, orch only) — grade the card (L0–L3), assemble inputs per the fixed card templates, pass the isolation self-check. Run before every subagent dispatch.
 ---
 
+<!-- docsx:skip .claude/agents/orch.md -->
 <!-- Project-owned. Consumer: orch (the main session), before every card.
      This file IS orch's operative contract: upstream 0.8.0 shipped one as
      .claude/agents/orch.md, but that path only ever reaches a *spawned*

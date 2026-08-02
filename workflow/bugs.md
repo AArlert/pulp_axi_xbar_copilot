@@ -7,13 +7,25 @@
 Every failure record's `## taxonomy` section names exactly one. The class
 determines the next action and where the lesson is banked.
 
-Registration is unconditional: any anomaly matching one of the five classes
-below gets a `doc/bugs.md` row, regardless of whether it blocked evidence,
-was worked around and fixed within the same card, or looked like "just" a
-tool/implementation quirk (a `TOOL_ENV` hit mid-implementation, before any
-scenario ever ran, still counts). The point of a taxonomy is that the next
-person can grep it — a class that was resolved inline and never logged
-defeats that purpose as surely as one that was ignored.
+Registration is unconditional: any anomaly matching one of the five
+classes gets a `doc/bugs.md` row, regardless of whether it blocked
+evidence or was worked around within the same card. A class resolved
+inline and never logged defeats the grep.
+
+**Scope: this covers verification failures** — a red sim, a checker
+mismatch, a tool blocking a run. Defects in the bookkeeping itself (stale
+references, hand-copied numbers, format drift in docs/helper scripts)
+take a lighter path (rationale + M4 data: doc/fw-feedback.md FB-39):
+
+- **Fix-in-passing (default).** Fix in the current commit — no row, no
+  card, no detail page, no rev; a commit-message mention is enough.
+- **Register only if the fix turns recorded green red** (false evidence
+  reference, a ✅/CLOSED that no longer stands, a bypassed gate): one
+  `suspect=doc` row + one L0 card. The closer is the machine —
+  `make check` + `make selftest` green ⇒ CLOSED; `min_repro`/
+  `verify_evidence` take the `CMD:` form. No detail page unless the RCA
+  is non-obvious; rev reviews these in batch at closeout. docs-check
+  drops the detail-page and TEST=/SEED= requirements for `suspect=doc`.
 
 **Diagnose in cost order** — cheapest hypothesis first, most expensive
 accusation last:
@@ -22,9 +34,8 @@ accusation last:
 TOOL_ENV → TB_BUG / CONSTRAINT_BUG → SPEC_ISSUE → DUT_BUG
 ```
 
-Blaming the DUT costs the most (a vendored DUT means a patch and possibly an
-upstream report; any DUT means it requires rev signoff), so it is earned by
-eliminating everything else — not reached by default.
+Blaming the DUT costs the most (patch + upstream report; rev signoff
+required), so it is earned by eliminating everything else.
 
 | Class | You are here if… (decision cues, check in order) | Typical next step |
 |---|---|---|
@@ -32,29 +43,25 @@ eliminating everything else — not reached by default.
 | `TB_BUG` | Driver violates protocol timing (e.g. valid waits on ready); monitor samples the wrong edge; scoreboard's expected value derived wrongly — or derived **from the RTL instead of the spec** | Fix TB → rerun this scenario **and** spot-check neighboring scenarios that share the component |
 | `CONSTRAINT_BUG` | Random stimulus produced a protocol-illegal combination; or constraints are so tight the target scenario is unreachable | Fix constraints → **re-examine historical PASSes** of scenarios using the same constraints: were they green only because the stimulus never reached the hard case? |
 | `SPEC_ISSUE` | spec.md contradicts upstream documentation, or does not define the behavior at all; DUT and TB each defensible under a different reading | Escalate to rev arbitration → spec change record + re-pin → sync testplan/affected checkers. Never "interpret locally" and move on |
-| `DUT_BUG` | Waveform shows DUT output violating an explicit spec clause; reproducible with an independent stimulus path (e.g. upstream smoke TB) | Requires rev signoff to assert. Then: vendored DUT → `P-xxx` patch + optional upstream report (see `doc/VENDOR.md`); own RTL → bug to the design side. Always ends with a regression guard |
+| `DUT_BUG` | Waveform shows DUT output violating an explicit spec clause; reproducible with an independent stimulus path (e.g. upstream smoke TB) | Requires rev signoff to assert. Then: vendored DUT → `P-xxx` patch + optional upstream report (see `vendor/VENDOR.md`); own RTL → bug to the design side. Always ends with a regression guard |
 
-**Why `CONSTRAINT_BUG` is its own class.** It could be filed under
-`TB_BUG`, but its follow-up is unique and expensive to forget: a constraint
-bug **invalidates history**. Every past green run that shared the
-constraint may have been vacuously green. No other class forces that
-retroactive audit, so the taxonomy keeps it visible.
+**Why `CONSTRAINT_BUG` is its own class:** a constraint bug
+**invalidates history** — every past green run sharing the constraint may
+have been vacuously green. No other class forces that retroactive audit.
 
 **Mapping to bugs.md.** The summary row's `suspect` column stays coarse
-(`TB / DUT / spec`) for scanability; the taxonomy class lives in the detail
-page. Terminal-state correspondence: `TB_BUG` row state ↔ TB_BUG/
-CONSTRAINT_BUG classes; `SPEC_CHANGED` ↔ SPEC_ISSUE; `CLOSED` ↔ DUT_BUG
-(fixed) or TOOL_ENV (worked around); `WONTFIX` ↔ any class where the
-cost/benefit says stop — the record still needs rca + guard-or-rationale.
+(`TB / DUT / spec / doc`); the taxonomy class lives in the detail page.
+Terminal-state map: `TB_BUG` ↔ TB_BUG/CONSTRAINT_BUG; `SPEC_CHANGED` ↔
+SPEC_ISSUE; `CLOSED` ↔ DUT_BUG (fixed) or TOOL_ENV (worked around);
+`WONTFIX` ↔ cost/benefit stop (still needs rca + guard-or-rationale).
 
 ## The failure record
 
-A failure record (FL) is the project's medical chart for one defect: what
-was observed, where the first anomaly is, what class of failure it was, how
-it was fixed, how it was re-verified, and what now guards against its
-return. Future debugging greps `doc/bugs/` before analyzing from scratch.
-Escape literal `|` in cells as `\|` — an unescaped one shifts every later
-column (docs-check fails the row).
+A failure record (FL) is the medical chart for one defect: symptom, first
+anomaly, class, fix, re-verification, guard. Future debugging greps
+`doc/bugs/` first. Escape literal `|` in cells as
+`\|` (an unescaped one shifts every later column; docs-check fails the
+row).
 
 Two carriers, one record:
 
@@ -67,16 +74,15 @@ Two carriers, one record:
      record; unexpired it passes signoff, due-or-overdue it blocks. Never
      terminal, never archived. (WONTFIX may not mean "later"; OPEN may not
      mean "decided".)
-   - `suspect` ∈ `TB / DUT / spec`. `min_repro` must contain `TEST=` and
-     `SEED=`. `fix_commit` is any *traceable* fix reference: `<sha>` /
+   - `suspect` ∈ `TB / DUT / spec / doc`. `min_repro` must contain `TEST=`
+     and `SEED=` (`suspect=doc` rows: `CMD:` form instead). `fix_commit` is any *traceable* fix reference: `<sha>` /
      `<repo>@<sha>` / `env: <change>` (environment fixes produce no local
      commit). `CLOSED` requires `verify_evidence` to reference an evidence
      record, and the re-runner must not be the fixer (core invariant #3).
-2. **Detail page** `doc/bugs/<BUG-ID>.md` — required as soon as the
-   debugging story exceeds one line; the primary carrier, the row is the
-   index (3000-character table cells proved unreadable once). Fixed `##`
-   sections; a checker validates presence + non-emptiness when
-   `fl_schema_enforce` is true in `iverif.json` (new repos: on):
+2. **Detail page** `doc/bugs/<BUG-ID>.md` — required once the story
+   exceeds one line (`suspect=doc`: only if the RCA is non-obvious); the
+   primary carrier, the row is the index. Fixed `##` sections, validated
+   when `fl_schema_enforce` is true in `iverif.json`:
 
 ```markdown
 # BUG-0007 — write responses reordered under back-pressure
@@ -88,8 +94,8 @@ One-paragraph observable behavior, with the failing check's message.
 signal: dut.i_rsp_fifo.rsp_valid
 time: 12450ns
 how_found: xdebug trace from the scoreboard mismatch backwards
-(The earliest point where reality diverges from spec — the heart of the
-chart. Locate with xdebug; reference waveform time, not vibes.)
+(Earliest point reality diverges from spec; locate with xdebug, reference
+waveform time, not vibes.)
 
 ## taxonomy
 TB_BUG            <- one of the five classes above
@@ -103,21 +109,18 @@ commit: <sha | repo@sha | env: change>
 what: one sentence.
 
 ## rerun
-Evidence records proving the fix: original failing TEST+SEED now passing,
-plus neighboring scenarios re-checked. Non-sim criteria (lint/compile/
-tool output) close via
+Evidence proving the fix: the failing TEST+SEED now passing + neighbors
+re-checked. Non-sim criteria close via
 `make evidence BUG=<ID> CMD='<re-verify cmd>' EXPECT='<signature>'`.
 
 ## regression_guard
 type: sva | covergroup | directed_test | script | checklist
 paths: tb/sva/*.sv         <- binding globs, machine-matched (make guards)
-ref: tb/sva/per_id_order_check.sv
+ref: tb/sva/<checker>.sv
 note: what future regression this blocks.
-(Consumed mechanically by `make guards FILES=...` at card assembly and
-signoff; no `paths:`, no injection. `paths:` = the note's *scope*, not
-`ref:`'s location — a constraint is usually wider than its birth file. A
-checklist guard is a mechanization TODO: note what script/SVA it should
-become, or why it cannot.)
+(Machine-consumed by `make guards`; no `paths:`, no injection. `paths:` =
+the note's *scope*, wider than `ref:`'s birth file. A checklist guard is
+a mechanization TODO: note what it should become, or why it cannot.)
 
 ## similar
 FL ids of related historical failures, or "none searched-on: <keywords>".
@@ -132,11 +135,10 @@ VERIFYING → CLOSED
 ```
 
 Anyone may open. The **fixer never sets CLOSED**: `make evidence
-BUG=<ID> TEST=... SEED=...` writes the re-verification evidence and flips
-the status itself. `SPEC_CHANGED` requires a rev arbitration record and
-triggers the spec change flow (change-record entry + re-pin). With a
-vendored DUT, confirmed DUT bugs are recorded, worked around via a `P-xxx`
-patch (see `doc/VENDOR.md`), optionally reported upstream — the vendored
+BUG=<ID> ...` writes the re-verification evidence and flips the status.
+`SPEC_CHANGED` requires a rev arbitration record + spec change flow
+(change-record entry + re-pin). Vendored DUT bugs: record, work around
+via `P-xxx` patch (`vendor/VENDOR.md`), optionally report upstream — the
 snapshot itself is read-only.
 
 ## RCA template
@@ -156,20 +158,18 @@ guard:      <if this exact defect were re-introduced tomorrow, which check
 
 **Working rules.**
 
-- **Walk backwards, not forwards.** Start from the failing check and trace
-  toward the first anomaly (`xdebug` traces drivers/loads across the
-  hierarchy; `xloc` gives stable short ids for log lines). Forward
-  simulation-reading finds where things *look* wrong; backward tracing
+- **Walk backwards, not forwards.** From the failing check toward the
+  first anomaly (`xdebug` traces drivers/loads; `xloc` gives stable log
+  ids). Forward reading finds where things *look* wrong; backward tracing
   finds where they *went* wrong.
-- **First anomaly beats first symptom.** The scoreboard mismatch at
-  12450ns may originate at 3200ns. The chart records 3200ns.
-- **≤5 links.** If the chain needs more, you have skipped a hypothesis test
-  somewhere — each link should be verifiable in the waveform or the code.
-- **The guard is the deliverable.** rca without a regression guard is a
-  story; with one, it is banked engineering.
-- **Search the chart archive first.** `grep -il "<symptom keyword>"
-  doc/bugs/` — the `## similar` section exists so the third occurrence of a
-  failure class takes minutes, not hours.
+- **First anomaly beats first symptom.** The mismatch at 12450ns may
+  originate at 3200ns; the chart records 3200ns.
+- **≤5 links.** More means a skipped hypothesis test; each link must be
+  verifiable in the waveform or the code.
+- **The guard is the deliverable.** rca without a guard is a story; with
+  one, it is banked engineering.
+- **Search the chart archive first.** `grep -il "<keyword>" doc/bugs/` —
+  so the third occurrence of a class takes minutes, not hours.
 
 ## Dispatch: assertion failure
 
@@ -185,11 +185,10 @@ blaming the DUT.
 | 4 | Same seed, clean rebuild — does it still fire? | no → `TOOL_ENV` | Minimal repro; check `P-xxx` / TOOL_ENV FLs; record the environment cue |
 | 5 | All above eliminated: locate `first_anomaly` in the waveform (`xdebug` backward trace from the assertion time) | `DUT_BUG` **candidate** | Write the FL with first_anomaly + chain, then request rev signoff — only rev's record makes it an asserted DUT bug |
 
-Escalation: if no row resolves it, the failure itself is evidence of a
-`SPEC_ISSUE` (two defensible readings) — take it to rev arbitration.
-
-Every path ends in a failure record (above) with a regression guard. An
-assertion failure that was debugged but not banked will be debugged again.
+Escalation: if no row resolves it, that is itself evidence of a
+`SPEC_ISSUE` (two defensible readings) — rev arbitration. Every path ends
+in a failure record with a regression guard: debugged-but-not-banked will
+be debugged again.
 
 ## Dispatch: regression failure
 

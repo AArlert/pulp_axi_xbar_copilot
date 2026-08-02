@@ -9,6 +9,12 @@ holds a one-line pointer into this table (id below); the original prose is
 preserved here verbatim (mechanical relocation, not a rewrite — discipline
 §3), joined into a single physical line per markdown table-cell syntax.
 
+<!-- docsx:skip workflow/dispatch/coverage_hole.md doc/docsx-baseline.md -->
+G-0011's `note` cell quotes `workflow/dispatch/coverage_hole.md` — a
+pre-0.8.0 upstream path, dead in this layout, carried verbatim from the
+original `doc/bugs/BUG-0011.md` guard prose per this migration's own
+"mechanical relocation, not a rewrite" rule (see the marker above).
+
 Schema (`columns_preset=en`): `| id | bugs | type | paths | check | note |`.
 
 - `id`: guard id (`G-xxx`, matches the source bug's own number —

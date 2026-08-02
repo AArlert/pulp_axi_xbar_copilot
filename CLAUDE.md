@@ -16,15 +16,14 @@
 1. 无 sim log 不 ✅ — 只有 `make evidence` 能把场景变绿。
 2. 记录首行即重放命令（TEST=/SEED= 或 CMD:）。
 3. closer ≠ fixer — 修复卡与关闭卡分两次派发，不给同一执行者。这是派卡时的
-   判断，不是字符串比对。
+   判断，不是字符串比对。适用于验证判断类关闭；文档/记账缺陷的 closer 是
+   机器门禁（`make check` 绿即关，见 `workflow/bugs.md`）。
 4. spec 钉死 — 期望只来自 sha256 钉住的 `doc/spec.md`，永不来自被测 RTL。
 5. 无击杀不采信 — 每 milestone 每类 checker 至少一次注伤自证（植入缺陷→红→
    恢复→绿），`doc/bugs.md` 记一行 `KILL`。机器背书：`make check MILESTONE=<n>`
-   缺 KILL 即红。**本仓库裁决（0.3.6）**：本条自 **M3 起**生效；M0/M1/M2 已在
-   旧 rubric 下合法签核，**不回填** KILL 行（同 FB-23「冻结记录不回改」）。
-   M2 的击杀自证确实做过，取证位置：`doc/evidence/v0.2.5/signoff-M2.md`
-   rubric #5（BUG-0027 缺陷放回见 336 条红后复原）。故
-   `make check MILESTONE=0|1|2` 的条件 4 恒红，**属已知记账缺口，非实质缺口**。
+   缺 KILL 即红。本条自 **M3 起**生效（0.3.6 裁决；M0-M2 按 FB-23 不回填,
+   M2 取证见 `doc/evidence/v0.2.5/signoff-M2.md` rubric #5）——故
+   `MILESTONE=0|1|2` 条件 4 恒红，属已知记账缺口，非实质缺口。
 
 ## §0 角色与隔离（硬性规则）
 
@@ -61,6 +60,8 @@ make check               # 关闭任何卡前必做
 失败：绝不登记为 evidence。按 `workflow/bugs.md` 分诊，登记 `doc/bugs.md`。
 **登记是无条件的**——不因是否阻塞 evidence、是否同卡内已绕过而豁免。本仓库
 为此吃过亏（M1-01 的 VCS-2018 `bind` 变通只落注释未进台账，事后补为 BUG-0007）。
+适用域=**验证失败**；文档/记账缺陷默认顺手修（当前 commit 直接修，零登记），
+仅当修复需**把已记录的绿翻红**才登记，两档细则见 `workflow/bugs.md`。
 
 ## §3 门禁顺序（派发前置条件）
 
@@ -108,16 +109,13 @@ make check               # 关闭任何卡前必做
   `git config core.hooksPath .githooks` ·
   `git remote add --no-tags upstream https://github.com/AArlert/iverif-workflow.git`
   （旧 clone 补 `git config remote.upstream.tagOpt --no-tags`；见 BUG-0055）
-- **上游关系（0.8.0 起变更）**：`workflow/`、`scripts/`、`.claude/agents/` 是
-  上游文件，但**不再有 fwsync/manifest/divergence 三态**——本地怎么改是自己的
-  事，不红。跟进上游：`git fetch upstream --no-tags` 后 `git cherry-pick` 想要
-  的提交。
-  **本仓库的移植基线 = upstream `e23d938`（2026-07-29 跟进；0.8.0 未变）**；
-  "上游比我们多了什么"因此可机械回答：
-  `git log e23d938..upstream/master --oneline`。每次跟进后更新此基线 sha 与
+- **与框架仓的关系（0.5.0 起为双向回流，不再有"上游"一说）**：`workflow/`、
+  `scripts/`、`.claude/agents/` 归本仓库所有，怎么改是自己的事；**实践中检验
+  有效的改动让框架仓来 cherry-pick**（记录在 fw-feedback）。反向取用：
+  `git fetch upstream --no-tags` 后 cherry-pick 想要的提交；移植基线 =
+  upstream `e23d938`，"对方比我们多了什么" =
+  `git log e23d938..upstream/master --oneline`。跟进后更新基线 sha 与
   `iverif.json` 的 `framework` 字段。
-  `scripts/regress.py` 自 0.8.0 起**归本项目所有**（canon 只保留判据原语
-  `scripts/svacheck.py --judge`）。
 - **实践记录 `doc/fw-feedback.md`（旧名沿用，性质已变）**：不再是"求上游修"
   的反馈台账，而是**我们做了什么改动、为什么**——自己先实践，做好了让上游来
   cherry-pick。**硬要求**：既然已无 manifest 记录我们动过哪些上游文件，

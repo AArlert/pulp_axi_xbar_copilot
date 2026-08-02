@@ -14,6 +14,7 @@ import re
 import signal
 import subprocess
 import sys
+from pathlib import Path
 
 from iverif_config import (BUG_ACCEPTED_RE, BUG_DONE_STATES, BUG_STATES,
                            BUG_STATES_NEED_COMMIT, FL_CLASSES, FL_SECTIONS,
@@ -37,6 +38,306 @@ SEMVER_RE = re.compile(r"^0\.(\d+)\.(\d+)$")
 JUNK_RE = re.compile(r"(\.swp$|\.swo$|~$|\.orig$|(^|/)\.DS_Store$)")
 
 ESCAPED_PIPE = "\x00"
+
+# ---------------------------------------------------------------------------
+# FB-40 (2026-08-03): scripts/docsx.py (project-owned) dissolved into this
+# canon file. F1 (number assertion), F3 (bidirectional set assertion via the
+# docsx:bidiff marker), F7 (hardcoded-snapshot heuristic) and F10 (baseline,
+# bidirectional) + the §12 lexical executor they all depended on retired —
+# the checked object (hand-copied derivable facts) is now banned outright by
+# workflow/records.md's "derived facts are never hand-copied" contract, and
+# F7 never caught a real defect. F2 (in-repo path existence), F4 (doc/
+# guards.md guard table) and F5 (orphan bidirectional: bug row <-> detail
+# page, evidence file <-> reference) survive and land here. BUG-0053's
+# tool-marker-leak check (never an F-family) also lands here, unchanged
+# (always-on, no exemption channel — the markers it looks for have zero
+# legitimate occurrence anywhere). See doc/fw-feedback.md FB-40 for the full
+# disposition (what was cut, what was merged, how the F10 baseline debt was
+# retired without regressing `make check`).
+#
+# C1.2 live file set (must include README.md) + C1.3 frozen prefixes
+# (historical record; FB-23 "frozen records are never rewritten").
+F2_LIVE_EXPLICIT = (
+    "README.md", "CLAUDE.md", "doc/bugs.md", "doc/fw-feedback.md",
+    "doc/milestone.md", "doc/testplan.md", "doc/feature-matrix.md",
+    "doc/coverage-waivers.md", "doc/lint-waivers.md", "doc/guards.md",
+)
+F2_LIVE_GLOBS = ("doc/design-prompt/*.md", "workflow/*.md", ".claude/**/*.md")
+FROZEN_PREFIXES = ("doc/review/", "doc/evidence/", "doc/archive/",
+                   "doc/bugs/")
+
+
+def is_frozen(rel):
+    return any(rel == p.rstrip("/") or rel.startswith(p)
+               for p in FROZEN_PREFIXES)
+
+
+def relpath(cfg, p):
+    return str(Path(p).relative_to(cfg.root)).replace("\\", "/")
+
+
+def f2_live_files(cfg):
+    """Existing files in the F2 live set, deterministically ordered. Files
+    the set names but this checkout hasn't grown yet are silently absent,
+    not an error."""
+    seen, out = set(), []
+    for rel in F2_LIVE_EXPLICIT:
+        p = cfg.root / rel
+        if p.exists() and p not in seen:
+            seen.add(p)
+            out.append(p)
+    for pat in F2_LIVE_GLOBS:
+        for p in sorted(cfg.root.glob(pat)):
+            if p.is_file() and p not in seen:
+                seen.add(p)
+                out.append(p)
+    return sorted(out)
+
+
+# F2 — in-repo path existence. Exemptions (both added by FB-40, replacing
+# the retired F10 baseline table): (a) a token inside a fenced code block
+# (```...```) is a worked example, not a live reference — auto-skipped;
+# (b) a `<!-- docsx:skip <token> [<token> ...] -->` marker anywhere in a
+# live file exempts those exact literal tokens for every occurrence in that
+# same file (not a blanket line/file skip — narrowly scoped to the named
+# strings). Total inline markers in this repo: 5 (doc/fw-feedback.md FB-40
+# delivery report enumerates each).
+PATH_TOKEN_RE = re.compile(
+    r'(?<![\w./-])'
+    r'(?:(?:README\.md|doc|scripts|workflow|tb|sim|vendor|\.claude|'
+    r'\.githooks)/[\w./*-]+|README\.md|CLAUDE\.md)'
+)
+DOCSX_SKIP_RE = re.compile(r'<!--\s*docsx:skip((?:\s+\S+)*)\s*-->')
+
+
+def _strip_fenced_lines(text):
+    """Blank every line inside a ``` ... ``` fence (including the fence
+    markers themselves) while preserving line count, so F2 locus line
+    numbers computed against the result still line up with the real file."""
+    out = []
+    in_fence = False
+    for line in text.split("\n"):
+        if line.strip().startswith("```"):
+            in_fence = not in_fence
+            out.append("")
+            continue
+        out.append("" if in_fence else line)
+    return "\n".join(out)
+
+
+def _docsx_skip_tokens(text):
+    tokens = set()
+    for m in DOCSX_SKIP_RE.finditer(text):
+        tokens.update(m.group(1).split())
+    return tokens
+
+
+def check_f2_text(cfg, rel, text):
+    out, seen = [], set()
+    skip = _docsx_skip_tokens(text)
+    masked = _strip_fenced_lines(text)
+    for m in PATH_TOKEN_RE.finditer(masked):
+        tok = m.group(0).rstrip(".")
+        if not tok or is_frozen(tok) or tok in skip:
+            continue
+        line_no = masked.count("\n", 0, m.start()) + 1
+        locus = "%s:%d:%s" % (rel, line_no, tok)
+        if locus in seen:
+            continue
+        seen.add(locus)
+        if "*" in tok:
+            if not list(cfg.root.glob(tok)):
+                out.append((locus, "F2 dead in-repo path reference (glob, "
+                                  "0 matches): %s" % tok))
+            continue
+        if not (cfg.root / tok).exists():
+            out.append((locus, "F2 dead in-repo path reference: %s" % tok))
+    return out
+
+
+def check_f2(cfg, errors):
+    for f in f2_live_files(cfg):
+        rel = relpath(cfg, f)
+        text = f.read_text(encoding="utf-8", errors="replace")
+        for locus, msg in check_f2_text(cfg, rel, text):
+            errors.append(msg + " (" + locus + ")")
+
+
+# F4 — doc/guards.md guard table. The F10-governed "a new type: checklist
+# row needs a baseline-authorized rev_ref (REV-035 §Q3(b)/A-c5)" rule
+# retired with F10 itself — it had no meaning standalone (every checklist
+# row was unconditionally "in violation" until F10's baseline cross-
+# reference silenced it; there is no successor authorization channel, and
+# inventing one to re-litigate 49 already-rev-approved rows is out of this
+# card's scope, see doc/fw-feedback.md FB-40). What remains: `type` must be
+# one of GUARD_TYPES, `paths` must be ASCII (BUG-0061), and a `type: script`
+# row's `check` cell must be non-empty (§12's executor retired with F1/F3/
+# F7, so this is presence-only now, not an executability proof).
+GUARD_TYPES = ("script", "checklist")
+
+
+def load_guards(cfg):
+    if not cfg.guards.exists():
+        return []
+    return parse_table(cfg.guards)
+
+
+def check_f4(cfg, guard_rows):
+    """Returns (viol, warns): viol is keyed by locus (dict, for callers
+    that want to dedupe/inspect); warns is a flat list. `paths` glob with
+    zero matches is a warning only (design contract F4 / REV-037)."""
+    viol, warns = {}, []
+    for row in guard_rows:
+        gid = row.get("id", "").strip()
+        gtype = row.get("type", "").strip()
+        paths_cell = row.get("paths", "")
+        check_cell = row.get("check", "").strip()
+        if gtype not in GUARD_TYPES:
+            viol["doc/guards.md:%s:type" % gid] = (
+                "F4 guard %s: type %r is not one of %s"
+                % (gid, gtype, "/".join(GUARD_TYPES)))
+        if any(ord(c) > 127 for c in paths_cell):
+            viol["doc/guards.md:%s:paths" % gid] = (
+                "F4 guard %s: paths cell contains non-ASCII: %r"
+                % (gid, paths_cell))
+        if gtype == "script" and (not check_cell or check_cell == "-"):
+            viol["doc/guards.md:%s:check" % gid] = (
+                "F4 guard %s: type: script but check= is empty" % gid)
+        globs = [g for g in re.split(r"[,\s]+", paths_cell.strip()) if g]
+        for g in globs:
+            if any(ord(c) > 127 for c in g):
+                continue  # already flagged above; do not double-warn
+            if "*" not in g and not (cfg.root / g).exists():
+                warns.append("F4 guard %s: paths token has zero matches "
+                             "(no glob, path does not exist): %s"
+                             % (gid, g))
+            elif "*" in g and not list(cfg.root.glob(g)):
+                warns.append("F4 guard %s: paths token has zero matches "
+                             "(glob): %s" % (gid, g))
+    return viol, warns
+
+
+def check_f4_gate(cfg, errors, warns):
+    if not cfg.guards.exists():
+        return
+    check_table_structure(cfg.guards, errors)
+    viol, f4_warns = check_f4(cfg, load_guards(cfg))
+    for locus, msg in viol.items():
+        errors.append(msg + " (" + locus + ")")
+    warns.extend(f4_warns)
+
+
+# F5 — orphan bidirectional: bug row <-> doc/bugs/<id>.md detail page (BUG-
+# 0067), evidence file <-> bugs.md(+archive)/testplan.md reference (BUG-
+# 0060). Two accepted-debt channels replace the retired F10 baseline table,
+# both narrower than a general-purpose baseline mechanism:
+#   (1) suspect=doc rows (workflow/bugs.md's FB-39-defined "fix-in-passing"
+#       lane) do not require a detail page at all (CLAUDE.md/workflow/
+#       bugs.md's own contract — a doc-bookkeeping fix-in-passing row is
+#       explicitly "no detail page unless the RCA is non-obvious").
+#   (2) a fixed, closed allowlist of the exact ids/paths REV-038 §B.1 swept
+#       as pre-existing debt when F5 first landed in docsx.py — still
+#       genuinely open (verified 2026-08-03: none of these ids/files have
+#       since gained a page/reference), never appended to. A *new* row or
+#       orphan is not in this set and reddens immediately (proven by the
+#       card's self-injury demonstration, scripts/tests/test_docs.py).
+F5_LEGACY_BUG_IDS = frozenset({
+    "BUG-0002", "BUG-0003", "BUG-0004", "BUG-0005", "BUG-0006", "BUG-0035",
+    "BUG-0049", "BUG-0050", "BUG-0051", "BUG-0052", "BUG-0053", "BUG-0054",
+    "BUG-0055", "BUG-0058", "BUG-0060", "BUG-0061", "BUG-0065", "BUG-0067",
+    "BUG-0069", "BUG-0070", "BUG-0071",
+    "KILL-0001", "KILL-0002", "KILL-0003", "KILL-0004", "KILL-0005",
+    "KILL-0006",
+})
+F5_LEGACY_EVIDENCE = frozenset({
+    "doc/evidence/v0.1.0/M1-01.log",
+    "doc/evidence/v0.2.0/M2-CFG01.log",
+    "doc/evidence/v0.2.0/M2-WO01.log",
+    "doc/evidence/v0.4.17/M4-BP02.log",
+    "doc/evidence/v0.4.23/M1-01.log",
+    "doc/evidence/v0.4.24/M1-01.log",
+    "doc/evidence/v0.4.27/M3-DE01.log",
+})
+F5_LEGACY_DANGLING_REF = frozenset({"doc/evidence/v0.4.38/0048.log"})
+EVIDENCE_LOG_REF_RE = re.compile(r'doc/evidence/[\w./-]+\.log')
+
+
+def check_f5_bug_pages(cfg):
+    """bug row (bugs.md + archive) -> doc/bugs/<id>.md must exist."""
+    viol = {}
+    if not (cfg.bugs.exists() and cfg.bugs_archive.exists()):
+        return viol
+    suspect_col = cfg.C.get("bug_suspect", "suspect")
+    rows = parse_table(cfg.bugs) + parse_table(cfg.bugs_archive)
+    for r in rows:
+        bid = r.get(cfg.C.get("bug_id", "id"), "").strip()
+        if not bid:
+            continue
+        if (cfg.bug_pages / ("%s.md" % bid)).exists():
+            continue
+        if r.get(suspect_col, "").strip().lower() == "doc":
+            continue
+        if bid in F5_LEGACY_BUG_IDS:
+            continue
+        viol["bugs.md:%s" % bid] = (
+            "F5 bug row %s has no detail page doc/bugs/%s.md (BUG-0067)"
+            % (bid, bid))
+    return viol
+
+
+def check_f5_evidence(cfg):
+    """doc/evidence/**/*.log <-> a reference somewhere in bugs.md(+archive)
+    or testplan.md, both directions (BUG-0060)."""
+    viol = {}
+    disk = ({relpath(cfg, p) for p in cfg.evidence_dir.rglob("*.log")}
+           if cfg.evidence_dir.exists() else set())
+    ref_text = ""
+    for p in (cfg.bugs, cfg.bugs_archive, cfg.testplan):
+        if p.exists():
+            ref_text += p.read_text(encoding="utf-8")
+    refs = set(EVIDENCE_LOG_REF_RE.findall(ref_text))
+    for f in sorted(disk - refs):
+        if f in F5_LEGACY_EVIDENCE:
+            continue
+        viol["evidence:%s" % f] = (
+            "F5 evidence file not referenced by bugs.md(+archive)/"
+            "testplan.md: %s" % f)
+    for r in sorted(refs - disk):
+        if r in F5_LEGACY_DANGLING_REF:
+            continue
+        viol["ref:%s" % r] = (
+            "F5 dangling evidence reference (file does not exist): %s" % r)
+    return viol
+
+
+# BUG-0053 — tool-marker leak. Not an F-family: a subagent's `</content>`/
+# `</invoke>` tags leaking into a committed record. Whole-line match only,
+# fenced code blocks excluded. No exemption channel — these markers have
+# zero legitimate occurrence anywhere, at any time.
+TOOL_MARKER_LINES = ("</content>", "</invoke>")
+
+
+def check_tool_marker_leak(rel, text):
+    out = []
+    in_fence = False
+    for i, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if stripped in TOOL_MARKER_LINES:
+            out.append("BUG-0053 tool-marker leak: whole line is %r (%s:%d)"
+                       % (stripped, rel, i))
+    return out
+
+
+def check_tool_marker_leak_tree(cfg, errors):
+    for p in sorted(cfg.root.glob("doc/**/*.md")):
+        rel = relpath(cfg, p)
+        text = p.read_text(encoding="utf-8", errors="replace")
+        errors.extend(check_tool_marker_leak(rel, text))
 
 
 def read_version():
@@ -555,15 +856,15 @@ def cmd_check():
             check_evidence(r.get(CFG.C["bug_verify"], ""),
                            "bugs.md %s closure" % bid, errors)
 
-    # Bug detail pages, both directions: referenced pages must exist; no
-    # orphan pages without a table row (including archived rows). Terminal
-    # bugs' pages must satisfy the failure-record schema when enforced.
-    bugs_text = (CFG.bugs.read_text(encoding="utf-8")
-                 + CFG.bugs_archive.read_text(encoding="utf-8"))
-    for ref in set(re.findall(r"doc/bugs/([A-Za-z0-9_-]+)\.md", bugs_text)):
-        if not (CFG.bug_pages / ("%s.md" % ref)).exists():
-            errors.append("bugs.md references a missing detail page: "
-                          "doc/bugs/%s.md" % ref)
+    # Bug detail pages, both directions: every bug row must have a page
+    # (F5/BUG-0067 — replaces the old, weaker "text explicitly mentions
+    # doc/bugs/X.md" scan, which missed rows that never self-cite their own
+    # page path; suspect=doc rows and the fixed REV-038 §B.1 legacy-debt set
+    # are exempt, see check_f5_bug_pages's docstring / FB-40); no orphan
+    # pages without a table row (including archived rows). Terminal bugs'
+    # pages must satisfy the failure-record schema when enforced.
+    for locus, msg in check_f5_bug_pages(CFG).items():
+        errors.append(msg + " (" + locus + ")")
     state_by_id = {}
     for r in bug_rows + abug_rows:
         state_by_id[r.get(CFG.C["bug_id"], "").strip()] = \
@@ -616,6 +917,16 @@ def cmd_check():
                               % f)
     else:
         warns.append("git ls-files unavailable — junk-file check skipped")
+
+    # FB-40 — merged from scripts/docsx.py: F2 (in-repo path existence over
+    # free prose, not just table cells), F4 (doc/guards.md guard table),
+    # F5's evidence-file direction (bug-page direction is above), and the
+    # BUG-0053 tool-marker-leak scan (always-on, no exemption channel).
+    check_f2(CFG, errors)
+    check_f4_gate(CFG, errors, warns)
+    for locus, msg in check_f5_evidence(CFG).items():
+        errors.append(msg + " (" + locus + ")")
+    check_tool_marker_leak_tree(CFG, errors)
 
     return report(errors, warns)
 
@@ -1183,31 +1494,39 @@ def cmd_explore():
 
 
 def cmd_guards(paths):
-    """Print every registered regression_guard whose `paths:` globs match
-    any given file path. Consumed at card assembly (dispatch self-check)
-    and by rubric #5 — constraint propagation by registered fact, which is
-    what the instance-isolation rules cannot carry (pulp BUG-0015: a guard
-    named the next victim file and nothing consumed it)."""
+    """Print every registered guard (doc/guards.md's F4 table, one row per
+    former `## regression_guard` page section — migrated under REV-038 §C,
+    see doc/design-prompt/doc_mechanization.md §F4) whose `paths:` globs
+    match any given file path. Consumed at card assembly (dispatch
+    self-check) and by rubric #5 — constraint propagation by registered
+    fact, which is what the instance-isolation rules cannot carry (pulp
+    BUG-0015: a guard named the next victim file and nothing consumed it).
+
+    FB-40: this replaces the old page-scan implementation (`## regression_
+    guard` sections in doc/bugs/*.md) now that doc/guards.md is the guard
+    table's load-bearing structure; the *output contract* is unchanged —
+    `"== <bugs> guard (hit: ...) =="` per match + a trailing `"N guard(s)
+    matched"` line — every existing `grep '== BUG-XXXX guard'`-shaped
+    consumer (REV-037 S1-S3, the dispatch SKILL self-check, historical REV
+    records) keeps working. `<label>` is the row's `bugs` cell (not its
+    `id`), byte-identical to the page-scan era's `page.stem`. See
+    doc/fw-feedback.md FB-38 (page-scan -> table era) and FB-40 (this
+    file -> scripts/docsx.py -> back into this file)."""
     import fnmatch
     hits = 0
-    for page in sorted(CFG.bug_pages.glob("*.md")):
-        text = page.read_text(encoding="utf-8", errors="replace")
-        m = re.search(r"^## regression_guard\s*\n(.*?)(?=^## |\Z)", text,
-                      re.M | re.S)
-        if not m:
-            continue
-        block = m.group(1).strip()
-        pm = re.search(r"^paths:\s*(.+)$", block, re.M)
-        if not pm:
-            continue
-        globs = [g for g in re.split(r"[,\s]+", pm.group(1).strip()) if g]
-        matched = [p for p in paths
-                   if any(fnmatch.fnmatch(p, g) for g in globs)]
+    for row in load_guards(CFG):
+        label = row.get("bugs", "").strip()
+        globs = [g for g in re.split(r"[,\s]+", row.get("paths", "").strip())
+                if g]
+        matched = [p for p in paths if any(fnmatch.fnmatch(p, g)
+                                           for g in globs)]
         if matched:
             hits += 1
-            print("== %s guard (hit: %s) ==" % (page.stem,
-                                                " ".join(matched)))
-            print(block + "\n")
+            print("== %s guard (hit: %s) ==" % (label, " ".join(matched)))
+            print("id: %s | type: %s | check: %s"
+                 % (row.get("id", ""), row.get("type", ""),
+                    row.get("check", "")))
+            print(row.get("note", "") + "\n")
     print("%d guard(s) matched" % hits)
 
 
@@ -1243,6 +1562,10 @@ def main():
                              "cites (candidate testplan rows)")
     args = parser.parse_args()
     CFG = load_config()
+    # FB-40: doc/guards.md is not part of iverif_config.Config (docs.py's own
+    # canon class) — attach it here rather than editing that upstream file,
+    # same pattern scripts/docsx.py used before it dissolved into this file.
+    CFG.guards = CFG.root / "doc" / "guards.md"
     if args.pin_spec:
         cmd_pin_spec()
     if args.archive:

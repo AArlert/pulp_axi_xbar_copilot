@@ -40,6 +40,11 @@ class TestCmdEvidence(unittest.TestCase):
                         + "| BUG-0001 | VERIFYING | TB | lint flag gone | "
                         "TEST=x SEED=1 | flags | abc1234 | - |\n",
                         encoding="utf-8")
+        # F5/BUG-0067 (FB-40): every bug row needs a detail page now that
+        # docs.py's --check enforces it directly (not just self-referencing
+        # text mentions) — a stub page keeps this fixture's bug row legal.
+        (self.tmp / "doc" / "bugs" / "BUG-0001.md").write_text(
+            "# BUG-0001\n", encoding="utf-8")
 
     def ev(self, *args):
         return run(self.tmp, "evidence.py", *args)
@@ -368,6 +373,19 @@ class TestBackfillDetails(EvidenceBase):
             "# Bugs\n\n" + _table(EN["bug_header"], [
                 "| BUG-001 | VERIFYING | TB | mismatch | TEST=fixture_test "
                 "SEED=1 | bad expect | abc123 | - |"]), encoding="utf-8")
+        # F5/BUG-0067 (FB-40): every bug row needs a detail page; this row
+        # ends CLOSED (terminal), so fl_schema_enforce also demands every
+        # fixed section be present and non-empty.
+        (self.tmp / "doc" / "bugs" / "BUG-001.md").write_text(
+            "# BUG-001\n"
+            "\n## symptom\nmismatch\n"
+            "\n## first_anomaly\nsignal: x time: 10ns\n"
+            "\n## taxonomy\nTB_BUG\n"
+            "\n## rca\nchain\n"
+            "\n## fix\ncommit: abc123\n"
+            "\n## rerun\nTEST=fixture_test SEED=1\n"
+            "\n## regression_guard\ntype: directed_test ref: t\n"
+            "\n## similar\nnone searched-on: mismatch\n", encoding="utf-8")
         self.write_log(UVM_PASS_LOG)
         cp = self.evidence("--bug", "BUG-001", "--test", "fixture_test",
                            "--seed", "1")

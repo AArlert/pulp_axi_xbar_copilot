@@ -77,21 +77,19 @@ regress:
 check:
 	@python3 scripts/docs.py --check $(if $(SCEN),--scen $(SCEN)) \
 		$(if $(MILESTONE),--milestone $(MILESTONE))
-	@python3 scripts/docsx.py --check
-# docsx.py is project-owned (F1/F2/F7/F10 batch 1; doc/design-prompt/
-# doc_mechanization.md §13 C13.1) — no SCEN/MILESTONE narrowing yet.
-# 见 doc/fw-feedback.md FB-36.
+# FB-40: scripts/docsx.py dissolved back into scripts/docs.py — a single
+# entry point again. F1/F3/F7/F10 + the §12 executor retired; F2/F4/F5 +
+# the BUG-0053 tool-marker-leak scan now live in docs.py's cmd_check().
 
-# Registered regression_guards binding the given files (card assembly +
-# review.md spot-check 6). Usage: make guards FILES="tb/sva/foo.sv tb/bar.sv"
-# Reads doc/guards.md (F4's guard table), not doc/bugs/*.md pages —
-# doc_mechanization.md §13 C13.3 (guard migration's necessary wiring
-# consequence). scripts/docs.py's own cmd_guards is left in place, unused
-# by this target (upstream file, not deleted). Output contract (the
+# Registered guards binding the given files (card assembly + review.md
+# spot-check 6). Usage: make guards FILES="tb/sva/foo.sv tb/bar.sv"
+# Reads doc/guards.md (F4's guard table). Output contract (the
 # "== <bug id> guard (hit: ...) =="/"N guard(s) matched" lines every
-# existing consumer greps) is unchanged. 见 doc/fw-feedback.md FB-38.
+# existing consumer greps) is unchanged since the doc/bugs/*.md page-scan
+# era. 见 doc/fw-feedback.md FB-38 (page-scan -> table), FB-40 (docsx.py ->
+# docs.py).
 guards:
-	@python3 scripts/docsx.py --guards $(FILES)
+	@python3 scripts/docs.py --guards $(FILES)
 
 # VERSION + CHANGELOG skeleton + reminder to tag. make bump minor=1 for a
 # milestone bump (0.M+1.0); default is a patch bump (0.M.P+1).
