@@ -145,7 +145,12 @@ assert）。
 
 **N/A 成因逐条核实（读 RTL 结构，非期望值推导）**：
 
-1. **纯例化壳，无本体过程语句**：`addr_decode.sv`（109 行，只对
+1. **[勘误 E6 → §10：本脚注主体（纯例化壳判定）成立；仅末句"以上均只有 Toggle
+   有意义…Line/Cond/Branch/Assert 无 bin"对 `axi_xbar`/`axi_xbar_unmuxed`/`axi_multicut`
+   三者的 **Assert** 分量失真（三者 Assert=100.00，见 §2.3 表）。§10.3 首行已载此发现，
+   但此前脚注 1 无就地标记、§10.1 无表行、§10.5 无事实行——本条补齐同形处置（BUG-0064）。
+   三态判定不受影响（§2.3 这些格未标 `N/A¹`）。下文原文保留不改。]**
+   **纯例化壳，无本体过程语句**：`addr_decode.sv`（109 行，只对
    `addr_decode_dync` 做参数透传例化）、`axi_demux.sv`（只例化
    `axi_demux_simple` + spill 链）、`axi_multicut.sv`（237 行，纯 generate-for
    例化 `axi_cut` 链，逐行核实无 `always_comb`/`if`/`case`）、`axi_cut.sv`
@@ -421,6 +426,8 @@ Assert）——**9 个 (模块,类型) 组合，跨 8 个模块**，均为 spec 
 | **E2** | 脚注 3（标题 + 正文对 `lzc` 的部分） | "`lzc.sv` 的 Line/**Cond**/**Branch** N/A"；"亲验 `modinfo.txt` `lzc` 小节 Line/**Branch** 均为空白" | `lzc` 模块页实有 Coverage 节 = **Assert / Branch / Cond / Toggle**（**无 Line 节**）；**仅 Line 为 N/A**，Cond=**97.73**、Branch=**97.73** | `modinfo.txt` L146860 起 `lzc` 模块页节种类枚举；`modlist.txt:48` `lzc` 行 = `84.51 -- 97.73 42.59 -- 97.73 100.00`（LINE 列为 `--`，COND/BRANCH 列有数） |
 | **E3** | 脚注 6（成因；N/A 判定本身成立） | "`stream_register.sv` 全文无 `if`/`case`/`?:`，纯组合赋值 + 时序锁存，无条件语句可供 VCS 生成 Cond bin" | 该模块**有** `if`：`:37`/`:38` 的 `FFLARNC` 宏展开出 `if (!rst_ni)` / `if (clr_i)` / `else if (ready_o\|reg_ena)`，urg Line 表逐支计数（37.5/37.8/37.10/38.5/38.8/38.10）、Branch 表列 `IF 37` 与 `IF 38` 各 4 支。**Cond 为 N/A 成立**（该页实有节 = Branch / Line / Toggle，无 Cond 节），**但原成因不成立**；重写见 §10.2 | `modinfo.txt` L2611 起 `stream_register` 模块页：节种类枚举 + Line 表 `ALWAYS 37`/`ALWAYS 38` + Branch 表 `IF 37`/`IF 38` |
 | **E4** | 脚注 5 的括注（**本次 §10.3 抽样反证新发现，不在 BUG-0051 原登记面内，已报 orch**） | "`stream_register.sv` 全文无 `if`" | 同 E3，该句失真。**但脚注 5 承载的是 Assert 格**，其操作性成因"实测无 `assert`"经复核**成立**（`grep -c assert vendor/common_cells/src/stream_register.sv` = **0**；该页无 Assert 节）⇒ `(stream_register, Assert)` 的 N/A 判定与成因**均不受影响** | 同上 + vendor RTL 亲读 |
+| **E5** | §10.2(B)（`:491`）判别式自洽段"有 Cond 节的 11 个模块…全部 Cond bin 的源码行" | "共 **31** 个行号" | **57** 个不同（模块,行号）对 / **53** 个不同行号（两口径互证）。结论"无一例外含 `&&`/`\|\|`/`?:`"不受影响 | `modinfo.txt` 按 `Cond Coverage for Module : <mod>` 分节提取 `LINE <n>`，22 DUT 模块过滤后程序化重算——命令/分布/局限见 §10.5（BUG-0063） |
+| **E6** | 脚注 1 末句（§10.3 首行 2026-08-02 已载，此前未获就地标记/表行/事实行——BUG-0064 同构缺陷处置不对称） | "以上均只有 Toggle 有意义…Line/Cond/Branch/Assert 无 bin"（其列举含 `axi_xbar`/`axi_xbar_unmuxed`/`axi_multicut`） | 该三模块 **Assert=100.00**（有 bin，非"无 bin"）；其 Line/Cond/Branch 仍 N/A 成立 | `modlist.txt`/`modinfo.txt` 该三模块 Assert 节 + §2.3 表逐格；三态判定不受影响（§2.3 未标 `N/A¹`） |
 
 **E1 的影响面**：实例数**不是** `doc/milestone.md` M4 出口条件第二条的判据要件（该条要件
 是"逐格 N/A 附已核实成因"），故 E1 不使任何格判为未满足；但它已被
@@ -488,7 +495,7 @@ Assert）——**9 个 (模块,类型) 组合，跨 8 个模块**，均为 spec 
   - **有 Cond 节的 11 个模块**——`axi_xbar_unmuxed`/`addr_decode_dync`/
     `axi_demux_simple`/`axi_demux_id_counters`/`axi_err_slv`/`axi_atop_filter`/
     `axi_mux`/`rr_arb_tree`/`lzc`/`fifo_v3`/`spill_register_flushable`——其**全部**
-    Cond bin 的源码行（程序化逐行核对，共 31 个行号）**无一例外**都含 `&&`/`||`/`?:`。
+    Cond bin 的源码行（程序化逐行核对，共 31 个行号 **[勘误 E5 → §10：该数与其自称的机器来源不符——从 `modinfo.txt` 按 `Cond Coverage for Module : <mod>` 分节提取 `LINE <n>`（22 DUT 模块过滤）实为 **57** 个不同（模块,行号）对 / **53** 个不同行号；提取命令、分布与局限见 §10.5。结论"无一例外都含 `&&`/`||`/`?:`"不受影响——57/57 逐条回 RTL 均含。下文原文保留不改。]**）**无一例外**都含 `&&`/`||`/`?:`。
   - **无 Cond 节的 11 个模块**——精化后均无此类表达式：`counter`/`addr_decode`/
     `axi_demux`/`axi_multicut`/`axi_cut`/`spill_register`/`axi_id_prepend`/
     `stream_register` 源码 `&&`/`||`/`?:` 计数为 0（`stream_register` 只有按位
@@ -546,4 +553,60 @@ E1 counter self_instances 12
 E2 lzc sections Assert,Branch,Cond,Toggle
 E3 stream_register sections Branch,Line,Toggle
 E4 stream_register rtl_assert_count 0
+E5 cond_bins module_line_pairs 57
+E5 cond_bins distinct_line_numbers 53
+E6 axi_xbar assert_score 100.00
+E6 axi_xbar_unmuxed assert_score 100.00
+E6 axi_multicut assert_score 100.00
 ```
+
+### 10.6 E5/E6 的可重放取数与结构等式（BUG-0063/0064 订正卡追记，2026-08-02·arch·L2）
+
+**处置形态同 §10**：不覆写、不删除，只追加 + 就地标记。E5 就地标记落在 §10.2(B)
+`:491`；E6 就地标记落在脚注 1。两者的 §10.1 表行、上方 `ERRATA-FACTS` 事实行同批补入。
+
+**E5（BUG-0063）——`共 31 个行号` 的正确计数，自 `modinfo.txt` 现场重算**。取数命令
+（只读，未 `make clean`、未 `make regress`、未写 `sim/out/`）：
+
+```
+python3 - <<'PY'
+import re
+DUT={"axi_xbar","axi_xbar_unmuxed","addr_decode","addr_decode_dync","axi_demux",
+ "axi_demux_simple","axi_demux_id_counters","counter","delta_counter","axi_err_slv",
+ "axi_atop_filter","stream_register","axi_mux","axi_id_prepend","rr_arb_tree","lzc",
+ "fifo_v3","axi_multicut","axi_cut","spill_register","spill_register_flushable","axi_pkg"}
+hdr=re.compile(r'^(\S+) Coverage for Module : (\S+)'); ln=re.compile(r'^\s*LINE\s+(\d+)\b')
+metric=mod=None; pairs=set()
+for r in open("sim/out/urgText6/modinfo.txt",encoding="utf-8",errors="replace"):
+    m=hdr.match(r)
+    if m: metric,mod=m.group(1),m.group(2); continue
+    if metric=="Cond" and mod in DUT:
+        x=ln.match(r)
+        if x: pairs.add((mod,int(x.group(1))))
+print(len(pairs),"pairs /",len({n for _,n in pairs}),"distinct lines")
+PY
+```
+
+实测输出：`57 pairs / 53 distinct lines`。逐模块分布（不同行号数，和 = 57）：
+`axi_atop_filter` 19 · `rr_arb_tree` 8 · `spill_register_flushable` 8 · `axi_demux_simple` 4 ·
+`fifo_v3` 4 · `axi_demux_id_counters` 3 · `axi_mux` 3 · `addr_decode_dync` 2 · `axi_err_slv` 2 ·
+`axi_xbar_unmuxed` 2 · `lzc` 2（**11 个模块有 Cond 节**，与 §10.2(B) 的模块枚举一致；6 个
+SVA 模块 `axi_chan_sva`/`axi_xbar_{atop,route,stall,txlimit,worder}_sva` 也各有 Cond 节，
+非 DUT 闭包成员，已被 22 模块过滤排除）。`spill_register_flushable`={53,72,78,79,84,85,90,96}、
+`lzc`={76,95} 与 §10.2(B) 括注的两个子集**逐字一致**——缺陷严格限于"31"这个标量，
+判别式与结论不受影响（57/57 逐条含 `&&`/`||`/`?:`）。
+
+**E6（BUG-0064）——脚注 1 末句"Assert 无 bin"对三壳失真的事实**：`axi_xbar`/
+`axi_xbar_unmuxed`/`axi_multicut` 的 Assert 得分均 **100.00**（§2.3 表逐格，源自
+`modlist.txt`/`modinfo.txt` 各自 Assert 节），故"无 bin"不成立。**结构等式（本条要害，
+钉"同构缺陷必须获得同形处置"而非某条事实）**：§10.3 判为失真的脚注 = {1,3,5,6}（4 条），
+脚注侧就地 `[勘误 E… → §10]` 标记 = 脚注 3(E2)/5(E4)/6(E3) + 本条补的脚注 1(E6) = 4 条
+⇒ **4 == 4**（本条补入 E6 前为 4 != 3）。可机器复算：
+`grep -c '\[勘误 E[0-9]* → §10' <脚注 1-8 区段>` = 4（脚注侧标记数）。
+
+**Q3 局限（须明写，不得默认可重放）**：E5 取数源 `sim/out/urgText6/modinfo.txt` 在
+`.gitignore`（`sim/out/`）内、不受版本控制，且会被任何 `make regress` 删除
+（`scripts/regress.py` 无条件 `make -C sim clean`，另见 BUG-0056/0066）。故本取数
+**不满足七问 Q3"陌生人只凭仓库即可复现"**——这是 §10 全部以 urgText6 为源的断言
+（E1–E6）共有的局限；E6 的三个 Assert 得分同源同限。closer 复验须在有该 vdb/urgText6
+的机器上跑，或先按 §0 命令②从 `out/cov.vdb` 重生 `out/urgText6`（不 `make clean`）。
