@@ -4,6 +4,33 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.11] 2026-08-03 BUG-0044 Step 2 — scoreboard oracle 支持全 ATOP 子类型
+
+**Done**
+- 核实 scoreboard 现有逻辑天然支持全 ATOP 子类型：`write_slv_req` line 547
+  的 `ro.atop[ATOP_R_RESP]` gate 已经是通用的，atomicswap/compare
+  （bit5=1）走 B+R pair 路径，atomicstore（bit5=0）仅 B——**无逻辑改动**。
+- 注释/消息泛化：7 处 "atomic load" → 覆盖全子类型描述（SB_ATOP_OVERLAP、
+  SB_ATOP_DANGLING、SB_SUMMARY、atop_pend 注释块、fcov 注释）。
+- `cg_atop` 增强：`sample_atop` 签名从 `(src_port, r_resp bit)` 改为
+  `(src_port, atop_t)`；新增 `cp_atop_subtype` coverpoint（4 bins：
+  atomicstore/atomicload/atomicswap/atomiccmp，swap/cmp 用 `iff` 区分
+  `atop[3:0]`）。
+- Rev 独立评审 PASS：逻辑正确性全路径追踪确认、coverage bin 核对、接口
+  类型匹配、红线检查通过。5 处 LOW 陈旧注释（rev 发现）已全修。
+
+**Not done**
+- Step 3：atop 约束放开 + 测试场景。
+
+**Next**
+- Step 3（0.5.12）：放开 atop rand 约束到全子类型、注册 testplan 行、写
+  test class、跑仿真（需要 VM 编译验证）、make evidence。
+
+**How verified**
+- `make check` 绿。
+- Rev 独立评审 PASS（四路径追踪 atomicstore/load/swap/compare、coverage
+  bin 编码核对 axi_pkg.sv、`iff` guard 正确性、`sample_atop` 接口一致性）。
+
 ## [0.5.10] 2026-08-03 BUG-0044 裁决 Step 1 — spec §6 补齐 ATOP 子类型条款
 
 **Done**

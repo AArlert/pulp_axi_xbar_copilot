@@ -58,7 +58,7 @@
 //          · SB_OR_REORDER: same-bucket completion order not reordered (§5.2.3, BUG-0013/0027)
 //          · SB_DECERR_ORDER: same-full-id OKAY/DECERR complete in accept order (§5.2.6-2.a)
 //          · decerr resp-code / beat-count / ERR_RDATA (§4.3/§4.4/§4.5, ERR_RDATA from pinned spec §4.4)
-//          · atop B+R pairing (§6.3) — one owed pair retired per atomic load
+//          · atop pairing (§6.3/§6.7/§6.8) — B+R for ATOP_R_RESP=1; B-only for atomicstore (§6.6)
 // ---------------------------------------------------------------------------
 
 `uvm_analysis_imp_decl(_slv_req)
@@ -287,28 +287,29 @@ class xbar_scoreboard extends uvm_scoreboard;
     return (src_port << 8) | tgt_port;
   endfunction
 
-  // ---- C6.3 ATOP atomic-load pair tracking (spec §6.3, M2-AT01) ----------
-  // One record per in-flight atomic load, keyed by (source slv port, full
-  // slv-side id) — unambiguous because the env guarantees the ATOP's ID
-  // differs from every in-flight ID on its port (spec §6.4, uvm_env.md
-  // C2.4/C5.5; SVA C3.5 property 2 watches that discipline independently).
+  // ---- ATOP B+R pair tracking (spec §6.3/§6.7/§6.8, BUG-0044) -----------
+  // One record per in-flight ATOP with ATOP_R_RESP=1 (atomic load, atomicswap,
+  // atomiccompare), keyed by (source slv port, full slv-side id) — unambiguous
+  // because the env guarantees the ATOP's ID differs from every in-flight ID
+  // on its port (spec §6.4; SVA C3.5 property 2 watches independently).
   // The record clears only once *both* the B and the R(last) with that ID
   // returned to the source port; anything still open at end of test is a
-  // §6.3 violation (reported in report_phase — "both must eventually
+  // §6.3/§6.7/§6.8 violation (reported in report_phase — "both must eventually
   // appear", with no B-vs-R order or latency asserted, spec §7.4).
+  // Atomicstore (§6.6, ATOP_R_RESP=0) never enters this tracking.
   typedef struct {
     bit b_seen;
     bit r_seen;
     // Functional coverage only (functional_coverage.md §2
     // cg_atop_read_interaction, spec §6.5 + §5.2.5): was a normal read with
-    // the same low-ID bucket in flight on this port when the atomic load was
-    // issued? Recorded at accept, sampled when the pair completes. Explicitly
+    // the same low-ID bucket in flight on this port when this ATOP was issued?
+    // Recorded at accept, sampled when the pair completes. Explicitly
     // non-decisional — spec §6.5 declares the resulting cross-direction stall
     // normal design behaviour.
     bit collide_read;
     // M5 failure-traceability (milestone.md M5 exit criterion 1): the AW
-    // accept instant of this atomic load, for SB_ATOP_DANGLING to name when
-    // the still-open pair started. Judgement-neutral.
+    // accept instant of this ATOP, for SB_ATOP_DANGLING to name when the
+    // still-open pair started. Judgement-neutral.
     time accept_time;
   } atop_pend_t;
   local atop_pend_t atop_pend[int unsigned];
@@ -537,12 +538,13 @@ class xbar_scoreboard extends uvm_scoreboard;
                                    ro.id[xbar_types_pkg::ID_W_SLV-1:0])))
       fcov.sample_miss_order(xbar_functional_coverage::MO_COEXIST);
 
-    // ---- C6.3 (spec §6.3, M2-AT01): an atomic load owes its source port
-    // *two* responses — the B (already registered by the write-direction
-    // resp_expect above) and an R burst with the same ID (registered here on
-    // the read direction so the C3.2 route check accepts it and report_phase
-    // catches an R that never comes). A dedicated pair record additionally
-    // ties the two halves together.
+    // ---- C6.3/C6.7/C6.8 (spec §6.3/§6.7/§6.8): an ATOP with ATOP_R_RESP=1
+    // (atomic load, atomicswap, atomiccompare) owes its source port *two*
+    // responses — the B (already registered by the write-direction resp_expect
+    // above) and an R burst with the same ID (registered here on the read
+    // direction so the C3.2 route check accepts it and report_phase catches an
+    // R that never comes). A dedicated pair record ties the two halves together.
+    // Atomicstore (§6.6, ATOP_R_RESP=0) owes only B — it never enters here.
     if (ro.is_write && ro.atop[axi_pkg::ATOP_R_RESP]) begin
       int unsigned ak;
       int unsigned rd_k;
@@ -550,11 +552,11 @@ class xbar_scoreboard extends uvm_scoreboard;
       ak = atop_key(ro.port_idx, ro.id[xbar_types_pkg::ID_W_SLV-1:0]);
       if (atop_pend.exists(ak))
         `uvm_error("SB_ATOP_OVERLAP",
-          $sformatf("slv port %0d issued atomic load id 'h%0h while a previous atomic load with the same id is still awaiting B/R — env violated its own spec §6.4 ID-uniqueness discipline (TB_BUG suspect first)",
-                     ro.port_idx, ro.id))
+          $sformatf("slv port %0d issued ATOP (atop='h%0h) id 'h%0h while a previous ATOP with the same id is still awaiting B/R — env violated spec §6.4 ID-uniqueness discipline (TB_BUG suspect first)",
+                     ro.port_idx, ro.atop, ro.id))
       // Coverage bookkeeping (cg_atop_read_interaction, spec §6.5 + §5.2.5):
       // a normal READ still open on this port in the same low-ID bucket is the
-      // situation in which the atomic load's shadow-AR can produce a
+      // situation in which this ATOP's shadow-AR injection can produce a
       // cross-direction false-conflict stall. Observation only.
       rd_k = or_key(ro.port_idx, 1'b0,
                     id_bucket(ro.id[xbar_types_pkg::ID_W_SLV-1:0]));
@@ -563,7 +565,7 @@ class xbar_scoreboard extends uvm_scoreboard;
                         accept_time: ro.accept_time};
       resp_expect[resp_key(ro.port_idx, 1'b0,
                            ro.id[xbar_types_pkg::ID_W_SLV-1:0])]++;
-      // The atomic load's R half is likewise a normal (is_err=0) owed response;
+      // This ATOP's R half is likewise a normal (is_err=0) owed response;
       // its B half was already queued by the write-direction push above.
       err_order_q[resp_key(ro.port_idx, 1'b0,
                            ro.id[xbar_types_pkg::ID_W_SLV-1:0])].push_back(1'b0);
@@ -843,8 +845,8 @@ class xbar_scoreboard extends uvm_scoreboard;
       // NoSlvPorts=1's 0-bit prefix legal (scoreboard_refmodel.md C5.7).
       src_port = ro.id >> xbar_types_pkg::ID_W_SLV;
       fcov.sample_addr_reconfig(rec.post_change, src_port); // spec §3.4
-      if (ro.is_write && ro.atop != '0)                     // spec §6.3/§6.1
-        fcov.sample_atop(src_port, ro.atop[axi_pkg::ATOP_R_RESP]);
+      if (ro.is_write && ro.atop != '0)                     // spec §6.1/§6.3/§6.6-6.8
+        fcov.sample_atop(src_port, ro.atop);
     end
     route_match_cnt++;
   endfunction
@@ -911,10 +913,10 @@ class xbar_scoreboard extends uvm_scoreboard;
       if (err_order_q.exists(rk) && err_order_q[rk].size() == 0) err_order_q.delete(rk);
     end
 
-    // ---- C6.3 (spec §6.3): mark this port+id's atomic-load pair half. Safe
-    // to key on (port, id) alone: while the pair is open no other in-flight
-    // transaction on this port may carry the same ID (spec §6.4 env
-    // discipline), so a B/R with this ID can only belong to the atomic load.
+    // ---- C6.3/C6.7/C6.8 (spec §6.3/§6.7/§6.8): mark this port+id's ATOP
+    // pair half. Safe to key on (port, id) alone: while the pair is open no
+    // other in-flight transaction on this port may carry the same ID (spec §6.4
+    // env discipline), so a B/R with this ID can only belong to this ATOP.
     begin
       int unsigned ak;
       atop_pend_t  ap;
@@ -924,9 +926,9 @@ class xbar_scoreboard extends uvm_scoreboard;
         if (ro.is_write) ap.b_seen = 1'b1;
         else             ap.r_seen = 1'b1;
         if (ap.b_seen && ap.r_seen) begin
-          // cg_atop_read_interaction (spec §6.5 + §5.2.5): the §6.3 pair
-          // judgement for this atomic load has just landed — record the
-          // situation captured at its issue. Observation only.
+          // cg_atop_read_interaction (spec §6.5 + §5.2.5): the B+R pair
+          // judgement for this ATOP has just landed — record the situation
+          // captured at its issue. Observation only.
           fcov.sample_atop_read_interaction(ap.collide_read);
           atop_pend.delete(ak);
           atop_pair_cnt++;
@@ -1088,7 +1090,7 @@ class xbar_scoreboard extends uvm_scoreboard;
     pending_total = 0;
     foreach (pending_by_id[k]) pending_total += pending_by_id[k].size();
     `uvm_info("SB_SUMMARY",
-      $sformatf("route: match=%0d mismatch=%0d | resp: match=%0d mismatch=%0d | resp-route(C3.2): match=%0d mismatch=%0d | pending(unmatched at end)=%0d | stall(C5.1/C5.2): violations=%0d open(unmatched at end)=%0d | atop(C6.3): pairs=%0d open(unpaired at end)=%0d | worder(C5.4): match=%0d mismatch=%0d open(unmatched at end)=%0d | decerr(§4): resp=%0d order_violations=%0d",
+      $sformatf("route: match=%0d mismatch=%0d | resp: match=%0d mismatch=%0d | resp-route(C3.2): match=%0d mismatch=%0d | pending(unmatched at end)=%0d | stall(C5.1/C5.2): violations=%0d open(unmatched at end)=%0d | atop(§6.3/§6.6-6.8): pairs=%0d open(unpaired at end)=%0d | worder(C5.4): match=%0d mismatch=%0d open(unmatched at end)=%0d | decerr(§4): resp=%0d order_violations=%0d",
                  route_match_cnt, route_mismatch_cnt, resp_match_cnt,
                  resp_mismatch_cnt, resp_route_match_cnt,
                  resp_route_mismatch_cnt, pending_total,
@@ -1132,12 +1134,12 @@ class xbar_scoreboard extends uvm_scoreboard;
                      resp_expect[k], ((k >> 5) & 1) ? "B(write)" : "R(read)"))
       end
     end
-    // C6.3 (spec §6.3): every atomic load must have returned *both* its B
-    // and its R by end of test — an open pair record means one (or both)
+    // C6.3/C6.7/C6.8: every ATOP with ATOP_R_RESP=1 must have returned *both*
+    // its B and its R by end of test — an open pair record means one (or both)
     // halves never appeared.
     foreach (atop_pend[k]) begin
       `uvm_error("SB_ATOP_DANGLING",
-        $sformatf("slv port %0d atomic load id 'h%0h (AW accepted@%0t) never completed its response pair (B seen=%0d, R seen=%0d) — spec §6.3 requires both B and R to return",
+        $sformatf("slv port %0d ATOP id 'h%0h (AW accepted@%0t) never completed its response pair (B seen=%0d, R seen=%0d) — spec §6.3/§6.7/§6.8 requires both B and R to return",
                    (k >> 5), (k & 'h1f), atop_pend[k].accept_time,
                    atop_pend[k].b_seen, atop_pend[k].r_seen))
     end

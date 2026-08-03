@@ -21,8 +21,8 @@
 //   cg_stall                  spec §5.2      (M2-OR01 / M2-OR02)
 //   cg_tx_limit               spec §2.1 MaxMstTrans row + §5.4.1 (M2-TL01/TL02)
 //   cg_w_order                spec §5.5      (M2-WO01)
-//   cg_atop                   spec §6.3      (M2-AT01)
-//   cg_atop_read_interaction  spec §6.5 + §5.2.5 (M2-AT01)
+//   cg_atop                   spec §6.3/§6.6-6.8 (M2-AT01, BUG-0044)
+//   cg_atop_read_interaction  spec §6.5 + §5.2.5 (M2-AT01, BUG-0044)
 //
 // The numeric ceilings come from the pinned baseline Cfg in xbar_types_pkg
 // (whose sole parameter-definition source is vendor/axi/src/axi_pkg.sv,
@@ -173,25 +173,32 @@ class xbar_functional_coverage extends uvm_component;
     }
   endgroup
 
-  // ---- cg_atop (spec §6.3, M2-AT01) -------------------------------------
-  covergroup cg_atop with function sample(int unsigned src_port, bit r_resp);
+  // ---- cg_atop (spec §6.3/§6.6/§6.7/§6.8, BUG-0044) --------------------
+  covergroup cg_atop with function sample(int unsigned src_port,
+                                          axi_pkg::atop_t atop_val);
     option.per_instance = 1;
     cp_atop_src_port: coverpoint src_port {
       bins port[] = {[0:xbar_types_pkg::NO_SLV_PORTS-1]};
     }
-    cp_atop_r_resp: coverpoint r_resp {
+    cp_atop_r_resp: coverpoint atop_val[axi_pkg::ATOP_R_RESP] {
       bins read_resp_required = {1'b1};
       bins no_read_resp       = {1'b0};
+    }
+    cp_atop_subtype: coverpoint atop_val[5:4] {
+      bins atomicstore = {axi_pkg::ATOP_ATOMICSTORE};
+      bins atomicload  = {axi_pkg::ATOP_ATOMICLOAD};
+      bins atomicswap  = {2'b11} iff (atop_val[3:0] == 4'b0000);
+      bins atomiccmp   = {2'b11} iff (atop_val[3:0] == 4'b0001);
     }
     x_src_rresp: cross cp_atop_src_port, cp_atop_r_resp;
   endgroup
 
   // ---- cg_atop_read_interaction (observational, spec §6.5 + §5.2.5) ------
   // Whether a normal read with the SAME low-ID bucket was in flight on the
-  // same slave port when the atomic load was issued. Purely a record of the
-  // situation: spec §6.5 states the resulting cross-direction stall is normal
-  // design behaviour affecting only performance, so no checker anywhere may
-  // draw a verdict from this bin's hit/miss.
+  // same slave port when the ATOP (ATOP_R_RESP=1) was issued. Purely a record
+  // of the situation: spec §6.5 states the resulting cross-direction stall is
+  // normal design behaviour affecting only performance, so no checker anywhere
+  // may draw a verdict from this bin's hit/miss.
   covergroup cg_atop_read_interaction with function sample(bit colliding);
     option.per_instance = 1;
     cp_atop_read_collision: coverpoint colliding {
@@ -491,8 +498,8 @@ class xbar_functional_coverage extends uvm_component;
     n_w_order++;
   endfunction
 
-  function void sample_atop(int unsigned src_port, bit r_resp);
-    cg_atop.sample(src_port, r_resp);
+  function void sample_atop(int unsigned src_port, axi_pkg::atop_t atop_val);
+    cg_atop.sample(src_port, atop_val);
     n_atop++;
   endfunction
 
