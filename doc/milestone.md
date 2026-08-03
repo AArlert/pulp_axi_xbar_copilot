@@ -13,13 +13,13 @@ git tag `v0.5.3-pre-reset` 及更早历史）；0.5.4 起本仓库以"接手者"
 | M2 | 功能场景 + SVA + 功能覆盖（8 场景） | ✅ |
 | M3 | 多配置回归 + 错误路径（11 场景，cfgA–E 配置点） | ✅ |
 | M4 | 六类覆盖测量基建 + 全闭包三态扫描 + 每格具名归属 | ✅ |
-| M5 | 约束随机 + 多种子回归 + 压力/soak | 🔲 进行中 |
-| M6 | 六类覆盖 ≥90% 收敛（含 Toggle） | 🔲 计划 |
+| M5 | 约束随机 + 多种子回归 + 压力/soak | ✅ |
+| M6 | 六类覆盖 ≥90% 收敛（含 Toggle） | 🔲 进行中 |
 
 M0–M4 的详细出口条件与逐条兑现记录不再在本页维护——git 历史即档案
 （`git show v0.5.3-pre-reset:doc/milestone.md`）。
 
-## M5 — 约束随机 + 多种子回归 + 压力/soak 🔲
+## M5 — 约束随机 + 多种子回归 + 压力/soak ✅
 
 **性质**：验证方法论成熟度轴，与 M4/M6 的结构覆盖率百分比轴正交。随机只能
 加固/发现，不承担 ≥90% 收敛门（那是 M6）。
@@ -51,9 +51,9 @@ M0–M4 的详细出口条件与逐条兑现记录不再在本页维护——git
 ### 场景骨架
 
 六行（M5-RN01..03 约束随机 + M5-SK01..03 soak，baseline/cfgA/cfgB 三点由
-soak 行顺带承担、长随机是随机 vseq 的超集）已注册进 `doc/testplan.md`
-(status 🔲，判据/must-reach 角落/红线逐行落地)——**场景真值表以 testplan.md
-为准，本页不重复维护该表**，避免两处漂移。下面这份约束设计要点是 testplan
+soak 行顺带承担、长随机是随机 vseq 的超集）已注册进 `doc/testplan.md`，后随
+BUG-0044 裁决增补第七行 M5-AT03（ATOP 子类型定向）——**场景真值表以
+testplan.md 为准，本页不重复维护该表**，避免两处漂移。下面这份约束设计要点是 testplan
 六行共享的设计依据，由各行引用，不是场景清单本身。
 
 **反稀释四条**（随机场景不得靠"跑了不报错"混绿）：
@@ -78,16 +78,25 @@ soak 行顺带承担、长随机是随机 vseq 的超集）已注册进 `doc/tes
       PASS（无 silent-pass、无 RTL 值泄漏为期望值、无 latency-bake）；
       故意注入两类失败（id 公式破坏、addr 篡改）现场验证消息格式后已还原，
       `make regress` 30/30 复绿。
-- [ ] **约束随机激励层**：上述约束设计落地，`xbar_random_vseq` 在 6 配置点
-      全部跑通（M5-RN01..03 + SK01..03 六行 ✅，经 `make evidence`）
-- [ ] **多种子回归**：定向场景底线 N=5 固定种子、时序/保序子集 N=10，种子行
-      入 `sim/regress/regress.list`，`make regress` 全绿
-- [ ] **压力/soak**：三拓扑 soak 行判据 = scoreboard/SVA 零失败 + 无 watchdog
+- [x] **约束随机激励层**：上述约束设计落地，soak/随机层在 6 配置点全部
+      跑通（M5-RN01..03 + SK01..03 六行 ✅，经 `make evidence`；实际落地为
+      directed-random hybrid `xbar_soak_seq/vseq`，通用 rand/constraint 层
+      的保留名 `xbar_random_vseq` 留给未来扩张，见 testplan M5-SK01 行注）。
+      落地后收口审计（0.5.15）补齐三处 must-reach 缺口：AT03 atomicload
+      阶段（BUG-0076）、decode-miss leg（BUG-0077）、fall-through AW/W
+      解耦呈现（BUG-0078），证据重生成于 doc/evidence/v0.5.15/
+- [x] **多种子回归**：定向场景底线 N=5 固定种子、时序/保序子集 N=10，种子行
+      入 `sim/regress/regress.list`，`make regress` 全绿——0.5.15 兑现：
+      241 行（定向 16 测试 ×5 + 时序/保序子集 14 测试 ×10：OR/TL/WO/AT02/
+      CFG02/AW01/BP02/BP03 + M5 7 测试 ×3），241/241 PASS 无 flaky
+- [x] **压力/soak**：三拓扑 soak 行判据 = scoreboard/SVA 零失败 + 无 watchdog
       超时（liveness，§5.5.4 无饿死性质）+ 覆盖率饱和作停止判据；判决延迟
-      不敏感（§7.4）
-- [ ] **BUG-0044 裁决**：ATOP 非-load 三子类（store/swap/compare）应答义务
-      ——补 spec §6 条款 + 定向场景 + oracle，或书面记为范围外（构造随机
-      场景时二选一，不拖过 M5）
+      不敏感（§7.4）——SK01/SK02/SK03 三行 ✅，must-reach（桶×方向压到
+      有效上限 15 + ≥2 桶同时非空）由 cg_tx_limit/cg_xbucket_total 见证
+- [x] **BUG-0044 裁决**：ATOP 非-load 三子类（store/swap/compare）应答义务
+      ——取"补 spec 条款"支：spec §6.6/6.7/6.8 落地 + scoreboard oracle
+      按 `atop[ATOP_R_RESP]` 泛化 + M5-AT03 定向场景 PASS，BUG-0044
+      CLOSED（0.5.13；0.5.15 补 atomicload 阶段使四子类型 bins 全命中）
 
 ## M6 — 六类覆盖 ≥90% 收敛（含 Toggle）🔲
 

@@ -4,6 +4,28 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.6.0] 2026-08-04 M5 收口 → M6 开启
+
+**Done**
+- milestone.md M5 簿记收口：四条 exit criteria 全部 [x]（各附兑现注记与
+  证据指针）、Abstract M5 ✅、M6 转"进行中"、场景骨架注记补第七行
+  M5-AT03；本次收口由 0.5.15 新增的 milestone 一致性检查（Abstract ↔
+  复选框 ↔ version.json 三方对齐）机械看护，与 bump minor 原子落地。
+- M6 准备（0.5.15 已落）：§M6 步 0（测量基线：`make regress COV=1` 合并
+  测量 →（模块,类型）格现状表 → 对照 M4 UNOWNED 清单标注归属）写入
+  milestone.md；xcov 在位、COV=1 流程、pre-reset 缺口清单指针均已验证。
+
+**Not done**
+- M6 全部工作（步 0 起）。
+- BUG-0075（休眠 TB_BUG，M6 二选一处置）。
+
+**Next**
+- M6 步 0：`make regress COV=1` 测量基线 + 现状表落 doc/evidence/。
+
+**How verified**
+- `make check` 全绿（milestone 一致性三方检查在位）；M5 出口条件逐条对照
+  0.5.15 的 241/241 回归与 v0.5.15 证据（见上一块与 milestone.md 注记）。
+
 ## [0.5.15] 2026-08-04 M5 收口审计修复 + 多种子出口达标 241/241 PASS
 
 **Done**
