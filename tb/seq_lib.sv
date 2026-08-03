@@ -2843,6 +2843,18 @@ class xbar_soak_seq extends uvm_sequence #(axi_seq_item);
     fire_round(1'b0, tgt, peak_buckets, peak_depth, 32'h0020_0000,
                $sformatf("xrand_r_%0d_peak", slv_port_idx));
 
+    // ---- target sweep: visit every master port round 0 did not hit (rev
+    // finding for cfgA where NO_SLV_PORTS=1 and round 0 only hits tgt=0;
+    // testplan M5-SK03 must-reach: "唯一 slave 端口须对全部 8 个 master 端口
+    // 均产生流量"). One single-item burst per port, one direction — negligible
+    // watchdog cost (NO_MST_PORTS × 1 item × resp_hold). ----
+    for (int unsigned m = 0; m < xbar_types_pkg::NO_MST_PORTS; m++) begin
+      if (m == tgt) continue;
+      fire_round(1'b1, m, '{0}, '{1},
+                 32'h0040_0000 + xbar_types_pkg::addr_t'(m) * 32'h4000,
+                 $sformatf("xsoak_%0d_sweep_m%0d", slv_port_idx, m));
+    end
+
     // ---- remaining rounds: randomized bucket set/depth/target/direction ----
     for (int unsigned r = 1; r < num_rounds; r++) begin
       int unsigned n_bk;
