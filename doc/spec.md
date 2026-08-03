@@ -1,7 +1,7 @@
 # axi_xbar DUT 行为规格（单一事实源）
 
-> v0：初稿经 REV-001 评审（条件通过）并按其 C1~C5 修订后应用，
-> sha256 pin 于 `doc/spec.sha256`（`docs.py --pin-spec` 维护）。
+> 本文的演化历史（含历次评审与仲裁依据）见 git log；不再另设修改记录表与
+> sha256 pin（0.5.4 重置起，git 即历史）。
 
 本文从上游材料机械提炼（pulp-platform/axi **v0.39.9**，SHA
 `a256a3b86394fedf19e361047fccfdd7f6ef83e4`，pin 记录见 `vendor/VENDOR.md`）：
@@ -183,10 +183,11 @@
    Default Slave Port 全段无 atop/atomic；demux.md/mux.md 对 err_slv 无记载；
    §4.3 只按读/写二分对写事务给**单拍 B**、§6.3 又要求原子读 **B 与 R 两通道
    都应答**，两读互斥；禁读实现体定义之）。**环境约束（BUG-0032 裁决，
-   REV-012 §Item 1；M4 重开并延展至 M4，BUG-0039 裁决，REV-017 §Item 3）**：
-   M3 与 M4 全部场景**不向译码未命中地址发起任何 ATOP**
-   （送往未命中地址的 AW 恒 `aw.atop ≡ '0`），使上述未定义情形**构造性
-   不可触发**。**范围澄清（M4-RC01 裁决，REV-018）**：本约束中的"译码未命中
+   REV-012 §Item 1；M4 延展 BUG-0039/REV-017；0.5.4 起改为里程碑无关写法，
+   BUG-0074 裁决）**：DV 激励（定向与随机）**默认不向译码未命中地址发起任何
+   ATOP**（送往未命中地址的 AW 恒 `aw.atop ≡ '0`），与里程碑无关——约束随机
+   层须把本条编码进 constraint；解禁前须先为 err_slv×ATOP 应答补许可来源
+   （重开 BUG-0032）。该约束使上述未定义情形**构造性不可触发**。**范围澄清（M4-RC01 裁决，REV-018）**：本约束中的"译码未命中
    地址"取**宽读**——泛指地址不匹配任何 rule 的全部地址，**不论**该 slave
    端口当下是否使能 default master port（即含"未命中但经 default 路由到
    真实 master 端口"的合法地址）；有意保守而非疏漏：其一，§3.4.2 default
@@ -198,13 +199,13 @@
    据此，decode-error 维度**不整体降级**，在"未命中地址上
    `aw.atop ≡ '0`"的合法子集上正常写 checker。"若强行违反本约束触发该组合时
    err_slv 如何应答"仍为许可来源未定义，作为**上游确认项**另行追踪，
-   **不阻塞** M3 与 M4；未取 DUT_BUG（无任何波形/证据显示行为违规）。**M4
-   覆盖率后果（BUG-0039 裁决，REV-017）**：本 DUT 层次内全部 `axi_atop_filter`
+   **不阻塞**任何里程碑；未取 DUT_BUG（无任何波形/证据显示行为违规）。
+   **覆盖率后果（BUG-0039 裁决，REV-017）**：本 DUT 层次内全部 `axi_atop_filter`
    实例均在 `axi_err_slv` 内（`axi_err_slv.sv:45-58`，`ATOPs=1` 时例化），其
    W/R FSM 离开 `W_FEEDTHROUGH`/`R_FEEDTHROUGH` 的唯一触发是收到
    `aw.atop[5:4] != ATOP_NONE` 的 AW（`axi_atop_filter.sv:138`），而该 AW
    仅能经译码未命中路径抵达 err_slv——恰为本约束所禁。故该 FSM 中仅经此被禁
-   激励可达的状态与迁移弧，在 M4 六类收敛中记为**环境约束致不可达**，按 §0
+   激励可达的状态与迁移弧，在六类覆盖收敛中记为**环境约束致不可达**，按 §0
    item 4"有 bin 但 <90%"分支出具 **rev 签核的书面豁免**（成因＝本约束，
    逐弧记录见 M4 签核文档，**不计入** ≥90% 的分子与分母；此为"有 bin"情形，
    **不适用** §0 item 4 的"无 bin ⇒ N/A"三态规则）。解除本约束以激励该
@@ -477,29 +478,13 @@
 2. `Connectivity[i][j]=0`（稀疏连接）时，"从 slave 端口 `i` 发出、地址译码
    命中**非连通** master 端口 `j`" 的事务如何应答，**许可来源未定义**
    （xbar.md 无 Connectivity 任何记载；禁读实现体定义之）。
-3. **环境约束（BUG-0002 裁决，REV-001 §5）**：M3/M4 稀疏 `Connectivity`
-   配置下，地址表（`addr_map_i`）与 default master port 须构造为**不把任一
+3. **环境约束（BUG-0002 裁决，REV-001 §5；0.5.4 起改为里程碑无关写法，
+   BUG-0074 裁决）**：稀疏 `Connectivity` 配置下（任何里程碑，定向与随机；
+   约束随机层须把本条编码进 constraint），地址表（`addr_map_i`）与 default
+   master port 须构造为**不把任一
    slave 端口 `i` 的任何地址译码到其非连通 master 端口 `j`（`Connectivity[i][j]=0`）**，
    使上述未定义情形**构造性不可触发**。据此，稀疏 `Connectivity` 维度**不整体
    降级**，在"地址表与连通矩阵一致"的合法子集上正常写 checker。
 4. "若强行违反 §8.3 约束触发该情形时 DUT 如何应答"仍为许可来源未定义，作为
-   **上游确认项**另行追踪，**不阻塞** M3/M4；未取 DUT_BUG（无任何波形/证据
-   显示行为违规）。
-
-## Change record
-
-| # | 日期 | 版本 | 章节 | 摘要 | 依据 |
-| --- | --- | --- | --- | --- | --- |
-| 1 | 2026-07-27 | 0.0.0 | 全文 | v0 初稿（草稿 spec-draft-v0.md，待 rev 评审后应用至 spec.md 并重 pin） | vendor/axi/doc/{axi_xbar,axi_demux,axi_mux}.md、src/axi_pkg.sv 定义段、src/axi_xbar.sv 声明段 @ v0.39.9（SHA a256a3b8） |
-| 2 | 2026-07-27 | 0.0.1 | §0(item 2/4/5)、§2.1、§3.1、§4、§5.2、§5.5、§6、§7.4、§8 | v0 修订（依据 REV-001）：C1 补齐 §0 基线全 13 Cfg 字段 + ATOPs/Connectivity 钉定值；C2 修正 §0 item 4/5 子模块层次（axi_xbar_unmuxed/addr_decode 列为强制内部核心子模块，移出范围外清单）；C3 应用 BUG-0002~0005 四条裁决（§8 构造性环境约束 / §6 无-ATOP 环境约束 / §2.1·§7.4 延迟不敏感+周期数未定义 / §2.1·§3.1 采信 xbar.md NoAddrRules 口径）；C4 §5.5 加固 round-robin 措辞；C5 §4 补写路 B(DECERR)、§5.2.4 标注派生条款 | REV-001（doc/review/REV-001.md）；基线数值来源：上游 tb 默认（REV-001 核对） |
-| 3 | 2026-07-27 | 0.2.0 | §2.1、§5.2、§5.4、§6 | M2 蒸馏三条新发现 SPEC_ISSUE 裁决应用（依据 REV-005，仅落地 REV-005 §3 逐条列明的"orch 应用范围"，不外溢）：BUG-0010 `MaxMstTrans` 由扁平口径改为按（约简 ID 桶×方向）分桶计数口径（§2.1、§5.4.1），并标注其与 §5.2 保序 stall 共用同一底层计数器/目标绑定寄存器机制；BUG-0011 保留 §5.4.2 可观测上界 + "per ID"采 xbar.md 口径澄清，执行机制列上游确认项、不阻塞里程碑（§5.4.3）——§2.1 `MaxSlvTrans` 字段行未改动（REV-005 该条裁决未授权此行）；BUG-0012 补 ATOP 原子读注入 AR 计数器可致读方向跨方向假冲突 stall 的派生条款（§6.5），并在 §5.2 加交叉引用（§5.2.5） | REV-005（doc/review/REV-005.md）；来源：vendor/axi/doc/axi_demux.md §Ordering and Stalls→Implementation（L70-74）、§Atomic Transactions→Implementation（L83-87）、axi_xbar.md L46/L47、axi_pkg.sv L489-494/L510、axi_mux.md（全篇核验，无对应按 ID 分桶计数机制段落）@ v0.39.9（SHA a256a3b8） |
-| 4 | 2026-07-28 | 0.2.0 | §5.2、§7.4、§5.4 | M2-OR01 仿真新发现 BUG-0013 裁决应用（依据 REV-006，仅落地 REV-006 §3 逐条列明的"orch 应用范围"）：收窄 §5.2.1"接受边界"字面表述为"不早于完成、判决锚完成序（§5.2.3）"，消除与基线 `CUT_ALL_AX` spill register 弹性缓冲的假红；§7.4 新增第 5 条，把"接受/拒收边界即时性"通用归入延迟不敏感表现（同时覆盖 §5.2 stall 与 §5.4.3 拒收，预防 M2-TL01 独立撞见同类交互）；§5.4.3 MaxMstTrans 侧句尾加交叉指针至 §7.4.5。§5.2.3 正文未改动（现文已充分表述功能目的，surgical） | REV-006（doc/review/REV-006.md）；来源：vendor/axi/doc/axi_xbar.md §Ordering and Stalls（L84/L86）、vendor/axi/doc/axi_demux.md §Configuration（L31）/§Pipelining and Latency（L37）/§Implementation（L70-74）、vendor/axi/src/axi_demux.sv（L89-116/L189-209 spill-register 结构） @ v0.39.9（SHA a256a3b8） |
-| 5 | 2026-07-28 | 0.2.0 | §2.1、§5.4、§7.4 | M2-TL01/TL02 仿真新发现 BUG-0016 裁决应用（依据 REV-007，taxonomy 终判 SPEC_ISSUE，改判 DUT_BUG——DUT 未产生错误输出、`MaxTrans` 为 `idx_width` 定宽提示而非精确上限，许可来源三方矛盾；仅落地 REV-007 §5 逐条列明的"orch 应用范围"，不外溢）：§5.4.1 把每桶在飞上限由字面 `≤MaxMstTrans` 改为**有效上限 `2^idx_width(MaxMstTrans)−1 = 2^⌈log₂MaxMstTrans⌉−1`**（基线 10⇒15；`MaxTrans` 从不进比较器、full 判据为 `&in_flight` 全一）；§5.4.2 **撤销**"每 ID ≤ MaxSlvTrans"可断言上界（`MaxSlvTrans`→`axi_mux.MaxWTrans` = AW→W ID 高位 FIFO 深度、mux 无 per-ID 在飞计数机制），并正式收回 REV-005 为 M2-TL02 解锁的"≤MaxSlvTrans 绝不假红"可观测上界监视器；§5.4.3 把 MaxMstTrans 侧拒收门改锚有效上限、MaxSlvTrans 侧由"上游确认项"升级为"mux 侧机制不存在"已定结论；§7.4.5 把"上限最终被守"绑定 §5.4.1 有效上限公式、明确越字面值为位宽取整效应非 spill；§2.1 `MaxMstTrans`/`MaxSlvTrans` 字段行同步收口。§5.2 保序机制与 BUG-0010 分桶口径措辞未动 | REV-007（doc/review/REV-007.md）；来源：vendor/axi/src/axi_demux_simple.sv（L69 `IdCounterWidth=idx_width(MaxTrans)`、L168/L322 full 门、L557/L615 `&in_flight` 判满、L460-508 无 MaxTrans 合法性检查）、vendor/common_cells/src/cf_math_pkg.sv（L57-58 `idx_width`）、vendor/common_cells/src/delta_counter.sv（`overflow_o` 语义）、vendor/axi/src/axi_xbar.sv（L141 `MaxWTrans←MaxSlvTrans`）、axi_xbar_unmuxed.sv（L175 `MaxTrans←MaxMstTrans`）、axi_mux.sv（L46/L319 `MaxWTrans` FIFO 深度）、vendor/axi/doc/{axi_xbar.md L46/L47,axi_demux.md L72,axi_mux.md L29}、axi_pkg.sv L489-494（四处散文互相矛盾）@ v0.39.9（SHA a256a3b8） |
-| 6 | 2026-07-28 | 0.2.2 | §5.2、§4 | BUG-0025 SPEC_ISSUE 半边仲裁应用（依据 REV-011 §1.3，仅落地条款提案 P-REV011-1/P-REV011-2 原文，不外溢）：§5.2 新增第 6 条**译码未命中事务的保序地位**——(1) 走 §3.3 default master port 的事务目标是真实 master 端口，§5.2.1-4 原样适用；(2) 走 §4 decode error slave 的事务分两层，**完整 ID 维度可断言**（同一 slave 端口上完整 ID 相同、同方向事务的 B/rlast 完成序须与接受序一致，无论路由去向，checker 必须纳入判决）、**低位 ID 桶维度不可断言**（完整 ID 不同且其一走 err_slv 时次序许可来源未定义，不得写断言、以非判决 cover 留痕并列上游确认项、不阻塞里程碑）；(3) 该排除必须显式引本条，**不得**以"未登记⇒读默认值⇒比较恰好为假"实现（陈旧值会继续参与比较，既漏检也可产生无来源假红）。§4 新增第 6 条一行交叉指针至 §5.2.6。§5.2.1-5 与 §4.1-5 正文未改动（surgical） | REV-011（doc/review/REV-011.md §1）；来源：vendor/axi/doc/axi_xbar.md L33/L35（Decode Errors and Default Slave Port）、L84/L86（Ordering and Stalls）、§开篇（完整 AXI4+ATOP）；vendor/axi/doc/axi_demux.md L54-76、vendor/axi/doc/axi_mux.md（对 err_slv 无记载，作为"未定义"的否定性证据）；spec 内部 §1/§3.3/§4.1/§4.5/§5.2.1/§5.2.2/§5.2.3 @ v0.39.9（SHA a256a3b8）。**无 RTL 实现体来源**——REV-011 明确声明未读 axi_xbar.sv/axi_demux.sv 实现体，spec-from-RTL 红线未破 |
-| 7 | 2026-07-29 | 0.3.9 | §4、§6 | BUG-0032 SPEC_ISSUE 终判应用（依据 REV-012 §Item 1 approve P-REV012-1，经 REV-013 spec-review 门禁 conditional pass 后按其订正文本逐字应用，不外溢）：§4 新增第 7 条——err_slv 对**要求读响应的 ATOP（atomic load）**落在译码未命中地址时的应答形态**许可来源未定义**（§4.3 写事务单拍 B 与 §6.3 原子读 B+R 两读互斥）；**环境约束（BUG-0032 裁决，REV-012 §Item 1）**：M3 全部场景不向译码未命中地址发起任何 ATOP，使该未定义情形构造性不可触发，decode-error 维度不整体降级、在合法子集上正常写 checker；违反约束时的应答仍列上游确认项、不阻塞 M3、未取 DUT_BUG。§6 clause 3 尾部加一行交叉引用指回 §4 clause 7。**REV-013 门禁订正**：提案原文两处 `M3/M4` 收窄为 `M3`——M4 覆盖率收敛若需触发该组合须重开仲裁，spec 现无 M4 config-matrix 承载该约束，写 M4 会构成 spec-vs-artifact 的 Retention 不一致；reopening 路径由本条第四部分 + BUG-0032 guard 承接，不因收窄受损。§4.1-6、§6.1-2/4-5 正文未改动（surgical） | REV-012（doc/review/REV-012.md §Item 1）+ REV-013（doc/review/REV-013.md，spec-review 门禁 + 逐字订正文本）；来源：vendor/axi/doc/axi_xbar.md §Decode Errors and Default Slave Port（全段无 atop/atomic，REV-012/REV-013 各自复核 grep 空集）、vendor/axi/doc/axi_demux.md §Atomic Transactions（L79-87，只涉路由/ID 计数器注入，不涉 err_slv）、vendor/axi/doc/axi_mux.md（对 err_slv 零命中）@ v0.39.9（SHA a256a3b8）。**无 RTL 实现体来源**——REV-012/REV-013 均未读 axi_xbar.sv/axi_demux.sv 实现体，spec-from-RTL 红线未破 |
-| 8 | 2026-07-29 | 0.3.9 | §4 | BUG-0033 SPEC_ISSUE 终判应用（依据 REV-014，仅落地提案 P-REV014-1，不外溢）：§4 clause 4 读响应数据值由 `32'hBADCAB1E` 零扩展校正为 err_slv 默认 `RespData=64'hCA11AB1EBADCAB1E`（`RespWidth=64`，两处例化均未覆写）按 `AxiDataWidth` 零扩展/截断，基线 `AxiDataWidth=64` ⇒ `r.data=64'hCA11AB1EBADCAB1E`；宽度参数化保留文档原有"零扩展或截断"适配机制，仅校正基数值（文档误将 64 位标记常量记作 32 位，该记法仅在 `AxiDataWidth=32` 截断情形下恰好正确）。taxonomy 终判 SPEC_ISSUE，**不改判 DUT_BUG**——错误响应 `RDATA` 值协议上 don't-care，无显式条款被违反，`RespData` 魔数为刻意设计常量，零功能/协议损害；不走 P-xxx 行为补丁。§4 clause 1/2/3/5/6/7 正文未改动（surgical） | REV-014（doc/review/REV-014.md）；来源：**RTL**——`vendor/axi/src/axi_err_slv.sv:24-25`（`RespWidth`/`RespData` 参数默认值）、`:196`（`err_resp.r.data = RespData` 赋值）、`vendor/axi/src/axi_xbar_unmuxed.sv:195-211/238-251`（两处 `axi_err_slv` 例化均未覆写 `RespData`/`RespWidth`）；上游文档 `vendor/axi/doc/axi_xbar.md:33`（"zero-extended or truncated"措辞与实现矛盾之处）@ v0.39.9（SHA a256a3b8）。**本条含 RTL 实现体来源**——doc-vs-RTL 矛盾裁决的性质决定，标注见 §4 clause 4 正文"（来源：RTL——…）" |
-| 9 | 2026-07-30 | 0.4.3 | §0(item 4/5) | BUG-0038 SPEC_ISSUE 终判应用（依据 REV-016，仅落地 P-REV016-1/P-REV016-2 两行原文，不外溢）：item 4 覆盖率范围由"命名枚举 + 等"澄清为**例化闭包**口径（判据 = 是否出现在 `axi_xbar` 实例子树内，与上游库目录无关），并新增**（模块,类型）三态判定规则**（无 bin ⇒ N/A、不入分子分母、须逐条写明已核实成因；空白不得记作 0%/100%/省略）；item 5 删去会被反向读成目录白名单的 `vendor/axi/src/` 限定词、末句改为指回 #4 闭包。**本次为澄清而非范围扩张**（依据 REV-001 §3.3 C2 的例化关系判据 + item 5 原文已有的"间接例化即计入 #4"）。§0 item 1/2/3/6 与 §1–§8 全部行为章节未改动（surgical），尤其 §4 clause 7 的 BUG-0032 环境约束一字未动 | REV-016（doc/review/REV-016.md）；来源：doc/spec.md L25/L26 自身文本、REV-001 §3.3（L101-113）、doc/milestone.md L57-62；例化层次事实（仅用于测量范围认定、未推导任何行为期望值）：axi_xbar.sv:99/124-148、axi_xbar_unmuxed.sv:95/101/116/164/195/215-236、addr_decode.sv:91-107、axi_demux.sv:89-209、axi_err_slv.sv:45-58、axi_multicut.sv:57-58、axi_cut.sv:49-105 @ v0.39.9（SHA a256a3b8） |
-| 10 | 2026-07-30 | 0.4.4 | §4(clause 7) | BUG-0039 SPEC_ISSUE 终判应用（依据 REV-017，仅落地其"orch 应逐字应用的 spec 订正文本"段，不外溢）：这是 REV-013 为 BUG-0032 预留、Change record #7 明写的**M4 重开**——§4 clause 7 的环境约束（不向译码未命中地址发起任何 ATOP）由 **M3 收窄延展为 M3 与 M4**：目的不变（令 err_slv×ATOP 应答这一无源组合构造性不可触发），M4 与 M3 的许可来源沉默现状相同，故延展非新增约束。新增**M4 覆盖率后果**段：本 DUT 层次内全部 `axi_atop_filter` 实例均在 `axi_err_slv` 内例化，其 W/R FSM 离开 `*_FEEDTHROUGH` 的唯一触发条件恰为本约束所禁的激励，故该 FSM 中仅经此路径可达的状态/迁移弧在 M4 六类收敛中记为**环境约束致不可达**，按 §0 item 4"有 bin 但 <90%"分支走 rev 签核书面豁免（不适用"无 bin ⇒ N/A"三态规则）；解除本约束须先补 err_slv×ATOP 应答的许可来源并重开 BUG-0032。**REV-017 条件化未闭合**：判 CONDITIONAL PASS，条件 2（M4 config-matrix testplan 行须同步承载延展后的约束，REV-013 要件 (b)）与条件 3（M4 签核时 rev 出具书面豁免 + 跑 BUG-0032 guard 抽查）尚未兑现，M4 在此之前不得签核。§0 item 1-6、§4 clause 1-6、§6 全部未改动（surgical） | REV-017（doc/review/REV-017.md）；来源：doc/spec.md §4 clause 7 现文自身（L163-176）、REV-012（doc/review/REV-012.md §Item 1）、REV-013（doc/review/REV-013.md，M3/M4→M3 收窄 + 重开路径构成要件）、REV-016（doc/review/REV-016.md §6.2，本冲突发现处）；例化与 FSM 事实（orch 独立复核，仅用于测量范围/触发条件认定，未推导许可来源）：axi_err_slv.sv:45-58、axi_xbar_unmuxed.sv（grep atop_filter 零命中）、axi_atop_filter.sv:138、axi_pkg.sv:400/415 @ v0.39.9（SHA a256a3b8）。**无 RTL 实现体来源用于期望值推导**——err_slv×ATOP 应答形态仍许可来源未定义，本条只延展"不可触发"环境约束，spec-from-RTL 红线未破 |
-| 11 | 2026-07-31 | 0.4.5 | §0(item 3)、§4(clause 7) | M4 spec-gap sweep 提案 1/2 仲裁应用（依据 REV-018，仅落地其"orch 可机械执行的落地清单"段，不外溢）：**提案 1（裁 (a)）**——§0 item 3 配置矩阵新增 `× FallThrough {0,1}` 维；`FallThrough=1` 是可达、spec 合法的 `axi_demux_simple` 内部逻辑（§2.1/§7.3.1），非环境约束致构造性不可达，按"豁免留给不可达、不留给不想测"纪律纳入矩阵而非留作覆盖率豁免，为候选场景 M4-FT01 提供矩阵归属。**提案 2（裁 (b)）**——§4 clause 7 环境约束"译码未命中地址"语义不改，追加范围澄清段：确认其取**宽读**（不论该 slave 端口是否使能 default master port），有意保守，理由二条：(i) 与 §3.4.2 default port 运行时可变（M4-RC01 场景）耦合下宽读恒稳、窄读会因运行时开关引入移动靶；(ii) 窄读法唯一解锁路径的功能语义已由 SPEC-6.3/6.4（M2-AT01/M3-AT02）覆盖，零额外收益。§0 item 1/2/4/5/6、§4 clause 1-6 正文未改动（surgical） | REV-018（doc/review/REV-018.md）+ doc/review/M4-spec-gap-sweep.md（arch 交付，REV-018 主审对象）；来源：spec 内部 §2.1 `FallThrough` 字段、§3.4.2、§6.3/6.4、REV-017（doc/review/REV-017.md，条件 2/3 背景）@ v0.39.9（SHA a256a3b8）。**无 RTL 实现体来源**——两条均为既有 spec 条款的矩阵归属/范围澄清，未读实现体，spec-from-RTL 红线未破 |
-| 12 | 2026-08-02 | 0.4.37 | §0(item 4) | 里程碑重构应用（依据 `doc/design-prompt/milestone_restructure.md` §2，arch 起草、REV-032 门禁 REJECTED→G-1/G-2 返工→复审 APPROVED 后逐字应用，不外溢）：item 4 处置指向句改为"≥90% 为合格阈值 + 未达标格四类具名归属（已修 / Kind-A 豁免 / 债务行 / M6 backlog）+ **UNOWNED=空集**；**六类 ≥90% 百分比达标收敛门属 M6 出口**，M4 出口只要求测量基建 + 全闭包三态扫描 + 每格具名归属"。这是 BUG-0047 终判预留**选项 (ii)（重议判据口径）**的正式落地——REV-026 十卡换 1.5pp 实证"定向刷宽总线 Toggle"为坏配对，90% 数字门迁至拥有约束随机 + cov_loop 工具的 M6（milestone.md 新增）。六类口径、例化闭包定义、（模块,类型）判定单位、三态判定规则**一字未动**；§3.2/§4/§6 未触碰（BUG-0039/0044/0045/0046 guard 守卫面零扰动；三条 `ACCEPTED@M5` 锚点零移动）。配套治理文本（milestone.md M4 重定义/M5 瘦身/M6 新增、coverage-waivers 抬头 Kind-B 解锁口径、verification_maturity 修订 A-E）同 commit 应用 | milestone_restructure.md（提案全文）+ REV-032（门禁 REJECTED→复审 APPROVED）+ REV-033（stream_register 归属 CW-014，G-1 前置）；数据基础：doc/evidence/v0.4.35/M4-coverage-final-sweep.md、REV-030 §3、REV-031 §5 @ v0.39.9（SHA a256a3b8）。**无 RTL 实现体来源**——纯判据口径/里程碑绑定变更，未读实现体，spec-from-RTL 红线未破 |
-| 13 | 2026-08-03 | 0.5.3 | §3.2(新增 clause 3/4) | BUG-0045 + BUG-0046 合并终结（**流程偏离：用户明确指示 orch 直接标注、不派 arch/rev 卡，见 doc/log.md [0.5.3] 区块**）：§3.2 新增 clause 3（终址哨兵 `end_addr == '0` ⇒ 等效终址 `2^AxiAddrWidth`，非零长度区间）与 clause 4（实现侧附加的区间非空约束 + DV 地址表环境约束 `start_addr < effective_end`）。二条合并的技术依据：`addr_decode_dync` 的 `check_start`（`start_addr < end_addr \|\| end_addr == '0`）解码哨兵后等价于单一严格判据 `start_addr < effective_end`（`start_addr` 为 `AxiAddrWidth` 位，恒 `< 2^AxiAddrWidth`，故 `\|\| end_addr=='0` 不是"豁免分支"而是同一严格 `<` 在哨兵编码下的写法）——BUG-0046 所称"RTL 禁止 `start==end`"**必须**以 BUG-0045 的哨兵为前提才能准确陈述（`start==end=='0` 合法且覆盖整个地址空间，`start==end!='0` 才非法），故两条非"同源的两条独立缺口"，而是同一条地址区间契约的主干与其编码约定，一条 clause 对不可分。clause 2 的权威 `<=` 口径**未改动**（spec 仍站 `axi_xbar.md` L26 一侧，未反向对齐 RTL，spec-from-RTL 红线未破）；refmodel（`tb/xbar_types_pkg.sv` `decode_mst_port`）哨兵分支**本次不实现**，留待 M5 真构造该类地址表时与定向场景同批落地（尊重 REV-021 对"不可证伪 refmodel 死代码"的反对，该反对在 refmodel 半边成立）。§3.1/§3.3/§3.4 及 §1-§8 其余章节未改动（surgical） | 用户裁决（2026-08-03 会话，判定两条为一体两面且原处置过度防御）；上游事实核验（orch 独立复核）：`vendor/common_cells/src/addr_decode_dync.sv` L112/L116-117（匹配式含 `\|\| end_addr=='0'`）、L60（头注释"if `end_addr == '0` end of address space is assumed"）、L148/L153-154（`check_start` ASSUME）；`vendor/axi/doc/axi_xbar.md` L26（权威 `<=` 口径，全文 grep 确认**未载**哨兵）；上游活跃度核验：`addr_decode_dync.sv` 自 2023-09-26 引入（common_cells PR #198）至今日 master（已更名 `cc_addr_decode_dync.sv`，PR #290）该逻辑一字未改，两仓 issue/PR 均无人跟踪此 doc-vs-RTL 不一致 ⇒ 按既定事实处理，不等上游修 @ v0.39.9（SHA a256a3b8）/ common_cells v1.39.0（SHA 9ca8a765）。**本条含 RTL 实现体来源**——两条 clause 均标注"（来源：RTL——上游文档未载）"，性质同 Change record #8 |
+   **上游确认项**另行追踪，**不阻塞**任何里程碑；未取 DUT_BUG（无任何波形/
+   证据显示行为违规）。
