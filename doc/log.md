@@ -2,6 +2,83 @@
 
 Newest block first; capped by docs-check — overflow moves to doc/archive/.
 
+## [0.5.3] 2026-08-03 M4 遗留四条债务清空:0073 修+关、0045/0046 合并入 spec §3.2、0044 记录
+
+**Done**
+- **BUG-0073（TOOL_ENV）修复并关闭**。根因:`scripts/evidence.py` 的 `--cmd`
+  分支起 `subprocess.run(shell=True)` 时未清 `MAKEFLAGS`/`MAKELEVEL`/`MFLAGS`,
+  该子进程是 `make evidence` recipe 的子进程,CMD 内嵌套的 `make <target>` 据此
+  误判自己是子 make、打印 GNU Make 的进入/离开目录横幅,且"离开目录"行落在最后
+  ——污染任何按位置摘取(`tail -N`)的证据签名。修法:`os.environ.copy()` 后 pop
+  掉这三个变量再传 `env=`,只清这三个、不动其余(commit `89002ab`)。fixer 与
+  closer 两次独立派发(closer≠fixer),closer 用两份隔离 worktree(修复前父提交
+  vs 修复后)跑同一条 CMD 对照,确认转绿,并为该行本身生成真实证据
+  `doc/evidence/v0.5.2/BUG-0073.log`(commit `82d522e`)。登记 FB-41。
+- **BUG-0045 + BUG-0046 合并终结为 SPEC_CHANGED**——`doc/spec.md` §3.2 新增
+  clause 3(终址哨兵 `end_addr=='0'` ⇒ 等效终址 `2^AxiAddrWidth`,非零长度区间)
+  与 clause 4(实现侧区间非空约束 + DV 地址表环境约束 `start<effective_end`),
+  spec Change record #13,已重 pin。**合并的技术依据**:`addr_decode_dync` 的
+  `check_start`(`start_addr < end_addr || end_addr=='0'`)把哨兵解码后等价于
+  **单一**严格判据 `start_addr < effective_end`(`start_addr` 为 `AxiAddrWidth`
+  位,恒 `< 2^AxiAddrWidth`),故 `|| end_addr=='0'` **不是**"豁免分支"、而是同
+  一条严格 `<` 在哨兵编码下的写法;BUG-0046 所称"RTL 禁止 `start==end`"必须以
+  BUG-0045 的哨兵为前提才能准确陈述(`start==end=='0'` 合法且覆盖全地址空间,
+  `start==end!='0'` 才非法)⇒ 两条是同一条区间契约的主干与编码约定,不可分。
+  clause 2 的权威 `<=` **一字未改**(spec 仍站 `axi_xbar.md` L26 一侧,未反向
+  对齐 RTL)。G-0045/G-0046 两条 guard 已从"M5 到期须再裁决"改写为守卫落地态。
+- **BUG-0044 记录已核实事实,维持 ACCEPTED@M5**(用户指示先不展开,留给 M5 构造
+  场景时做):三问查清并写入详情页 `## orch investigation note`——(1) 上游许可
+  来源三份文档对 atomicstore/swap/compare 应答义务**全部沉默**,只有
+  `axi_pkg.sv` 387-415 注释有定义,而该文件的许可范围按 CLAUDE.md §6 只覆盖
+  `xbar_cfg_t` 等类型定义、不含这段 ATOP 语义;(2) DUT **会**走到这三类——
+  `axi_demux_simple.sv:162/185` 的 AR 注入判据只看 `atop[ATOP_R_RESP]`(第 5
+  位),该位对 load/swap/compare 均为 1、仅 store 为 0,是通用机制而非
+  atomic-load 特判;(3) TB 目前**不会**——M5 决策点 2 已把 `atop` 随机空间硬限
+  在 `{'0} ∪ 合法 atomic-load 编码`。
+- 3 条终态行经 `make docs-archive` 轮转出主表(BUG-0073/0045/0046)。
+
+**Not done**
+- **refmodel 哨兵分支故意未实现**——`tb/xbar_types_pkg.sv` 的 `decode_mst_port`
+  仍只做半开区间比较,不认 `end_addr=='0'`。这是尊重 REV-021"不实现即无不可
+  证伪死代码"的反对(该反对在 refmodel 半边成立、在 spec 半边不成立,因为本项目
+  本就容忍 spec 条款跑在场景前面)。约束写进 G-0045:未来构造该类地址表时,
+  testplan 行 + refmodel 分支 + 判决锚必须同批落地。
+- BUG-0044 的补全三件套(spec §6 条款 + 定向场景 + refmodel oracle)未做。
+- M5 场景探索本身未开始(本轮目标就是把 M4 遗留债务清干净再进 M5)。
+
+**Next**
+- M5 场景探索:`make explore` → arch spec-gap 卡(M5 尚无场景行,且 7 个 spec
+  小节无场景引用)。
+- 仍挂账:L3 rev 卡(vm.md 决策点 + M5 出口条件即代码)。
+
+**How verified**
+- `make check` 退出码 0(`docs-check passed`;4 类 `[gap]` 为既有信息性缺口,
+  与上一版逐项相同,无新增)。`make selftest` 102/102 OK。
+- BUG-0073:修复前后对照见上;closer 独立复验未读 fixer 草稿(scratchpad 分子
+  目录隔离)。
+- spec 改动:`python3 scripts/docs.py --pin-spec` 重 pin 通过(sha
+  `c8279a87…`),Change record #13 已录,spec 变更门禁(改动须配变更记录+重 pin)
+  绿。
+- guard 面未失守:`make guards FILES="doc/spec.md"` 仍命中 5 条,含改写后的
+  G-0045/G-0046。
+- 上游活跃度为一手核验(非推测):`addr_decode_dync.sv` 自 2023-09-26 引入
+  (common_cells PR #198)至今日 master(已随 PR #290 更名
+  `cc_addr_decode_dync.sv`)`check_start` 逻辑一字未改;`axi_xbar.md` 的 `<=`
+  措辞同样未变;两仓 issue/PR 无人跟踪此不一致。vendored 副本与 pin 的 SHA
+  `9ca8a765` 逐字节相同(`diff` 确认)。
+
+**流程偏离(留痕)**
+- CLAUDE.md §0 规定 orch 不产出技术制品、spec 改动按定级表属 L3(arch 起草 →
+  rev 门禁 → orch 应用并重 pin)。本轮 §3.2 clause 3/4 由 **orch 直接撰写**,
+  未派 arch/rev 卡——用户在会话中明确指示"既然已经明白了设计意图,spec 标注
+  即可,你做了就行"。风险自评:本次是对**已由双方独立核实的上游既定事实**做
+  记录性标注,未引入任何新的期望值推导;clause 2 权威口径未动,spec-from-RTL
+  红线未破;refmodel 未动,故无 checker 期望值受影响。若日后 rev 认为该 clause
+  措辞需订正,按常规 spec 修订流程重开即可。
+- 同时用户指示放宽 closer≠fixer 的执行成本:凡"跑一条命令/一次仿真即可判定"
+  的复验,由 orch 自己跑或派 haiku 跑并汇报,不再派 sonnet/opus 独立实例。本轮
+  BUG-0073 的 closer 卡是在该指示**之前**派的,故仍走了完整独立实例。
+
 ## [0.5.2] 2026-08-03 文档漂移扫描:四份 agent 卡死引用 failure_taxonomy.md 顺手修
 
 **Done**
@@ -68,29 +145,4 @@ Newest block first; capped by docs-check — overflow moves to doc/archive/.
 - `suspect=doc` 三条红/绿用例入 `test_docs.py::TestSuspectDoc`。
 - 定级 vs 实际:B 卡定 L1,实际工作量偏 L2(触及 19 文件),风险面仍工具层
   ——失配记录于此。
-
-## [0.5.0] 2026-08-03 M4 签核 APPROVED 关门 + 文档体系机械化整轮，进 M5
-
-**Done**
-- **M4 APPROVED 关门**（REV-039，推翻旧 v0.4.13 REJECTED——旧「六类≥90%」口径随 0.4.37 里程碑重构作废）。`make check MILESTONE=4` 四条机器条件全 PASS，新口径出口（覆盖测量基建 + 全闭包三态扫描 + 每格具名归属 UNOWNED=∅ + KILL 覆盖）全部满足。
-- **文档体系机械化落地**（本轮主线，回应用户「管住文档膨胀与数据漂移」）：新建 `scripts/docsx.py`（project-owned）七族检查——F1 数字断言（含元检查：复现命令自身须可执行非空，源自 FB-23 自带伪造复现命令的教训）/ F2 仓内路径存在性 / F3 双向集合 / F4 `doc/guards.md` 单表 / F5 孤儿双向 / F7 枚举快照(warning) / F10 存量 baseline；§12 词法执行器（allowlist + 拒命令替换 + 秒级超时 + cwd 锁根）。接 `make check` + `.githooks/pre-commit` 双门禁。selftest 72→143。
-- **22 条 bug 全部 terminal**：BUG-0052~0069（REV-037 批量裁决面十六条）+ 期间新登 0070~0073，经 docsx 各族 fixer（卡2a/2b/2c/2g）+ 散文订正（2d）+ 独立族 closer（2e）批量关闭 + 签核裁（0070/0071 CLOSED、0073 ACCEPTED@M5）。P0 先拆两颗实雷（0066/0056：`regress.py` 默认不再摧毁覆盖库）。
-- **guard 载体迁移**：49 页详情页 `## regression_guard` 段迁 `doc/guards.md` 单表（族级 guard 载体，满足 REV-035 §Q5）；BUG-0061 中文标点污染 paths 清 ASCII、恢复 3 处真丢失路径。
-
-**Not done**
-- **BUG-0073 ACCEPTED@M5**：make 嵌套调用 banner 污染 `tail` 的证据工具隐患，M5 排 fixer（可证伪解锁=evidence.py 清 MAKEFLAGS 后该形态转 PASS）。
-- **轻量化 P5 未做**：review 常驻轮转留 3 份、evidence 叙事归档、字节棘轮——移 M5 期间穿插（常驻语料仍约 2.7MB，机制已建、批量搬运待做）。
-- **vm.md 决策点 2-4 未过 rev**：M5 启动前置（约束随机/多种子回归/soak 三决策点仍「提案草案」），是下一步。
-
-**Next**
-- 派 rev 评审卡：`doc/design-prompt/verification_maturity.md` 决策点 2/3/4 过门（M5 三支柱架构输入）。通过后 orch 应用批注、更新 vm.md 抬头状态。
-- 首批 M5 场景行随第一张 M5 DV 卡登记（登记先于编码，records 契约）。
-- P5 轻量化搬运 M5 期间穿插；BUG-0073 M5 fixer。
-
-**How verified**
-- `make check MILESTONE=4` 四条全 PASS + `signoff-M4.md` 判词 APPROVED（本 closeout 亲跑）。
-- docs+docsx 双门禁绿；`make selftest` 143 OK；KILL-0004~0007 覆盖功能 oracle + docsx 执行器。
-- 机械化三则自证（机制真在干活）：pre-commit F2 拦下 orch 自己写入的死路径字面量 · BUG-0072 执行器引号内命令替换逃逸被 fixer 主动实测暴露并堵死（KILL-0007）· F10 反向 prune 在 BUG-0052 归档后自动删除其 stale baseline 行。
-- 回源纪律三向兑现：下游拦上游（2d 拦 REV-037 台账 S 失实）、拦卡面（2c 拦「解析判词」误导）、拦机制自身（0072）。逐卡 fixer→独立 closer 两次派发，orch 收卡一律走集合差完备性核对。
-
 
