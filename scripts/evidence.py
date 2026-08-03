@@ -13,6 +13,7 @@
 #             --spec-ref SPEC-4.2.1[,SPEC-4.2.3]
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -249,8 +250,21 @@ def main():
         except re.error as e:
             sys.exit("--expect is not a valid regex (%s): %r"
                      % (e, args.expect))
+        # BUG-0073: this subprocess is itself a child of the `make evidence`
+        # recipe, so it inherits MAKEFLAGS/MAKELEVEL/MFLAGS. If args.cmd
+        # nests another `make <target>` call, that nested make would detect
+        # (via these inherited vars) that it is a sub-make and print GNU
+        # Make's standard Entering/Leaving-directory banners around its
+        # output — banners a direct top-level shell invocation of the same
+        # string never prints, silently changing the captured stdout shape
+        # (e.g. breaking `tail -N`-based signatures). Strip only these
+        # sub-make-detection vars so a nested `make` behaves as a top-level
+        # invocation; no other environment variable is touched.
+        cmd_env = os.environ.copy()
+        for var in ("MAKEFLAGS", "MAKELEVEL", "MFLAGS"):
+            cmd_env.pop(var, None)
         cp = subprocess.run(args.cmd, shell=True, capture_output=True,
-                            text=True, cwd=str(CFG.root))
+                            text=True, cwd=str(CFG.root), env=cmd_env)
         out = (cp.stdout + cp.stderr).splitlines()
         if cp.returncode != 0:
             sys.exit("re-verification command failed (exit %d) — FAIL "
