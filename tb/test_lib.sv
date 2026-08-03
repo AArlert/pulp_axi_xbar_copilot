@@ -732,3 +732,37 @@ class m4_bp03_demuxlock_ar_test extends base_test;
     phase.drop_objection(this, "m4_bp03_demuxlock_ar_vseq done");
   endtask
 endclass
+
+// M5-SK01 baseline saturation soak (testplan.md M5-SK01, spec §5.4.1).
+// Baseline config (6x8, CUT_ALL_AX) — no config knob needed, no runtime
+// preconditions (UniqueIds=0, ATOPs stays default-'0 stimulus since
+// xbar_soak_seq does not yet draw atop — see seq_lib.sv class header,
+// deferred to a later M5 slice that actually needs it). Judgement is the
+// existing scoreboard/SVA oracle, unchanged (milestone.md M5 反稀释第1条).
+class m5_sk01_soak_test extends base_test;
+  `uvm_component_utils(m5_sk01_soak_test)
+
+  function new(string name = "m5_sk01_soak_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    // Same bounded-hold rationale as M2-TL01/M3-TL01/M4-BP02 (set before the
+    // responders' own build_phase — child components build after this test's):
+    // without it, responses drain as fast as they're presented and the
+    // per-bucket in-flight count never genuinely piles up ("空转", uvm_env.md
+    // C5.3) — confirmed empirically here: an unheld first pass left
+    // cg_xbucket_total at samples=0, i.e. the round-0 peak (bucket0 to 15)
+    // never actually happened despite the construction "should" have built it.
+    uvm_config_db#(int)::set(this, "env.mst_agent*", "resp_hold", 100);
+    super.build_phase(phase);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    xbar_soak_vseq vseq;
+    phase.raise_objection(this, "xbar_soak_vseq running");
+    vseq = xbar_soak_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "xbar_soak_vseq done");
+  endtask
+endclass

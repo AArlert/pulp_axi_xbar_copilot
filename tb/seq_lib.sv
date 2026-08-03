@@ -2747,3 +2747,140 @@ class m4_eb02_errbp_vseq extends uvm_sequence #(uvm_sequence_item);
     fanout_per_slv#(slvport_eb02_seq)::run(p_sequencer, "eb02_seq");
   endtask
 endclass
+
+// ----------------------------------------------------------------------------
+// M5 soak layer (milestone.md M5「约束随机层设计要点」, testplan.md
+// M5-SK01/SK02/SK03 — the three soak rows; config-independent, reused
+// unchanged under baseline/cfgA/cfgB via NO_SLV_PORTS/NO_MST_PORTS/Cfg, see
+// fanout_per_slv's own precedent for the same genericity).
+//
+// Naming note (rev finding, M5-SK01 review): this is NOT yet the full
+// generic layer milestone.md:32 describes (rand is_write/addr/len/id + bounded
+// rand atop, constraint-solved). It is a directed-random hybrid — weighted
+// $urandom_range draws, no `rand`/`constraint` block — sufficient for the
+// three SK0x rows' must-reach corner (bucket depth, not payload/atop
+// diversity) but deliberately NOT named xbar_random_vseq/xbar_random_seq so
+// a future RN0x slice that needs real constraint solving (atop legality,
+// §5.3.1 ID-allocator interaction) can introduce that class under the
+// reserved name without colliding with or silently reinterpreting this one.
+//
+// xbar_soak_seq: per-slave-port leaf. Each "round" builds ONE combined
+// multi-bucket axi_burst_item per direction — build_txlimit_burst() per
+// bucket, sub-items concatenated onto one burst so drive_burst()
+// (slvport_agent.sv) presents every sub-item back-to-back with no inter-item
+// wait (the exact construction M3-TL01's slvport_tl01_xbucket_seq already
+// established: buckets are genuinely concurrently in flight, not filled one
+// after another).
+//
+// Round 0 is a deliberate "peak" round, not left to chance: one bucket driven
+// to exactly MAX_MST_TRANS_EFF (15, spec §5.4.1's structural effective
+// ceiling, BUG-0016) while a second, different bucket stays simultaneously
+// non-empty — the must-reach corner testplan.md's M5-SK0x rows declare must
+// be hit every seed, not just probabilistically. Remaining rounds randomize
+// bucket set/depth/target-port/direction for genuine exploration across the
+// soak's duration (milestone.md's "id 软加权" — a small 2-value bucket pool
+// raises collision odds vs uniform 1/n_buckets dilution).
+class xbar_soak_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(xbar_soak_seq)
+
+  int unsigned slv_port_idx;
+  // soak duration knob (milestone.md "旋钮=事务数"). Kept small against the
+  // tb_top 200000ns watchdog — and NOT just against one port's own item
+  // count: b_respond_loop/r_respond_loop (mstport_agent.sv) serialize one
+  // response at a time PER MASTER-PORT RESPONDER, and every slave port's
+  // random-round target/direction is drawn independently, so the true worst
+  // case is every port's traffic piling onto the SAME responder in the SAME
+  // round (rev finding on an earlier draft here: a "72000ns, safe" comment
+  // ignored exactly this cross-port pileup and was wrong — true worst case
+  // was ~234000ns, over budget). With num_rounds=4 (round 0 peak + 3
+  // randomized) and random-round depth capped at 3: worst case on one
+  // responder = round0's own-port 36 items (round 0's per-port targets are
+  // all distinct, so no cross-port pileup there) + 3 rounds * 6 ports * 2
+  // buckets * depth 3 = 108 items = 144 items total * resp_hold(100) cyc =
+  // 14400 cyc = 144000ns — under the 200000ns watchdog even in that
+  // (astronomically unlikely: 6 independent uniform draws over 8 ports all
+  // matching, repeated 3 rounds) pathological case, not just on average.
+  int unsigned num_rounds = 4;
+
+  function new(string name = "xbar_soak_seq");
+    super.new(name);
+  endfunction
+
+  // One combined multi-bucket burst for one direction: bucket_ids[i] driven
+  // to bucket_depth[i] in-flight sub-transactions, all concatenated onto one
+  // axi_burst_item so they present back-to-back (genuinely concurrent).
+  task automatic fire_round(input bit is_write, input int unsigned tgt,
+                             input int unsigned bucket_ids[$],
+                             input int unsigned bucket_depth[$],
+                             input xbar_types_pkg::addr_t addr_base,
+                             input string name);
+    axi_burst_item burst, tmp;
+    burst = build_txlimit_burst($sformatf("%s_b0", name), is_write, tgt,
+                                 bucket_depth[0], addr_base, 1'b1,
+                                 bucket_ids[0]);
+    for (int unsigned i = 1; i < bucket_ids.size(); i++) begin
+      tmp = build_txlimit_burst($sformatf("%s_b%0d", name, i), is_write, tgt,
+                                 bucket_depth[i],
+                                 addr_base + xbar_types_pkg::addr_t'(i) * 32'h4000,
+                                 1'b1, bucket_ids[i]);
+      foreach (tmp.items[k]) burst.items.push_back(tmp.items[k]);
+    end
+    start_item(burst);
+    finish_item(burst);
+  endtask
+
+  task body();
+    int unsigned tgt;
+    int unsigned peak_buckets[$];
+    int unsigned peak_depth[$];
+    tgt = slv_port_idx % xbar_types_pkg::NO_MST_PORTS;
+
+    // ---- round 0: deliberate peak (see class header) ----
+    peak_buckets = '{0, 1};
+    peak_depth   = '{xbar_types_pkg::MAX_MST_TRANS_EFF, 3};
+    fire_round(1'b1, tgt, peak_buckets, peak_depth, 32'h0010_0000,
+               $sformatf("xrand_w_%0d_peak", slv_port_idx));
+    fire_round(1'b0, tgt, peak_buckets, peak_depth, 32'h0020_0000,
+               $sformatf("xrand_r_%0d_peak", slv_port_idx));
+
+    // ---- remaining rounds: randomized bucket set/depth/target/direction ----
+    for (int unsigned r = 1; r < num_rounds; r++) begin
+      int unsigned n_bk;
+      int unsigned buckets[$];
+      int unsigned depth[$];
+      bit          dir;
+      int unsigned r_tgt;
+
+      // Fixed at 2 buckets (not random 2-4) and a shallow depth cap (3, not
+      // the structural ceiling 15 — round 0 already guarantees that corner
+      // deterministically) so worst-case total item count stays bounded even
+      // under full cross-port pileup on one responder (see num_rounds field
+      // comment: watchdog budget math).
+      n_bk = 2;
+      for (int unsigned i = 0; i < n_bk; i++) begin
+        // small 2-value pool (not 0..n_buckets-1) — raises same-bucket
+        // collision odds, milestone.md's stated id-weighting rationale.
+        buckets.push_back($urandom_range(0, 1));
+        depth.push_back($urandom_range(2, 3));
+      end
+      dir   = bit'($urandom_range(0, 1));
+      r_tgt = $urandom_range(0, xbar_types_pkg::NO_MST_PORTS - 1);
+      fire_round(dir, r_tgt, buckets, depth,
+                 32'h0030_0000 + xbar_types_pkg::addr_t'(r) * 32'h0001_0000,
+                 $sformatf("xrand_%0d_r%0d", slv_port_idx, r));
+    end
+  endtask
+endclass
+
+class xbar_soak_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(xbar_soak_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+
+  function new(string name = "xbar_soak_vseq");
+    super.new(name);
+  endfunction
+
+  task body();
+    fanout_per_slv#(xbar_soak_seq)::run(p_sequencer, "xsoak_seq");
+  endtask
+endclass

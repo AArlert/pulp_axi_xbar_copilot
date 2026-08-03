@@ -4,6 +4,51 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.8] 2026-08-03 M5-SK01 落地（Slice 1/4）；新流程：每闭环强制 rev 门禁
+
+**Done**
+- 用户确立新标准流程（此后默认适用）：任务切成可闭环小片；每片做完必须
+  派 rev 独立评审；rev prompt 不带我的推理叙事（只给改了什么/在哪 + 客观
+  要求原文 + charter 维度，不塞"我验证过 X"）；rev 过了才 git push。
+- 把"M5 第二张活"切成 4 片（TaskCreate #7-10）：Slice1=核心机制+M5-SK01
+  (baseline)、Slice2=纯复用 SK02/SK03/RN03、Slice3=cfgD+RN02、
+  Slice4=cfgC ID 分配器+RN01。
+- 摸清驱动模型：`axi_seq_item`/`drive_write`/`drive_read` 单笔阻塞（等
+  B/R 才 item_done），建不了同桶在飞深度；`axi_burst_item`/`drive_burst`
+  才能背靠背下发多笔（M2-TL01/M3-TL01 先例），且必须配 `resp_hold`（否则
+  响应即时回收、深度"空转"——现场验证过：不设 resp_hold 时
+  `cg_xbucket_total` samples=0）。
+- 落地 `tb/seq_lib.sv`：`xbar_soak_seq`/`xbar_soak_vseq`（复用
+  `build_txlimit_burst`+`fanout_per_slv`，未新增底层机制）；round 0 是
+  确定性"peak"轮（bucket0 压到 SPEC-5.4.1 结构有效上限 15、bucket1=3 同时
+  非空，每颗种子必中，不靠随机撞）；其余 3 轮小幅随机（桶/深度/方向/
+  目标端口）。`tb/test_lib.sv` 新增 `m5_sk01_soak_test`（resp_hold=100）。
+- rev 独立评审 verdict PASS（现场读 raw log/coverage feeder 交叉核对，非
+  信任 testplan 行文字）：确认 cg_tx_limit `at_effective_ceiling`（15）与
+  cg_xbucket_total 均真实命中、无 RTL 值泄漏为期望值、无 silent-pass。
+  2 处非阻塞发现已处理：①（中）我自己写的"worst case 72000ns 安全"注释
+  算漏了跨端口叠加到同一 responder 的情形（真实最坏~234000ns 可能顶到
+  watchdog）——收窄随机轮深度上限 6→3，重算最坏情形 144000ns 留足余量；
+  ②（低）`xbar_random_vseq` 这个名字是 milestone.md 留给未来真正
+  rand/constraint 求解通用层的，本实现无 rand/constraint 块，占用会话
+  RN0x 实现时的语义——更名 `xbar_soak_vseq`，同步改 testplan M5-SK01 行。
+- `make evidence SCEN=M5-SK01`；`sim/regress/regress.list` 新增一行。
+
+**Not done**
+- Slice 2/3/4（M5-SK02/SK03/RN01/RN02/RN03）未动。
+
+**Next**
+- Slice 2：M5-SK02（cfgB）/SK03（cfgA）/RN03（cfgE）——纯复用
+  `xbar_soak_vseq`，各自新 test class + sim/Makefile 加 TEST 名前缀→
+  `+define` 映射（当前只有 m3_cf01../m3_cf04../m4_ft01_ 前缀，M5 测试名
+  需要新增对应行）。
+
+**How verified**
+- `make regress` 31/31（改前 30/31 基线 + 改后两次，rename/收窄后重跑
+  确认 corner 仍命中：cg_tx_limit cp_inflight=100%、cg_xbucket_total
+  samples=36/100%，Time=57925000ps < watchdog 200000000ps）；rev 独立
+  评审 PASS；`make check` 绿。
+
 ## [0.5.7] 2026-08-03 文档漂移修复：M5 六行注册进 testplan.md（真值表归位）
 
 **Done**

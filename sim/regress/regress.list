@@ -29,3 +29,4 @@ m4_eb01_errbp_test 1
 m4_eb02_errbp_test 1
 m4_bp02_demuxlock_test 1
 m4_bp03_demuxlock_ar_test 1
+m5_sk01_soak_test 1
