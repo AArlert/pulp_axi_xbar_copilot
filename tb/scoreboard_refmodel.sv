@@ -92,6 +92,13 @@ class xbar_scoreboard extends uvm_scoreboard;
     // runtime address-table/default-port change? Recorded at accept, sampled
     // when this record's routing judgement lands. Never a judgement input.
     bit                     post_change;
+    // M5 failure-traceability (milestone.md M5 exit criterion 1): this
+    // transaction's AW/AR accept instant, carried through to whichever check
+    // eventually consumes/retires this record so a mismatch or dangling
+    // report can name *when* the transaction started, not just its id.
+    // Judgement-neutral (mirrors or_open_rec_t/worder_rec_t's existing
+    // accept_time fields).
+    time                    accept_time;
   } pend_rec_t;
 
   // Keyed by {direction, expected master-side id}. A *FIFO queue* per key (not
@@ -299,6 +306,10 @@ class xbar_scoreboard extends uvm_scoreboard;
     // non-decisional — spec §6.5 declares the resulting cross-direction stall
     // normal design behaviour.
     bit collide_read;
+    // M5 failure-traceability (milestone.md M5 exit criterion 1): the AW
+    // accept instant of this atomic load, for SB_ATOP_DANGLING to name when
+    // the still-open pair started. Judgement-neutral.
+    time accept_time;
   } atop_pend_t;
   local atop_pend_t atop_pend[int unsigned];
   int unsigned      atop_pair_cnt;
@@ -503,6 +514,7 @@ class xbar_scoreboard extends uvm_scoreboard;
     rec.size          = ro.size;
     rec.burst         = ro.burst;
     rec.atop          = ro.atop;
+    rec.accept_time   = ro.accept_time;
     if (ro.is_write) begin
       rec.wdata = ro.wdata;
       rec.wstrb = ro.wstrb;
@@ -547,7 +559,8 @@ class xbar_scoreboard extends uvm_scoreboard;
       rd_k = or_key(ro.port_idx, 1'b0,
                     id_bucket(ro.id[xbar_types_pkg::ID_W_SLV-1:0]));
       collide = or_open_q.exists(rd_k) && or_open_q[rd_k].size() != 0;
-      atop_pend[ak] = '{b_seen: 1'b0, r_seen: 1'b0, collide_read: collide};
+      atop_pend[ak] = '{b_seen: 1'b0, r_seen: 1'b0, collide_read: collide,
+                        accept_time: ro.accept_time};
       resp_expect[resp_key(ro.port_idx, 1'b0,
                            ro.id[xbar_types_pkg::ID_W_SLV-1:0])]++;
       // The atomic load's R half is likewise a normal (is_err=0) owed response;
@@ -720,8 +733,8 @@ class xbar_scoreboard extends uvm_scoreboard;
         || ro.burst != rec.burst || ro.atop != rec.atop) begin
       route_mismatch_cnt++;
       `uvm_error("SB_ROUTE",
-        $sformatf("routing/attr mismatch id 'h%0h: got port=%0d write=%0d addr='h%0h len=%0d atop='h%0h — expected port=%0d write=%0d addr='h%0h len=%0d atop='h%0h (spec §3.1/§3.2/§1/§6.1)",
-                   ro.id, ro.port_idx, ro.is_write, ro.addr, ro.len, ro.atop,
+        $sformatf("routing/attr mismatch id 'h%0h (AW/AR accepted@%0t): got port=%0d write=%0d addr='h%0h len=%0d atop='h%0h — expected port=%0d write=%0d addr='h%0h len=%0d atop='h%0h (spec §3.1/§3.2/§1/§6.1)",
+                   ro.id, rec.accept_time, ro.port_idx, ro.is_write, ro.addr, ro.len, ro.atop,
                    rec.exp_mst_port, rec.is_write, rec.addr, rec.len, rec.atop))
       return;
     end
@@ -729,16 +742,16 @@ class xbar_scoreboard extends uvm_scoreboard;
       if (ro.wdata.size() != rec.wdata.size()) begin
         route_mismatch_cnt++;
         `uvm_error("SB_WDATA_LEN",
-          $sformatf("id 'h%0h write beat count mismatch: got %0d expected %0d (spec §1)",
-                     ro.id, ro.wdata.size(), rec.wdata.size()))
+          $sformatf("id 'h%0h (AW accepted@%0t) write beat count mismatch: got %0d expected %0d (spec §1)",
+                     ro.id, rec.accept_time, ro.wdata.size(), rec.wdata.size()))
         return;
       end
       foreach (ro.wdata[k]) begin
         if (ro.wdata[k] !== rec.wdata[k] || ro.wstrb[k] !== rec.wstrb[k]) begin
           route_mismatch_cnt++;
           `uvm_error("SB_WDATA",
-            $sformatf("id 'h%0h write beat %0d payload mismatch: got data='h%0h strb='h%0h expected data='h%0h strb='h%0h (spec §1 payload pass-through)",
-                       ro.id, k, ro.wdata[k], ro.wstrb[k], rec.wdata[k], rec.wstrb[k]))
+            $sformatf("id 'h%0h (AW accepted@%0t) write beat %0d payload mismatch: got data='h%0h strb='h%0h expected data='h%0h strb='h%0h (spec §1 payload pass-through)",
+                       ro.id, rec.accept_time, k, ro.wdata[k], ro.wstrb[k], rec.wdata[k], rec.wstrb[k]))
           return;
         end
       end
@@ -1090,19 +1103,33 @@ class xbar_scoreboard extends uvm_scoreboard;
       `uvm_info("SB_UNIQUEIDS_SUMMARY",
         $sformatf("cfgC §5.3.1 UniqueIds precondition monitor: violations=%0d (0 = env held the constructive guarantee for the whole run)",
                    uid_violation_cnt), UVM_LOW)
+    // M5 failure-traceability (milestone.md M5 exit criterion 1): one
+    // uvm_error PER still-open record (port/dir/id/accept_time), not a bare
+    // count — a reader must be able to name *which* transaction never
+    // surfaced, not just how many. Same fire condition as before
+    // (pending_total != 0, computed by the untouched counting loop above,
+    // which also still feeds SB_SUMMARY).
     if (pending_total != 0) begin
-      `uvm_error("SB_DANGLING",
-        $sformatf("%0d slv-side request(s) never observed a matching mst-side request — routing incomplete at end of test",
-                   pending_total))
+      foreach (pending_by_id[k]) begin
+        foreach (pending_by_id[k][i]) begin
+          pend_rec_t rec;
+          rec = pending_by_id[k][i];
+          `uvm_error("SB_DANGLING",
+            $sformatf("slv port %0d %s exp_mst_id 'h%0h (addr='h%0h, accepted@%0t) never observed a matching mst-side request by end of test — routing incomplete (spec §5.1.1/§3.1: every accepted request must eventually surface at its decoded master port)",
+                       int'(k[xbar_types_pkg::ID_W_MST-1:0]) >> xbar_types_pkg::ID_W_SLV,
+                       rec.is_write ? "AW" : "AR", k[xbar_types_pkg::ID_W_MST-1:0],
+                       rec.addr, rec.accept_time))
+        end
+      end
     end
     // C3.2: any source port still expecting a response never received back
     // on its own port means a B/R was dropped or misrouted (spec §5.1.2).
     foreach (resp_expect[k]) begin
       if (resp_expect[k] != 0) begin
         `uvm_error("SB_RESP_DANGLING",
-          $sformatf("source port %0d still expects %0d %s response(s) never observed on its own port — response routing incomplete/misrouted (spec §5.1.2/§5.1.3)",
-                     (k >> 6), resp_expect[k],
-                     ((k >> 5) & 1) ? "B(write)" : "R(read)"))
+          $sformatf("source port %0d slv-id 'h%0h still expects %0d %s response(s) never observed on its own port — response routing incomplete/misrouted (spec §5.1.2/§5.1.3)",
+                     (k >> 6), k & ((1 << xbar_types_pkg::ID_W_SLV) - 1),
+                     resp_expect[k], ((k >> 5) & 1) ? "B(write)" : "R(read)"))
       end
     end
     // C6.3 (spec §6.3): every atomic load must have returned *both* its B
@@ -1110,23 +1137,40 @@ class xbar_scoreboard extends uvm_scoreboard;
     // halves never appeared.
     foreach (atop_pend[k]) begin
       `uvm_error("SB_ATOP_DANGLING",
-        $sformatf("slv port %0d atomic load id 'h%0h never completed its response pair (B seen=%0d, R seen=%0d) — spec §6.3 requires both B and R to return",
-                   (k >> 5), (k & 'h1f), atop_pend[k].b_seen,
-                   atop_pend[k].r_seen))
+        $sformatf("slv port %0d atomic load id 'h%0h (AW accepted@%0t) never completed its response pair (B seen=%0d, R seen=%0d) — spec §6.3 requires both B and R to return",
+                   (k >> 5), (k & 'h1f), atop_pend[k].accept_time,
+                   atop_pend[k].b_seen, atop_pend[k].r_seen))
     end
     // C5.1: any still-open stall-tracking record at end of test means a B/
     // rlast never arrived for a request this check thought was accepted.
+    // M5 failure-traceability: per-record detail (port/dir/bucket/id/target/
+    // accept_time), same fire condition as before (or_open_total != 0, from
+    // the untouched counting loop above that also feeds SB_SUMMARY).
     if (or_open_total != 0) begin
-      `uvm_error("SB_OR_DANGLING",
-        $sformatf("%0d C5.1/C5.2 stall-tracking record(s) never observed a matching B/rlast — incomplete at end of test",
-                   or_open_total))
+      foreach (or_open_q[k]) begin
+        foreach (or_open_q[k][i]) begin
+          `uvm_error("SB_OR_DANGLING",
+            $sformatf("slv port %0d dir=%s id-bucket 'h%0h: id 'h%0h -> mst port %0d (accepted@%0t) never observed a matching B/rlast by end of test — spec §5.2.1/§5.2.3 stall-tracking record incomplete",
+                       k >> 8, ((k >> 7) & 1) ? "W" : "R", k & 7'h7f,
+                       or_open_q[k][i].slv_id, or_open_q[k][i].mst_port,
+                       or_open_q[k][i].accept_time))
+        end
+      end
     end
     // C5.4 (spec §5.5.1): any still-open W-order record means a write's burst
     // never completed at its target master port — routing/pairing incomplete.
+    // M5 failure-traceability: per-record detail (source/target port, id,
+    // accept_time), same fire condition as before (worder_open_total != 0,
+    // from the untouched counting loop above that also feeds SB_SUMMARY).
     if (worder_open_total != 0) begin
-      `uvm_error("SB_WORDER_DANGLING",
-        $sformatf("%0d C5.4 W-order record(s) never observed a completing master-side write burst — incomplete at end of test",
-                   worder_open_total))
+      foreach (worder_pend[k]) begin
+        foreach (worder_pend[k][i]) begin
+          `uvm_error("SB_WORDER_DANGLING",
+            $sformatf("src slv port %0d -> mst port %0d: write id 'h%0h (AW accepted@%0t) never observed a completing master-side write burst by end of test — spec §5.5.1 W-order record incomplete",
+                       k >> 8, k & 8'hff, worder_pend[k][i].mst_id,
+                       worder_pend[k][i].accept_time))
+        end
+      end
     end
   endfunction
 endclass

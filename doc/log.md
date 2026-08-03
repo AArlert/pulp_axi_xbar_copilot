@@ -4,6 +4,48 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.6] 2026-08-03 M5 第一张活：失败可追溯机制落地
+
+**Done**
+- 摸清现状：scoreboard ~22 处 `uvm_error 中约 15 处已是"实际/期望/spec§"
+  三段式，真正缺口是 (1) seed 不在报错附近（只在 log 第 1 行 Command:
+  banner）(2) `report_phase` 五处"悬挂"类报错三处是纯聚合计数，连是哪个
+  id/port 都不报。据此收窄范围，未动已经写得好的比对类报错，未动 6 个
+  SVA 文件。
+- 新增 `tb/report_seed_catcher.sv`：全局 `uvm_report_catcher`，给每条
+  UVM_ERROR/FATAL 追加 `[seed=N]`（`$value$plusargs("ntb_random_seed=%d")`
+  回读 sim/Makefile 传的同一 plusarg），`test_lib.sv` base_test 注册一处，
+  零改动既有调用点，SVA 的 `uvm_error 一并覆盖（同一 uvm_root 回调池）。
+- `pend_rec_t`/`atop_pend_t` 补 `time accept_time` 字段并在创建点回填；
+  SB_ROUTE/SB_WDATA_LEN/SB_WDATA/SB_ATOP_DANGLING 带上 accept_time，
+  SB_RESP_DANGLING 补 slv-id。
+- `report_phase` 三处纯聚合计数改造：SB_DANGLING（pending_by_id）/
+  SB_OR_DANGLING（or_open_q）/SB_WORDER_DANGLING（worder_pend）从
+  "%0d 条记录未匹配"改为逐记录 `uvm_error`（port/dir/bucket/id/
+  accept_time，从 key 位运算还原，与各自 key-builder 函数对齐），计数用的
+  原 foreach 循环不动（SB_SUMMARY 数字来源不变），只换 `if (total!=0)` 里
+  的单条聚合改成逐记录 foreach——触发条件（非空⟺有错）不变。
+- rev 评审（checker/oracle 设计评审）verdict PASS：无 silent-pass、无
+  RTL 值泄漏为期望值、无 latency-bake、`accept_time` 无未初始化读取路径；
+  1 处措辞类 nit（seed catcher 注释误导，已改）。
+- 现场验证（故意破坏后复原，非纸面评审）：破坏 `build_exp_id` 强制全部
+  `pending_by_id` 查找落空——SB_DANGLING 精确触发 333 次，与 SB_SUMMARY
+  `pending=333` 完全对齐（UVM 自带 per-id 计数交叉核对）；破坏
+  `rec.addr` 触发 SB_ROUTE，消息含 seed+accept_time+got/expected/spec§，
+  自包含可读。两处破坏均已还原（grep TEMP-DELIBERATE-BREAK 为空）。
+- milestone.md M5 exit criteria 第一条打勾。
+
+**Not done**
+- M5 其余四条 exit criteria：约束随机层、多种子回归、soak、BUG-0044 裁决。
+
+**Next**
+- M5 第二张活：约束随机激励层（`xbar_random_vseq`，milestone.md 已有约束
+  设计蒸馏），先注册 M5-RN01..03/SK01..03 六行 testplan 骨架。
+
+**How verified**
+- `make regress` 30/30（改动前后各跑一次，改动后现场注入两类失败观察新
+  报错格式后还原复绿）；rev 独立评审 PASS；`make check` 绿。
+
 ## [0.5.5] 2026-08-03 M5 步 0：VM 内 make regress 确认接手基线绿
 
 **Done**

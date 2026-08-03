@@ -31,6 +31,9 @@ package xbar_tb_pkg;
   `include "scoreboard_refmodel.sv"
   `include "xbar_env.sv"
   `include "seq_lib.sv"
+  // report_seed_catcher.sv before test_lib.sv: base_test::build_phase
+  // references xbar_seed_catcher (M5 failure-traceability).
+  `include "report_seed_catcher.sv"
   `include "test_lib.sv"
 
 endpackage

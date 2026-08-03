@@ -10,6 +10,12 @@ class base_test extends uvm_test;
   endfunction
 
   virtual function void build_phase(uvm_phase phase);
+    // M5 failure-traceability (milestone.md M5 exit criterion 1): tag every
+    // UVM_ERROR/UVM_FATAL tb-wide with the run seed. Registered here (every
+    // test extends base_test) so it is active before env/scoreboard/SVA
+    // build, catching anything any child component might report.
+    xbar_seed_catcher catcher = new();
+    uvm_report_cb::add(null, catcher);
     super.build_phase(phase);
     env = xbar_env::type_id::create("env", this);
   endfunction

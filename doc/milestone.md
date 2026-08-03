@@ -72,10 +72,18 @@ M0–M4 的详细出口条件与逐条兑现记录不再在本页维护——git
 
 ### Exit criteria
 
-- [ ] **失败可追溯机制落地（第一张活）**：评估现 scoreboard/SVA 的报错形态，
+- [x] **失败可追溯机制落地（第一张活）**：评估现 scoreboard/SVA 的报错形态，
       改造为失败自包含——报错即给出 seed + 该笔事务的完整操作轨迹（发起/各
       触发点/比对点）+ 三方文本（DUT 实际 / 参考模型期望 / spec 条款引文），
-      使 `make run TEST=<t> SEED=<n>` 单跑一条即稳定复现并可读懂
+      使 `make run TEST=<t> SEED=<n>` 单跑一条即稳定复现并可读懂。落地：
+      `tb/report_seed_catcher.sv`（全局 uvm_report_catcher，给每条
+      UVM_ERROR/FATAL 追加 `[seed=N]`，零改动既有 20+ 处调用点）+
+      `pend_rec_t`/`atop_pend_t` 补 `accept_time` 并回填 4 处比对类报错 +
+      `report_phase` 三处纯聚合计数（SB_DANGLING/SB_OR_DANGLING/
+      SB_WORDER_DANGLING）改逐记录打印 port/dir/id/accept_time。rev 评审
+      PASS（无 silent-pass、无 RTL 值泄漏为期望值、无 latency-bake）；
+      故意注入两类失败（id 公式破坏、addr 篡改）现场验证消息格式后已还原，
+      `make regress` 30/30 复绿。
 - [ ] **约束随机激励层**：上述约束设计落地，`xbar_random_vseq` 在 6 配置点
       全部跑通（M5-RN01..03 + SK01..03 六行 ✅，经 `make evidence`）
 - [ ] **多种子回归**：定向场景底线 N=5 固定种子、时序/保序子集 N=10，种子行

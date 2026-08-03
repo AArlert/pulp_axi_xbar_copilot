@@ -1,2 +1,3 @@
+{"date": "2026-08-03", "version": "0.5.6", "summary": "M5 第一张活完成:失败可追溯机制落地(全局seed catcher+accept_time轨迹+report_phase三处聚合计数改逐记录);rev checker/oracle评审PASS;故意注入两类失败现场验证消息格式后已还原,make regress 30/30;next=M5 第二张活约束随机层xbar_random_vseq"}
 {"date": "2026-08-03", "version": "0.5.5", "summary": "M5 步0完成:VM 内 make regress 30/30 PASS,前任基线在接手环境下确认活着;顺手修 milestone.md 场景数笔误(24→30);next=M5 第一张活失败可追溯机制"}
 {"date": "2026-08-03", "version": "0.5.4", "summary": "大重置:拆除仪式层(workflow/评审/证据存档/guards/fw-feedback/四角色/60单测),保留核心资产与机械脚本(docs.py 单入口);spec 就地裁决两条环境约束改里程碑无关;现场锁 tag v0.5.3-pre-reset。next=M5 步0:VM 内 make regress 确认接手基线绿,然后做失败可追溯机制"}
