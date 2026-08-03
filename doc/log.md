@@ -4,6 +4,48 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.9] 2026-08-03 M5 全 6 行翻绿（Slice 2-4 交付）
+
+**Done**
+- Slice 2（M5-SK02/SK03/RN03）：纯复用 `xbar_soak_vseq`，各 config point
+  新增 test class + Makefile `TEST` 前缀→`+define` 映射。SK02 cfgB（6×1）
+  `resp_hold=20`（6 端口汇聚到 1 个 responder，100 会顶 watchdog）；
+  SK03 cfgA（1×8）/RN03 cfgE `resp_hold=100`。rev 发现 SK03 仅 1 个 slave
+  端口 + `num_rounds=4` 最多只访问 4/8 个 master 端口——追加 target sweep
+  （`fire_round` 遍历每个 round 0 未命中的 master 端口）；cfgA 下+7 sweep
+  项，cfgB/baseline 下+0/~7 项，watchdog 余量充足。全回归 35/35。
+- Slice 3（M5-RN02 cfgD）：新建 `xbar_soak_cfgd_seq`（继承 `xbar_soak_seq`，
+  override `body()`）+ `xbar_soak_cfgd_vseq`。`cfgd_region()` 将逻辑目标
+  映射到地址区域（mst0/mst1 走 rule region，default port 走 unmapped
+  region `NO_ADDR_RULES*REGION_SIZE`=0x8000_0000）；target 限定于
+  `CONNECTIVITY[slv_port_idx]`；default-port config 沿用 m3_cf04 同一
+  `set_cfgd_default()` 模式。rev PASS + 清理 dead `def_port` 变量。36/36。
+- Slice 4（M5-RN01 cfgC UniqueIds=1）：`drive_burst()` 逐 burst 全排空
+  响应（`wait(done_cnt>=total)` + `item_done()`），故 `fire_round()` 间
+  无跨 burst 在飞重叠——SPEC-5.3.1 结构性保证，无需运行时 ID 分配器。
+  peak burst 15 项同桶 ID 循环（{0,8,16,24} 各 3-4 次）在 resp_hold=100
+  下同时在飞同目标，覆盖"合法堆积"分支。`SB_UNIQUEIDS_SUMMARY:
+  violations=0`。rev PASS；testplan M5-RN01 行描述更新为结构性方案
+  （原文描述"集中 ID 分配器"与实现不符）。36/36。
+- 每片 rev 独立评审 PASS（Slice 2/3/4 各一轮，共 3 次 rev 调用）。
+
+**Not done**
+- BUG-0044 仍 OPEN（ATOP store/swap/compare 无 oracle）。
+- M5 多种子回归未跑（当前每行仅 SEED=1）。
+- M6（覆盖率收敛）未启动。
+
+**Next**
+- BUG-0044 裁决（补 spec §6 条款 or 书面标范围外）。
+- M5 多种子回归（`make regress` 扩充 SEED 列表，验证随机层稳定性）。
+- M6 覆盖率收敛（`doc/milestone.md`）。
+
+**How verified**
+- `make regress` 36/36（含 M5 全 6 行：SK01/SK02/SK03/RN01/RN02/RN03）。
+- 每 Slice 独立 rev 评审 PASS（3 轮）。
+- 关键覆盖：cg_xbucket_total 每行 100%；RN02 cg_default_port_tracked
+  100%（13 samples）；RN01 SB_UNIQUEIDS_SUMMARY violations=0。
+- `make check` 绿；`make evidence` 逐行收集。
+
 ## [0.5.8] 2026-08-03 M5-SK01 落地（Slice 1/4）；新流程：每闭环强制 rev 门禁
 
 **Done**
