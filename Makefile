@@ -3,7 +3,7 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help handoff next run evidence regress check guards bump commit \
+.PHONY: help handoff next explore run evidence regress check guards bump commit \
         archive docs-archive selftest
 
 # Bare `make` (no target) lands here. Keep in sync with the target comments
@@ -38,6 +38,9 @@ handoff:
 
 next:
 	@python3 scripts/docs.py --next
+
+explore:
+	@python3 scripts/docs.py --explore
 
 # make run TEST=<t> SEED=<n> — forwarded, project-owned (sim/Makefile).
 run:

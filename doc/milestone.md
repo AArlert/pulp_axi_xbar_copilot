@@ -106,10 +106,11 @@ Exit criteria:
 > 关闭，也不承担 M6 的 ≥90% 收敛门——本里程碑出口全部为"能力落地 + KILL 自证"，
 > **无覆盖率百分比门**。M5 的随机/闭环产出**可能**帮更省力关上 M6 结构缺口，但
 > 目标性质不同（design-prompt Decision 1，C1.1–C1.4）。
-> **进门前置不变**：三条 `ACCEPTED@M5` 债务（BUG-0044/0045/0046）到期于 M5 签核，
-> 须**二选一再裁决、不得自动延期**（见各自 guard：BUG-0044 §6 / BUG-0045·0046
-> §3.2）；本里程碑与其版本方案变更（v1.1.*→v0.5.*）均**不移动 `@M5` 锚点**——锚定
-> 里程碑号 M5、非版本串。
+> **进门前置**：原三条 `ACCEPTED@M5` 债务中，BUG-0045+0046 已于 0.5.3 合并为
+> spec §3.2 clause 3/4 并转 `SPEC_CHANGED`（不再到期）；**余 BUG-0044**（§6 ATOP
+> 非-load 子类型应答义务）仍到期于 M5 签核，须**二选一再裁决、不得自动延期**
+> （见 guard G-0044）。本里程碑与其版本方案变更（v1.1.*→v0.5.*）均**不移动
+> `@M5` 锚点**——锚定里程碑号 M5、非版本串。
 
 Exit criteria（草稿，rev 门禁前不生效）：
 
@@ -129,10 +130,11 @@ Exit criteria（草稿，rev 门禁前不生效）：
       同时压到 §5.4.1 有效上限（design-prompt Decision 4）
 - [ ] **KILL 覆盖（不变量 5）**：M5 新引入的每类 checker（soak watchdog liveness、
       饱和探测器、随机约束合法性 env 兜底监视）各至少一条打 M5 标签的 KILL 行
-- [ ] **三条 ACCEPTED@M5 债务到期二选一仲裁**（rubric #8，不得自动延期）：BUG-0044
-      （§6 atop 非-load 应答义务，REV-019 SP-1）、BUG-0045（§3.2 `end_addr=='0`
-      末端哨兵，REV-021）、BUG-0046（§3.2 doc-vs-RTL `<=` vs `<`，REV-023）——各自
-      到期动作与可证伪解锁见对应 REV 记录 §Q3/§4
+- [ ] **BUG-0044 到期二选一仲裁**（rubric #8，不得自动延期）：§6 atop 非-load 子
+      类型应答义务（REV-019 SP-1；已核实事实见 `doc/bugs/BUG-0044.md` 的 orch
+      investigation note）——到期动作与可证伪解锁见该记录。姊妹两条 BUG-0045/0046
+      已于 0.5.3 合并入 spec §3.2 clause 3/4 转 `SPEC_CHANGED`，不再到期；其残留
+      约束（refmodel 哨兵分支未实现）改由 guard G-0045 承接
 - [ ] 签核：`doc/evidence/v0.5.*/signoff-M5.md`（rev 全 rubric）
 
 ## M6 — 六类覆盖 ≥90% 收敛（cov_loop，含 Toggle）🔲（提案草稿，rev 未过）

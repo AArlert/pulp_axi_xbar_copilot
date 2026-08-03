@@ -21,16 +21,22 @@
 4. spec 钉死 — 期望只来自 sha256 钉住的 `doc/spec.md`，永不来自被测 RTL。
 5. 无击杀不采信 — 每 milestone 每类 checker 至少一次注伤自证（植入缺陷→红→
    恢复→绿），`doc/bugs.md` 记一行 `KILL`。机器背书：`make check MILESTONE=<n>`
-   缺 KILL 即红。本条自 **M3 起**生效（0.3.6 裁决；M0-M2 按 FB-23 不回填,
-   M2 取证见 `doc/evidence/v0.2.5/signoff-M2.md` rubric #5）——故
-   `MILESTONE=0|1|2` 条件 4 恒红，属已知记账缺口，非实质缺口。
+   缺 KILL 即红。自 **M3 起**生效（0.3.6 裁决，M0-M2 不回填）——故
+   `MILESTONE=0|1|2` 条件 4 恒红属已知记账缺口。
+
+## 迭代优先：捷径可走，写明即可
+
+流程为证据服务，不是反过来。**五条不变量不可让**；其余（角色隔离、定级链、
+spec 的 arch→rev→orch 路径、closer 独立实例）明显过重时一律可为速度让路。
+**唯一条件**：在该轮 closeout 的 log 写一段「流程偏离」——偏了什么、为什么、
+风险自评。写明的捷径是决策，不写的是欠账。先例见 0.5.3。
 
 ## §0 角色与隔离（硬性规则）
 
-- **orch（主会话，即你）**：纯派发者——定级、组卡、隔离自检、按固定报告格式
-  收交付物、应用 rev 批准的 spec 修改并重新 pin、用 make 维护记忆系统。
-  **orch 不产出任何技术制品**：不写 RTL/TB/design-prompt/spec 内容。中文交流。
-  操作细则见 `/dispatch` skill（orch 的完整契约，派卡时载入）。
+- **orch（主会话，即你）**：派发者——定级、组卡、隔离自检、按固定报告格式收
+  交付物、应用 spec 修改并重新 pin、用 make 维护记忆系统。默认**不产出技术
+  制品**（RTL/TB/design-prompt/spec 内容），破例按上节写明。中文交流。操作
+  细则见 `/dispatch` skill（派卡时载入）。
 - **arch / de / dv / rev**：子代理，见 `.claude/agents/`（0.8.0 起为静态文件，
   不再渲染；本地改动自负）。各自边界写在自己文件里。
 - 实例隔离：每卡一个全新实例；DE 与 DV 对同一模块绝不共用；arch 与 rev 绝不
@@ -58,10 +64,10 @@ make check               # 关闭任何卡前必做
 ```
 
 失败：绝不登记为 evidence。按 `workflow/bugs.md` 分诊，登记 `doc/bugs.md`。
-**登记是无条件的**——不因是否阻塞 evidence、是否同卡内已绕过而豁免。本仓库
-为此吃过亏（M1-01 的 VCS-2018 `bind` 变通只落注释未进台账，事后补为 BUG-0007）。
-适用域=**验证失败**；文档/记账缺陷默认顺手修（当前 commit 直接修，零登记），
-仅当修复需**把已记录的绿翻红**才登记，两档细则见 `workflow/bugs.md`。
+**登记是无条件的**——不因是否阻塞 evidence、是否同卡内已绕过而豁免（吃过亏：
+M1-01 的 `bind` 变通只落注释未进台账，事后补为 BUG-0007）。适用域=**验证
+失败**；文档/记账缺陷默认顺手修（当前 commit 直接修，零登记），仅当修复需
+**把已记录的绿翻红**才登记，两档细则见 `workflow/bugs.md`。
 
 ## §3 门禁顺序（派发前置条件）
 
@@ -84,16 +90,14 @@ make check               # 关闭任何卡前必做
 
 ## §4 环境
 
-- 仿真在 VM（Ubuntu 22.04，VCS/Verdi O-2018）。工具变通见
-  `scripts/make/vcs-2018.mk` 头部。
-- **xverif 工具体系**（`xdebug` daidir/FSDB 事实与 RTL 因果 · `xcov` 覆盖库 ·
-  `xbit` 确定性 bit/SV 字面量计算 · `xloc` 压缩日志位置还原 · `xentry`
-  descriptor 解码 · `xsva` SVA IR · `xeda-runner` 安全执行 EDA 命令）不在
-  PATH：入口 `$XVERIF_ROOT/tools/`（默认 `/home/open_tools/xverif`，由
-  `vcs-2018.mk` 导出）；需先 `export VERDI_HOME`；用
-  `test -x $XVERIF_ROOT/tools/xcov` 探测，**绝不用 `command -v`**。
-- **优先用 xverif 取事实，而非心算/猜测**：失配定位、覆盖率核对、日志位置
-  还原、bit 与表达式计算，一律先做确定性查询。
+- 仿真在 VM（Ubuntu 22.04，VCS/Verdi O-2018）。变通见 `scripts/make/vcs-2018.mk`
+  头部。
+- **xverif 工具体系**（xdebug/xcov/xbit/xloc/xentry/xsva/xeda-runner，各自用途
+  见 `/xverif` skill）不在 PATH：入口 `$XVERIF_ROOT/tools/`（默认
+  `/home/open_tools/xverif`，由 `vcs-2018.mk` 导出）；需先 `export VERDI_HOME`；
+  用 `test -x $XVERIF_ROOT/tools/xcov` 探测，**绝不用 `command -v`**。
+- **优先用 xverif 取事实，而非心算/猜测**：失配定位、覆盖率核对、日志位置还原、
+  bit 与表达式计算，一律先做确定性查询。
 - **边界不变**：以上只是观测"实际发生了什么"的手段；checker 的**期望值**仍只
   准从 `doc/spec.md` 推导——波形/覆盖事实不得抄成期望值（spec-from-RTL 红线）。
 - 宿主机开发、克隆进 VM 运行；换行符由 `.gitattributes` 锁定，不要与它对抗。
@@ -104,23 +108,21 @@ make check               # 关闭任何卡前必做
 ## §5 Git 与上游
 
 - Conventional commits。Evidence 与它所证明的代码落同一 commit。closeout 后
-  `git push`（`make commit` 只到本地，本仓库原则是“小步快跑”，即长任务切片为可闭环的小任务，每次任务都推送到 github）。
-- 每次 clone 后执行两条一次性设置（`.git/config` 不随仓库走）：
+  `git push`（`make commit` 只到本地）。小步快跑：长任务切成可闭环小任务，每次都推。
+- 每次 clone 后两条一次性设置（`.git/config` 不随仓库走）：
   `git config core.hooksPath .githooks` ·
   `git remote add --no-tags upstream https://github.com/AArlert/iverif-workflow.git`
   （旧 clone 补 `git config remote.upstream.tagOpt --no-tags`；见 BUG-0055）
 - **与框架仓的关系（0.5.0 起为双向回流，不再有"上游"一说）**：`workflow/`、
   `scripts/`、`.claude/agents/` 归本仓库所有，怎么改是自己的事；**实践中检验
   有效的改动让框架仓来 cherry-pick**（记录在 fw-feedback）。反向取用：
-  `git fetch upstream --no-tags` 后 cherry-pick 想要的提交；移植基线 =
-  upstream `e23d938`，"对方比我们多了什么" =
-  `git log e23d938..upstream/master --oneline`。跟进后更新基线 sha 与
-  `iverif.json` 的 `framework` 字段。
-- **实践记录 `doc/fw-feedback.md`（旧名沿用，性质已变）**：不再是"求上游修"
-  的反馈台账，而是**我们做了什么改动、为什么**——自己先实践，做好了让上游来
-  cherry-pick。**硬要求**：既然已无 manifest 记录我们动过哪些上游文件，
-  **该台账就是那份记录本身**。任何对 `workflow/`/`scripts/`/`.claude/` 的本地
-  改动必须在此留行 + 代码旁注明 `见 doc/fw-feedback.md FB-xx`。
+  `git fetch upstream --no-tags` 后 cherry-pick；基线 = upstream `e23d938`
+  （`git log e23d938..upstream/master --oneline` 看差异），跟进后更新该 sha
+  与 `iverif.json` 的 `framework`。
+- **实践记录 `doc/fw-feedback.md`**：记**我们改了什么、为什么**（不再是"求上游
+  修"的台账），也是唯一记录我们动过哪些框架文件的账本。任何对 `workflow/`/
+  `scripts/`/`.claude/` 的改动必须在此留行 + 代码旁注 `见 doc/fw-feedback.md
+  FB-xx`。
 
 ## §6 项目专属
 
