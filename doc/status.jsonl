@@ -1,3 +1,4 @@
+{"date": "2026-08-03", "version": "0.5.14", "summary": "M5多种子回归51/51 PASS:regress.list M5全7测试扩充seed{1,2,3}(+14行),M0-M4维持seed1;约束随机层3种子下稳定无flaky;next=M6覆盖率收敛"}
 {"date": "2026-08-03", "version": "0.5.13", "summary": "BUG-0044 CLOSED:M5-AT03仿真PASS(route 18/0,resp 30/0,atop pairs 12/0,zero UVM_ERROR);make evidence翻绿testplan M5-AT03;BUG-0044 FIXING→CLOSED;next=M5多种子回归+M6覆盖率收敛"}
 {"date": "2026-08-03", "version": "0.5.12", "summary": "BUG-0044 Step3:M5-AT03定向测试场景落地(atomicstore/atomicswap/atomiccompare三阶段seq+vseq+test class);testplan行注册(🔲);AT01 stale注释更新;BUG-0044维持FIXING(三步代码全落地,待VM跑PASS后evidence关闭);regress.list+1;next=VM编译跑AT03→make evidence翻绿+BUG-0044关闭+M5多种子回归+M6"}
 {"date": "2026-08-03", "version": "0.5.11", "summary": "BUG-0044 Step2:scoreboard oracle天然支持全ATOP子类型(ATOP_R_RESP bit gate已通用);注释/消息泛化atomic-load→全子类型;cg_atop新增cp_atop_subtype(store/load/swap/cmp 4 bins);sample_atop改传完整atop_t;rev PASS(5处LOW陈旧注释已修);next=Step3 atop约束放开+测试"}

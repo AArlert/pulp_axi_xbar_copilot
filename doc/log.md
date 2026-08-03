@@ -4,6 +4,22 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.14] 2026-08-03 M5 多种子回归 51/51 PASS
+
+**Done**
+- `regress.list` M5 全 7 个测试扩充 seed {1,2,3}（+14 行），M0-M4 维持
+  seed 1。总计 51 行（30 M0-M4 + 21 M5）。
+- `make regress` 51/51 PASS：约束随机层在 3 种子下行为稳定，无 flaky。
+
+**Not done**
+- M6 覆盖率收敛未启动。
+
+**Next**
+- M6（`doc/milestone.md`）。
+
+**How verified**
+- `make regress` 51/51 PASS（`sim/result_summary.txt`）。
+
 ## [0.5.13] 2026-08-03 BUG-0044 关闭 — M5-AT03 仿真 PASS + evidence 收集
 
 **Done**
