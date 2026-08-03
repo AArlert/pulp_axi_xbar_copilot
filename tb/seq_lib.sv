@@ -2921,14 +2921,11 @@ class xbar_soak_cfgd_seq extends xbar_soak_seq;
 
   task body();
     int unsigned connected[$];
-    int unsigned def_port;
     int unsigned tgt;
 
     for (int unsigned m = 0; m < xbar_types_pkg::NO_MST_PORTS; m++)
       if (xbar_types_pkg::CONNECTIVITY[slv_port_idx][m])
         connected.push_back(m);
-    def_port = (slv_port_idx < xbar_types_pkg::NO_SLV_PORTS / 2)
-               ? xbar_types_pkg::CFG_DEF_LO : xbar_types_pkg::CFG_DEF_HI;
 
     // ---- round 0: peak on a rule-reachable port ----
     // Spread across mst0/mst1 (mod 2) to halve cross-port pileup.
