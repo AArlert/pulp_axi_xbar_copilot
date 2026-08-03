@@ -4,6 +4,31 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.6.2] 2026-08-04 M6 闭环 2：覆盖率基线测量（步 0）
+
+**Done**
+- `make regress COV=1` 全量 241/241 PASS（7 config points: baseline 196 +
+  cfgA-E 各 8 + m0 5 = 241），覆盖率累积到 per-config cov.vdb
+- urg 文本报告重生成（baseline `out/urgText6/`，cfgA-E/m0 各自
+  `out/<cfg>/urgText6/`），`cov_baseline.py` 产出 22 模块 × 6 类型现状表
+- 基线结果：132 cells，30 cells below 90%（18 UNOWNED + 11 waivered +
+  1 pending 0%），全格有数字
+- xcov 交叉核对 NPI_INIT_FAILED（Verdi O-2018 pynpi.cov 缺失），
+  记录为环境限制，urg 数字为唯一权威来源
+- `make evidence SCEN=M6-BL01` 翻绿 testplan
+
+**Not done**
+- xcov 数字交叉核对（环境限制，非遗漏）
+
+**Next**
+- M6 步 1：覆盖率缺口分析——30 cells 逐格分诊，识别可定向闭合的
+  UNOWNED 格（toggle 为主，部分 line/cond/branch），登记定向场景
+
+**How verified**
+- `sim/result_summary.txt` passed=241/241
+- `doc/evidence/v0.6.1/M6-BL01-coverage-baseline.md` 完整证据
+- `make check` OK
+
 ## [0.6.1] 2026-08-04 M6 闭环 1：BUG-0075 处置 + testplan 注册
 
 **Done**
