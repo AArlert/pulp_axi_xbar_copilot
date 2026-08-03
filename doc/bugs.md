@@ -20,4 +20,4 @@
 
 | id | class | status | summary | evidence | link |
 | --- | --- | --- | --- | --- | --- |
-| BUG-0044 | SPEC_ISSUE | FIXING | spec §6 补齐 atomicstore/atomicswap/atomiccompare 应答义务条款（SPEC-6.6/6.7/6.8）+ scoreboard oracle 天然支持（ATOP_R_RESP bit gate 已通用）+ M5-AT03 定向测试场景已落地，待 VM 编译运行后 make evidence 关闭 | - | doc/bugs/BUG-0044.md |
+| BUG-0044 | SPEC_ISSUE | CLOSED | spec §6 补齐 ATOP 子类型应答义务（SPEC-6.6/6.7/6.8）+ scoreboard oracle 天然支持 + M5-AT03 定向测试 PASS | doc/evidence/v0.5.12/M5-AT03.log | doc/bugs/BUG-0044.md |

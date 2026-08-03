@@ -4,6 +4,31 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.13] 2026-08-03 BUG-0044 关闭 — M5-AT03 仿真 PASS + evidence 收集
+
+**Done**
+- `make run TEST=m5_at03_atop_subtypes_test SEED=1` PASS（VM 运行）。
+  SB_SUMMARY: route match=18 mismatch=0 | resp match=30 mismatch=0 |
+  atop(§6.3/§6.6-6.8) pairs=12 open=0 | zero UVM_ERROR/FATAL。
+  数学核对：18 笔事务（6 端口 × 3 子类型）；30 resp = 6 B-only(store) +
+  12 B+R(swap) + 12 B+R(compare)；12 atop pairs = 6(swap) + 6(compare)。
+- `make evidence SCEN=M5-AT03` 翻绿 testplan M5-AT03 行。
+- BUG-0044 FIXING → CLOSED（bugs.md + BUG-0044.md，evidence 列指向
+  `doc/evidence/v0.5.12/M5-AT03.log`）。
+
+**Not done**
+- M5 多种子回归未跑。
+- M6 未启动。
+
+**Next**
+- M5 多种子回归（`make regress` 扩充 SEED 列表）。
+- M6 覆盖率收敛（`doc/milestone.md`）。
+
+**How verified**
+- `make check` 绿。
+- `make evidence` 从真实仿真 log 提取证据（红线 1）。
+- SB_SUMMARY 各字段数值与序列结构数学一致。
+
 ## [0.5.12] 2026-08-03 BUG-0044 Step 3 — ATOP 全子类型测试场景 + BUG 关闭
 
 **Done**
