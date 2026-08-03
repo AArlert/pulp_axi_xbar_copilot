@@ -48,19 +48,13 @@ M0–M4 的详细出口条件与逐条兑现记录不再在本页维护——git
 - 通用虚拟序列 `xbar_random_vseq`：配置无关，端口范围由生效配置点推导，全
   配置点复用；旋钮 = 事务数、atop 权重、撞车权重、未命中权重、汇聚偏置。
 
-### 场景骨架（6 行，注册进 testplan 时逐行落判据）
+### 场景骨架
 
-| id | config | 内容 |
-|---|---|---|
-| M5-RN01 | cfgC (UniqueIds=1) | 随机 vseq + 集中 ID 分配器保证前置条件 |
-| M5-RN02 | cfgD (稀疏 Conn + ATOPs=0) | 随机 vseq，约束保证 atop≡'0 且地址不出连通域 |
-| M5-RN03 | cfgE (FallThrough=1) | 随机 vseq，功能判据与 FallThrough=0 逐条相同 |
-| M5-SK01 | baseline 6×8 CUT_ALL_AX | 长随机饱和 soak，各桶在飞压到 §5.4.1 有效上限 15 |
-| M5-SK02 | cfgB 6×1 CUT_ALL_PORTS | 同上，mux 汇聚仲裁最紧 |
-| M5-SK03 | cfgA 1×8 NO_LATENCY | 同上，全组合路径 |
-
-（baseline/cfgA/cfgB 三点由 soak 行顺带承担——长随机是随机 vseq 的超集，
-故 6 行覆盖全部 6 个配置点。）
+六行（M5-RN01..03 约束随机 + M5-SK01..03 soak，baseline/cfgA/cfgB 三点由
+soak 行顺带承担、长随机是随机 vseq 的超集）已注册进 `doc/testplan.md`
+(status 🔲，判据/must-reach 角落/红线逐行落地)——**场景真值表以 testplan.md
+为准，本页不重复维护该表**，避免两处漂移。下面这份约束设计要点是 testplan
+六行共享的设计依据，由各行引用，不是场景清单本身。
 
 **反稀释四条**（随机场景不得靠"跑了不报错"混绿）：
 

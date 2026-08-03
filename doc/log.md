@@ -4,6 +4,43 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.7] 2026-08-03 文档漂移修复：M5 六行注册进 testplan.md（真值表归位）
+
+**Done**
+- 用户指出潜在文档漂移：milestone.md 的"场景骨架（6 行）"表（id/config/
+  内容）号称"注册进 testplan 时逐行落判据"，但一直未真正注册——
+  testplan.md 才是 CLAUDE.md 定义的场景真值表，milestone.md 只是进度表，
+  两处并存同形表格是真实漂移风险（而非已经漂移，因为内容还没来得及分岔，
+  但下一次任一处被单独改动就会分岔）。核实：`testplan.md` 自己的表头就写
+  明"Register rows BEFORE coding"；`scripts/docs.py` 的 `update_row`/
+  `row_exists` 只改已存在行，不建行——注册新行必须是人工步骤，机械脚本
+  不代劳。历史沿用的"未开始"状态符号是 `🔲`（评审/证据列留 `-`），git log
+  证实（重置前 59 处 `🔲`、55 处 `-`）。
+- 补齐 6 行 M5-RN01/RN02/RN03/SK01/SK02/SK03 到 testplan.md（status 🔲，
+  evidence/repro 留 `-`），每行落判据（oracle 复用现有 scoreboard/SVA、
+  spec 锚点、反稀释"必须真正到达"角落、适用红线），而非照抄 milestone.md
+  的一句话摘要——testplan 行本身要自包含。
+- milestone.md 的"场景骨架"表整块移除，改一段指回 testplan.md 的指针
+  （"场景真值表以 testplan.md 为准，本页不重复维护该表"），只保留仍然
+  正确归属 milestone.md 的共享设计依据（约束设计要点、反稀释四条）。
+- `make check`/`make next` 验证：`make next` 现在正确列出 6 个 M5 open
+  scenarios（此前一直是"M5 has no testplan rows yet"），确认机械推导层
+  与真实状态对齐。
+
+**Not done**
+- 6 行仍是 🔲（判据已落但代码未写）——M5 第二张活：约束随机层
+  `xbar_random_vseq` 待实现，实现后逐行 `make evidence` 转绿。
+
+**Next**
+- 写 `xbar_random_vseq`（milestone.md 约束设计要点：len/addr/id/atop 四
+  类硬软约束），先落 cfgC 一行（M5-RN01，集中 ID 分配器）跑通，再横向铺
+  其余 5 行。
+
+**How verified**
+- `make check` 绿；`make next` 输出从"M5 has no testplan rows yet"变为
+  列出 6 个具体 open scenario id，确认真值表与机械推导层对齐；6 行列数
+  逐行核对（7 列/8 个竖线，与表头一致）。
+
 ## [0.5.6] 2026-08-03 M5 第一张活：失败可追溯机制落地
 
 **Done**
