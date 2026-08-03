@@ -895,3 +895,20 @@ class m5_rn03_soak_test extends base_test;
     phase.drop_objection(this, "xbar_soak_vseq done");
   endtask
 endclass
+
+class m5_at03_atop_subtypes_test extends base_test;
+  `uvm_component_utils(m5_at03_atop_subtypes_test)
+
+  function new(string name = "m5_at03_atop_subtypes_test",
+               uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    m5_at03_atop_subtypes_vseq vseq;
+    phase.raise_objection(this, "m5_at03_atop_subtypes_vseq running");
+    vseq = m5_at03_atop_subtypes_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m5_at03_atop_subtypes_vseq done");
+  endtask
+endclass

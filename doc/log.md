@@ -4,6 +4,44 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.12] 2026-08-03 BUG-0044 Step 3 — ATOP 全子类型测试场景 + BUG 关闭
+
+**Done**
+- 新增 `slvport_at03_atop_subtypes_seq`（seq_lib.sv）：三阶段定向序列——
+  Phase A atomicstore（`{ATOP_ATOMICSTORE, LITTLE_END, ADD}`，SPEC-6.6
+  仅 B 无 R）、Phase B atomicswap（`6'b110000`，SPEC-6.7 B+R）、Phase C
+  atomiccompare（`6'b110001`，SPEC-6.8 B+R）。每笔 `len=0`，blocking
+  driver 使 SPEC-6.4 ID 唯一性 trivial。
+- 新增 `m5_at03_atop_subtypes_vseq`（fanout_per_slv 复用）+
+  `m5_at03_atop_subtypes_test`（test_lib.sv）。
+- M5-AT03 行注册进 testplan.md（status 🔲，判据锚 §6.6/§6.7/§6.8 +
+  `cp_atop_subtype` 四 bins 全命中 + 红线：期望值只从 spec 推导）。
+- `sim/regress/regress.list` 新增一行。
+- AT01 注释更新：stale "BUG-0044, ACCEPTED@M5" → "exercised by M5-AT03
+  (BUG-0044 resolution; spec §6.6/§6.7/§6.8)"。
+- BUG-0044 维持 FIXING（三步代码全部落地，待 VM 运行 M5-AT03 PASS 后
+  `make evidence` 关闭）。
+
+**Not done**
+- M5-AT03 仿真未跑（需 VM 编译验证），testplan status 仍 🔲。
+- BUG-0044 待仿真 PASS + evidence 后 FIXING → CLOSED。
+- M5 多种子回归未跑。
+- M6 未启动。
+
+**Next**
+- VM 编译运行 `make run TEST=m5_at03_atop_subtypes_test SEED=1`，
+  PASS 后 `make evidence SCEN=M5-AT03` 翻绿。
+- M5 多种子回归。
+- M6 覆盖率收敛。
+
+**How verified**
+- `make check` 绿。
+- 代码审查：scoreboard `write_slv_req` L547 `ro.atop[ATOP_R_RESP]` gate
+  天然覆盖 atomicstore（bit5=0→仅 B）和 swap/compare（bit5=1→B+R），
+  无逻辑改动；driver（slvport_agent:113）和 responder（mstport_agent:166）
+  同理。
+- seq_lib.sv AT03 序列的三个 atop 编码值逐一核对 axi_pkg.sv 定义。
+
 ## [0.5.11] 2026-08-03 BUG-0044 Step 2 — scoreboard oracle 支持全 ATOP 子类型
 
 **Done**

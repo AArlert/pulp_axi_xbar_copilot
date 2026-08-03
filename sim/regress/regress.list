@@ -35,3 +35,4 @@ m5_sk03_soak_test 1
 m5_rn01_soak_test 1
 m5_rn02_soak_test 1
 m5_rn03_soak_test 1
+m5_at03_atop_subtypes_test 1

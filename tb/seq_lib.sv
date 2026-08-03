@@ -732,10 +732,9 @@ class slvport_at01_atop_seq extends uvm_sequence #(axi_seq_item);
   // judgment (still just "B+R came back", scoreboard_refmodel.sv:534
   // gates only on ATOP[5]=ATOP_R_RESP) without adding a new one. The
   // remaining ATOP subtypes — atomicstore (`ATOP[5:4]=2'b01`) and the
-  // atomicswap/atomiccompare full-6-bit encodings `6'b11000_` — stay out of
-  // scope: spec §6 has no response-obligation clause for them (BUG-0044,
-  // ACCEPTED@M5); this card does not touch that gap, only the atomic-load
-  // subset residual REV-026 C-2 named.
+  // atomicswap/atomiccompare full-6-bit encodings `6'b11000_` — are exercised
+  // by M5-AT03 (BUG-0044 resolution; spec §6.6/§6.7/§6.8); this card covers
+  // only the atomic-load subset residual REV-026 C-2 named.
   function automatic axi_pkg::atop_t load_encoding(input logic [3:0] idx4);
     return {axi_pkg::ATOP_ATOMICLOAD, idx4};
   endfunction
@@ -834,6 +833,106 @@ class m2_at01_atop_vseq extends uvm_sequence #(uvm_sequence_item);
 
   task body();
     fanout_per_slv#(slvport_at01_atop_seq)::run(p_sequencer, "at01_seq");
+  endtask
+endclass
+
+// ----------------------------------------------------------------------------
+// M5-AT03 — ATOP subtypes: atomicstore / atomicswap / atomiccompare
+// (testplan.md M5-AT03, BUG-0044 resolution, spec §6.6/§6.7/§6.8).
+//
+// Phase A (atomicstore, §6.6): each slave port sends one atomicstore
+//   (ATOP[5:4]=ATOP_ATOMICSTORE, ATOP_R_RESP=0) — expects only B, no R.
+// Phase B (atomicswap, §6.7): each slave port sends one atomicswap
+//   (atop=ATOP_ATOMICSWAP=6'b110000, ATOP_R_RESP=1) — expects B+R.
+// Phase C (atomiccompare, §6.8): each slave port sends one atomiccompare
+//   (atop=ATOP_ATOMICCMP=6'b110001, ATOP_R_RESP=1) — expects B+R.
+//
+// All addresses hit the rule table (§4.7 env constraint). Blocking driver
+// makes each transaction standalone, so §6.4 ID-uniqueness holds trivially.
+// Scoreboard judges routing + atop passthrough (§6.1) + response pairing
+// (§6.6: B-only / §6.7-6.8: B+R). The responder (mstport_agent.sv) already
+// handles ATOP_R_RESP=1 by queueing an R response (line 166), and the
+// driver (slvport_agent.sv) already handles ATOP_R_RESP=0 by skipping the
+// R-wait (line 113) — no infrastructure change needed.
+// ----------------------------------------------------------------------------
+class slvport_at03_atop_subtypes_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_at03_atop_subtypes_seq)
+
+  int unsigned slv_port_idx;
+
+  function new(string name = "slvport_at03_atop_subtypes_seq");
+    super.new(name);
+  endfunction
+
+  task body();
+    int unsigned tgt;
+    tgt = slv_port_idx % xbar_types_pkg::NO_MST_PORTS;
+
+    // ---- Phase A: atomicstore (spec §6.6, B-only) ----
+    begin
+      axi_seq_item item;
+      item = axi_seq_item::type_id::create(
+          $sformatf("at03_store_%0d", slv_port_idx));
+      start_item(item);
+      item.is_write = 1'b1;
+      item.atop     = {axi_pkg::ATOP_ATOMICSTORE, axi_pkg::ATOP_LITTLE_END,
+                        axi_pkg::ATOP_ADD};
+      item.id       = xbar_types_pkg::id_slv_t'(slv_port_idx);
+      item.addr     = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
+                      + 32'h0000_0A00
+                      + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+      item.len      = axi_pkg::len_t'(0);
+      fill_wr_payload(item, item.len);
+      finish_item(item);
+    end
+
+    // ---- Phase B: atomicswap (spec §6.7, B+R) ----
+    begin
+      axi_seq_item item;
+      item = axi_seq_item::type_id::create(
+          $sformatf("at03_swap_%0d", slv_port_idx));
+      start_item(item);
+      item.is_write = 1'b1;
+      item.atop     = axi_pkg::ATOP_ATOMICSWAP;
+      item.id       = xbar_types_pkg::id_slv_t'(slv_port_idx + 8);
+      item.addr     = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
+                      + 32'h0000_0B00
+                      + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+      item.len      = axi_pkg::len_t'(0);
+      fill_wr_payload(item, item.len);
+      finish_item(item);
+    end
+
+    // ---- Phase C: atomiccompare (spec §6.8, B+R) ----
+    begin
+      axi_seq_item item;
+      item = axi_seq_item::type_id::create(
+          $sformatf("at03_cmp_%0d", slv_port_idx));
+      start_item(item);
+      item.is_write = 1'b1;
+      item.atop     = axi_pkg::ATOP_ATOMICCMP;
+      item.id       = xbar_types_pkg::id_slv_t'(slv_port_idx + 16);
+      item.addr     = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
+                      + 32'h0000_0C00
+                      + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+      item.len      = axi_pkg::len_t'(0);
+      fill_wr_payload(item, item.len);
+      finish_item(item);
+    end
+  endtask
+endclass
+
+class m5_at03_atop_subtypes_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m5_at03_atop_subtypes_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+
+  function new(string name = "m5_at03_atop_subtypes_vseq");
+    super.new(name);
+  endfunction
+
+  task body();
+    fanout_per_slv#(slvport_at03_atop_subtypes_seq)::run(
+        p_sequencer, "at03_seq");
   endtask
 endclass
 
