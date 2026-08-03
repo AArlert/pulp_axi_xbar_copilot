@@ -815,6 +815,35 @@ class m5_sk03_soak_test extends base_test;
   endtask
 endclass
 
+// M5-RN02 cfgD (4×4, sparse Connectivity, ATOPs=0) constrained random soak
+// (testplan.md M5-RN02). Applies default-port config (mst2/mst3, spec §3.3)
+// then runs cfgD-specific soak with targets restricted to connected ports.
+class m5_rn02_soak_test extends base_test;
+  `uvm_component_utils(m5_rn02_soak_test)
+
+  virtual xbar_cfg_if cfg_vif;
+
+  function new(string name = "m5_rn02_soak_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    uvm_config_db#(int)::set(this, "env.mst_agent*", "resp_hold", 100);
+    super.build_phase(phase);
+    if (!uvm_config_db#(virtual xbar_cfg_if)::get(this, "", "cfg_vif", cfg_vif))
+      `uvm_fatal("NOCFGVIF", "m5_rn02_soak_test: cfg_vif not set")
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    xbar_soak_cfgd_vseq vseq;
+    phase.raise_objection(this, "xbar_soak_cfgd_vseq running");
+    vseq = xbar_soak_cfgd_vseq::type_id::create("vseq");
+    vseq.cfg_vif = cfg_vif;
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "xbar_soak_cfgd_vseq done");
+  endtask
+endclass
+
 // M5-RN03 cfgE (FallThrough=1) constrained random soak (testplan.md M5-RN03).
 // Same topology as baseline (6×8); no cfgE-specific constraint tightening.
 class m5_rn03_soak_test extends base_test;

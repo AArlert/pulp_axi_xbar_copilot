@@ -2896,3 +2896,97 @@ class xbar_soak_vseq extends uvm_sequence #(uvm_sequence_item);
     fanout_per_slv#(xbar_soak_seq)::run(p_sequencer, "xsoak_seq");
   endtask
 endclass
+
+// xbar_soak_cfgd_seq: cfgD-specific soak leaf (testplan M5-RN02, SPEC-8.3).
+// Constraints vs the generic xbar_soak_seq:
+//   (1) targets restricted to connected ports per CONNECTIVITY[slv_port_idx]
+//   (2) rule-reachable ports (mst0/mst1, idx < CFG_RULE_MST_MOD) addressed
+//       normally; default port addressed via unmapped region (>= 0x8000_0000)
+//   (3) ATOPs already '0 in build_txlimit_burst — no additional constraint
+class xbar_soak_cfgd_seq extends xbar_soak_seq;
+  `uvm_object_utils(xbar_soak_cfgd_seq)
+
+  function new(string name = "xbar_soak_cfgd_seq");
+    super.new(name);
+  endfunction
+
+  // Address-region index that routes traffic to tgt via cfgD's routing rules:
+  // mst0/mst1 are rule-reachable (region idx = tgt); default port is only
+  // reachable via unmapped addresses (region idx = NO_ADDR_RULES → addr base
+  // 0x8000_0000, outside all 8 rule windows).
+  function automatic int unsigned cfgd_region(input int unsigned tgt);
+    return (tgt < xbar_types_pkg::CFG_RULE_MST_MOD)
+             ? tgt : xbar_types_pkg::NO_ADDR_RULES;
+  endfunction
+
+  task body();
+    int unsigned connected[$];
+    int unsigned def_port;
+    int unsigned tgt;
+
+    for (int unsigned m = 0; m < xbar_types_pkg::NO_MST_PORTS; m++)
+      if (xbar_types_pkg::CONNECTIVITY[slv_port_idx][m])
+        connected.push_back(m);
+    def_port = (slv_port_idx < xbar_types_pkg::NO_SLV_PORTS / 2)
+               ? xbar_types_pkg::CFG_DEF_LO : xbar_types_pkg::CFG_DEF_HI;
+
+    // ---- round 0: peak on a rule-reachable port ----
+    // Spread across mst0/mst1 (mod 2) to halve cross-port pileup.
+    tgt = slv_port_idx % xbar_types_pkg::CFG_RULE_MST_MOD;
+    fire_round(1'b1, cfgd_region(tgt), '{0, 1},
+               '{xbar_types_pkg::MAX_MST_TRANS_EFF, 3}, 32'h0010_0000,
+               $sformatf("xrand_w_%0d_peak", slv_port_idx));
+    fire_round(1'b0, cfgd_region(tgt), '{0, 1},
+               '{xbar_types_pkg::MAX_MST_TRANS_EFF, 3}, 32'h0020_0000,
+               $sformatf("xrand_r_%0d_peak", slv_port_idx));
+
+    // ---- sweep: visit every connected port round 0 did not hit ----
+    for (int unsigned i = 0; i < connected.size(); i++) begin
+      if (connected[i] == tgt) continue;
+      fire_round(1'b1, cfgd_region(connected[i]), '{0}, '{1},
+                 32'h0040_0000 + xbar_types_pkg::addr_t'(i) * 32'h4000,
+                 $sformatf("xsoak_%0d_sweep_m%0d", slv_port_idx, connected[i]));
+    end
+
+    // ---- random rounds: target constrained to connected ports ----
+    for (int unsigned r = 1; r < num_rounds; r++) begin
+      int unsigned buckets[$];
+      int unsigned depth[$];
+      bit          dir;
+      int unsigned pick, r_tgt;
+
+      for (int unsigned i = 0; i < 2; i++) begin
+        buckets.push_back($urandom_range(0, 1));
+        depth.push_back($urandom_range(2, 3));
+      end
+      dir   = bit'($urandom_range(0, 1));
+      pick  = $urandom_range(0, connected.size() - 1);
+      r_tgt = connected[pick];
+      fire_round(dir, cfgd_region(r_tgt), buckets, depth,
+                 32'h0030_0000 + xbar_types_pkg::addr_t'(r) * 32'h0001_0000,
+                 $sformatf("xrand_%0d_r%0d", slv_port_idx, r));
+    end
+  endtask
+endclass
+
+// xbar_soak_cfgd_vseq: applies cfgD default-port config (spec §3.3/§3.4)
+// then fans out xbar_soak_cfgd_seq on all slave ports.
+class xbar_soak_cfgd_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(xbar_soak_cfgd_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  virtual xbar_cfg_if cfg_vif;
+
+  function new(string name = "xbar_soak_cfgd_vseq");
+    super.new(name);
+  endfunction
+
+  task body();
+    if (cfg_vif == null)
+      `uvm_fatal("NOCFGVIF", "xbar_soak_cfgd_vseq: cfg_vif not set")
+    do @(posedge cfg_vif.clk_i); while (!cfg_vif.all_ax_idle);
+    cfg_vif.en_default_mst_port <= xbar_types_pkg::EN_DEFAULT_CFGD;
+    cfg_vif.default_mst_port    <= xbar_types_pkg::DEFAULT_MST_CFGD;
+    repeat (3) @(posedge cfg_vif.clk_i);
+    fanout_per_slv#(xbar_soak_cfgd_seq)::run(p_sequencer, "xsoak_cfgd_seq");
+  endtask
+endclass
