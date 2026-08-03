@@ -70,6 +70,18 @@ ifneq ($(filter m4_ft01_%,$(TEST)),)
 CFG_DEFINE := +define+XBAR_CFG_E
 override OUT := $(OUT)/cfgE
 endif
+ifneq ($(filter m5_sk02_%,$(TEST)),)
+CFG_DEFINE := +define+XBAR_CFG_B
+override OUT := $(OUT)/cfgB
+endif
+ifneq ($(filter m5_sk03_%,$(TEST)),)
+CFG_DEFINE := +define+XBAR_CFG_A
+override OUT := $(OUT)/cfgA
+endif
+ifneq ($(filter m5_rn03_%,$(TEST)),)
+CFG_DEFINE := +define+XBAR_CFG_E
+override OUT := $(OUT)/cfgE
+endif
 RUN_LOG := $(BASE_OUT)/$(TEST)_$(SEED).log
 
 # lint 门禁的判定范围与执行证明范围（BUG-0022）：本仓库交付的全部 tb 源文件。

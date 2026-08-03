@@ -766,3 +766,74 @@ class m5_sk01_soak_test extends base_test;
     phase.drop_objection(this, "xbar_soak_vseq done");
   endtask
 endclass
+
+// M5-SK02 cfgB (6×1 CUT_ALL_PORTS) saturation soak (testplan.md M5-SK02).
+// cfgB: all 6 slave ports converge on the single master port — round 0's
+// 6×36=216 items all hit one responder, so resp_hold must be much lower than
+// baseline's 100 to stay within the 200000ns watchdog. 20 cycles still builds
+// genuine depth: 6 concurrent senders inject faster than one responder drains.
+class m5_sk02_soak_test extends base_test;
+  `uvm_component_utils(m5_sk02_soak_test)
+
+  function new(string name = "m5_sk02_soak_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    uvm_config_db#(int)::set(this, "env.mst_agent*", "resp_hold", 20);
+    super.build_phase(phase);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    xbar_soak_vseq vseq;
+    phase.raise_objection(this, "xbar_soak_vseq running");
+    vseq = xbar_soak_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "xbar_soak_vseq done");
+  endtask
+endclass
+
+// M5-SK03 cfgA (1×8 NO_LATENCY) saturation soak (testplan.md M5-SK03).
+class m5_sk03_soak_test extends base_test;
+  `uvm_component_utils(m5_sk03_soak_test)
+
+  function new(string name = "m5_sk03_soak_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    uvm_config_db#(int)::set(this, "env.mst_agent*", "resp_hold", 100);
+    super.build_phase(phase);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    xbar_soak_vseq vseq;
+    phase.raise_objection(this, "xbar_soak_vseq running");
+    vseq = xbar_soak_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "xbar_soak_vseq done");
+  endtask
+endclass
+
+// M5-RN03 cfgE (FallThrough=1) constrained random soak (testplan.md M5-RN03).
+// Same topology as baseline (6×8); no cfgE-specific constraint tightening.
+class m5_rn03_soak_test extends base_test;
+  `uvm_component_utils(m5_rn03_soak_test)
+
+  function new(string name = "m5_rn03_soak_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    uvm_config_db#(int)::set(this, "env.mst_agent*", "resp_hold", 100);
+    super.build_phase(phase);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    xbar_soak_vseq vseq;
+    phase.raise_objection(this, "xbar_soak_vseq running");
+    vseq = xbar_soak_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "xbar_soak_vseq done");
+  endtask
+endclass
