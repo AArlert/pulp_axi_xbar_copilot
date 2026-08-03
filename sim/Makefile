@@ -78,6 +78,10 @@ ifneq ($(filter m5_sk03_%,$(TEST)),)
 CFG_DEFINE := +define+XBAR_CFG_A
 override OUT := $(OUT)/cfgA
 endif
+ifneq ($(filter m5_rn01_%,$(TEST)),)
+CFG_DEFINE := +define+XBAR_CFG_C
+override OUT := $(OUT)/cfgC
+endif
 ifneq ($(filter m5_rn02_%,$(TEST)),)
 CFG_DEFINE := +define+XBAR_CFG_D
 override OUT := $(OUT)/cfgD

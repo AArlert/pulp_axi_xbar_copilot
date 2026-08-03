@@ -815,6 +815,35 @@ class m5_sk03_soak_test extends base_test;
   endtask
 endclass
 
+// M5-RN01 cfgC (4×4, UniqueIds=1) constrained random soak (testplan.md M5-RN01).
+// SPEC-5.3.1 precondition: drive_burst() (slvport_agent.sv) fully drains all
+// responses before item_done(), so sequential fire_round() calls never overlap
+// in-flight windows — cross-burst ID conflict is structurally impossible. Within
+// each burst, all items target one port, so same-ID reuse is legal (branch b).
+// The peak burst's 15 items with 4 cycling IDs exercises the "same ID, same dir,
+// multiple in-flight, all same target" must-reach. The scoreboard's uid_check
+// (gated on Cfg.UniqueIds) monitors the precondition as TB_BUG fallback.
+class m5_rn01_soak_test extends base_test;
+  `uvm_component_utils(m5_rn01_soak_test)
+
+  function new(string name = "m5_rn01_soak_test", uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+
+  virtual function void build_phase(uvm_phase phase);
+    uvm_config_db#(int)::set(this, "env.mst_agent*", "resp_hold", 100);
+    super.build_phase(phase);
+  endfunction
+
+  virtual task run_phase(uvm_phase phase);
+    xbar_soak_vseq vseq;
+    phase.raise_objection(this, "xbar_soak_vseq running");
+    vseq = xbar_soak_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "xbar_soak_vseq done");
+  endtask
+endclass
+
 // M5-RN02 cfgD (4×4, sparse Connectivity, ATOPs=0) constrained random soak
 // (testplan.md M5-RN02). Applies default-port config (mst2/mst3, spec §3.3)
 // then runs cfgD-specific soak with targets restricted to connected ports.
