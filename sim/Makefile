@@ -23,7 +23,7 @@ IS_UVM := 0
 # top-level designs). Redirect only the coverage DB, not OUT itself, so
 # the build product (out/simv) and `make clean`'s scope (bare `make
 # clean` still wipes the whole $(OUT) tree, unaffected by TEST's default
-# value of upstream_sanity) are unchanged. 见 doc/fw-feedback.md FB-30.
+# value of upstream_sanity) are unchanged. 见 git show v0.5.3-pre-reset:doc/fw-feedback.md FB-30.
 COV_DIR := $(OUT)/m0/cov.vdb
 else
 FLISTS := -f flist/vendor.f -f flist/dut.f -f flist/tb.f
@@ -36,7 +36,7 @@ endif
 # a config never reuses another config's elaborated simv — the silent-pass
 # hazard behind BUG-0022 (lint 假绿) / BUG-0028 (分母缩水). C5.2 isolation is on
 # the BUILD PRODUCT (simv/daidir in $(OUT)/cfgA), NOT the run log: the run log
-# stays at the base out/ standard path ($(BASE_OUT)) so evidence.py/regress.py
+# stays at the base out/ standard path ($(BASE_OUT)) so docs.py/regress.py
 # default lookups (sim/out/{test}_{seed}.log) find it with no LOG= override and
 # no scripts change — the log self-identifies its config via [CFG_REPORT] (C5.3)
 # regardless of where the simv lives. Only the matched branch touches OUT;
@@ -82,7 +82,7 @@ LINT_SRCS := $(shell find ../tb -name '*.sv' | sed 's|^\.\./tb/||' | sort)
 # BUG-0037: mkdir also COV_DIR's parent -- for the baseline/cfg cases it
 # equals $(OUT) already (no-op), but M0's COV_DIR lives one level under
 # $(OUT) (out/m0/) without $(OUT) itself moving there, so it needs its own
-# mkdir. 见 doc/fw-feedback.md FB-30.
+# mkdir. 见 git show v0.5.3-pre-reset:doc/fw-feedback.md FB-30.
 compile:
 	@mkdir -p $(OUT) $(if $(filter 1,$(COV)),$(dir $(COV_DIR)))
 	$(VCS) $(VCS_FLAGS_2018) $(if $(filter 1,$(COV)),$(CM)) $(CFG_DEFINE) $(FLISTS) \
@@ -90,7 +90,7 @@ compile:
 
 # 上游 tb 以 $stop 结束 → ucli 脚本驱动批处理；UVM tb_top 以 run_test()
 # 内部 $finish 自然结束，不需要 ucli。SIM_OPTS_2018（-assert verbose）
-# 不可省：sva_enforce 下 evidence.py/regress.py 依赖其原生 "Summary: N
+# 不可省：sva_enforce 下 docs.py/regress.py 依赖其原生 "Summary: N
 # assertions" 行，缺行即 fail-closed（拒收证据）。+ntb_random_seed 为 SV
 # RNG 种子（M0/M1 通用）。
 #
@@ -128,7 +128,7 @@ regress:
 # BUG-0037: -dir now $(COV_DIR), not a hardcoded $(OUT)/cov.vdb, so a query
 # for a given TEST/OUT resolves to the SAME db that `make run` for that
 # TEST actually wrote into (see the TEST=upstream_sanity/cfgA-D overrides
-# above). 见 doc/fw-feedback.md FB-30.
+# above). 见 git show v0.5.3-pre-reset:doc/fw-feedback.md FB-30.
 cov:
 	urg -full64 -dir $(COV_DIR) -report $(OUT)/urgReport
 

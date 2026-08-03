@@ -1,6 +1,3 @@
 #!/bin/sh
-# Local soft gate (bypassable with --no-verify; project CI still hard-fails).
-# 0.8.0: the fwsync drift check retired with the tool — upstream files are no
-# longer hash-pinned, so there is no drift state left to warn about.
+# Local soft gate (bypassable with --no-verify; CI still hard-fails).
 python3 scripts/docs.py --check || exit 1
-# FB-40: scripts/docsx.py dissolved into scripts/docs.py — one entry point.

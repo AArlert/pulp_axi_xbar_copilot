@@ -1,5 +1,7 @@
 # Testplan
 
+> **注（0.5.4 重置）**：文中出现的 `doc/evidence|review|design-prompt|archive`、`workflow/`、`doc/guards.md`、`doc/fw-feedback.md` 等路径为重置前产物，工作树已移除；查阅用 `git show v0.5.3-pre-reset:<path>`。
+
 Scenario truth table — contract: workflow/records.md's "Testplan entry" section. Register rows BEFORE coding; ✅/evidence/repro are script-owned.
 
 | id | milestone | description | config | status | evidence | repro |

@@ -1,5 +1,7 @@
 # AXI 基础：从零读懂本项目的 DUT
 
+> **注（0.5.4 重置）**：文中出现的 `doc/evidence|review|design-prompt|archive`、`workflow/`、`doc/guards.md`、`doc/fw-feedback.md` 等路径为重置前产物，工作树已移除；查阅用 `git show v0.5.3-pre-reset:<path>`。
+
 > **这份文档是什么**：给人看的 AXI4 入门读物，逐层递进，最后落到本仓库的 DUT
 > （`axi_xbar`）上。目标是让一个没碰过 AXI 的人读完能看懂 `doc/spec.md` 和
 > 那张数据流图。

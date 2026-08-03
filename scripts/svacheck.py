@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """SVA assertion-failure detection — the single judgment point shared by
-evidence.py and any project-owned regress loop (via `--judge <log>`; see
+docs.py (evidence) and any project-owned regress loop (via `--judge <log>`; see
 scripts/make/vcs-2018.mk's reference pattern). Ported from
 ppa-lite-copilot BUG-014, with the BUG-017/BUG-018 adversarial hardenings.
 
@@ -282,7 +282,7 @@ def judge(text, cfg, baseline=None):
 
 def main():
     """python3 scripts/svacheck.py --judge <log>: the one-log, two-leg
-    primitive (log_verdict + SVA layers, via judge()) that evidence.py and
+    primitive (log_verdict + SVA layers, via judge()) that docs.py (evidence) and
     any project-owned regress loop share — the single judgment point this
     module exists to centralize. Prints PASS or FAIL <reason> to stdout;
     exit code 0/1 tracks the verdict.

@@ -20,7 +20,7 @@
 #               UVM_ERROR and do not change the simv exit code; the native
 #               "Summary: N assertions, ..." line this option prints is the
 #               only structured proof of assertion cleanliness, and
-#               evidence.py / svacheck.py --judge fail-closed without it
+#               docs.py(evidence) / svacheck.py --judge fail-closed without it
 #               (ppa BUG-014). Never drop it from the run rule.
 #   cov-dir-lazy - CM's `-cm_dir` used to be bound with `:=` (immediate
 #               expansion) at include time, freezing whatever OUT held
@@ -29,7 +29,7 @@
 #               `make run` wrote into the same shared cov.vdb regardless of
 #               which design/topology it was (pulp BUG-0037) => CM/COV_DIR
 #               are now recursive (`=`), resolved at recipe-execution time
-#               instead. 见 doc/fw-feedback.md FB-30.
+#               instead. 见 git show v0.5.3-pre-reset:doc/fw-feedback.md FB-30.
 
 # ---- EDA environment fallback (non-interactive shells skip ~/.bashrc) ----
 export VCS_HOME        ?= /home/synopsys/vcs-mx/O-2018.09-SP2
@@ -64,7 +64,7 @@ FSDB ?= 0
 # every M1+ UVM test — see BUG-0037) without touching OUT itself, which
 # would also move that TEST's build product and narrow `make clean`'s
 # scope. Recursive (`=`, not `:=`): must resolve OUT/its own override at
-# CM's point of use, not at this include. 见 doc/fw-feedback.md FB-30.
+# CM's point of use, not at this include. 见 git show v0.5.3-pre-reset:doc/fw-feedback.md FB-30.
 COV_DIR = $(OUT)/cov.vdb
 
 VCS    := vcs
@@ -87,7 +87,7 @@ ifeq ($(COV),1)
 # `=` (recursive), not `:=`: must re-resolve COV_DIR at the point compile:/
 # run: actually reference $(CM) (recipe-execution time), by which point the
 # including Makefile's per-config `override OUT` / per-TEST `COV_DIR`
-# overrides have already run (BUG-0037). 见 doc/fw-feedback.md FB-30.
+# overrides have already run (BUG-0037). 见 git show v0.5.3-pre-reset:doc/fw-feedback.md FB-30.
 CM = -cm line+cond+fsm+tgl+branch+assert -cm_dir $(COV_DIR)
 # Optional measurement-domain filter: CMHIER=<cfg> passes -cm_hier to both
 # compile and sim (restrict to the tb subtree / exclude UVM library

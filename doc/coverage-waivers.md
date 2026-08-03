@@ -1,5 +1,7 @@
 # Coverage waivers（rev 签核；REV-024 建档，REV-016 §9.5 触发）
 
+> **注（0.5.4 重置）**：文中出现的 `doc/evidence|review|design-prompt|archive`、`workflow/`、`doc/guards.md`、`doc/fw-feedback.md` 等路径为重置前产物，工作树已移除；查阅用 `git show v0.5.3-pre-reset:<path>`。
+
 覆盖率缺口（有 bin、<90%）的书面豁免登记本。凡 silent exclude（无本表条目的
 排除）失效（`workflow/bugs.md` L229）。每条豁免须声明 **Kind** 与**可证伪解锁**。
 
