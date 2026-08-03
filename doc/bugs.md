@@ -20,4 +20,4 @@
 
 | id | class | status | summary | evidence | link |
 | --- | --- | --- | --- | --- | --- |
-| BUG-0044 | SPEC_ISSUE | OPEN | spec §6 只载 atomic-load 应答义务（B+R，§6.3），store/swap/compare 三子类无 oracle；M5 随机层暂以有界约束（`{'0} ∪ load 编码`）挡住，构造场景时二选一：补 §6 条款+定向场景+oracle，或书面记范围外 | - | doc/bugs/BUG-0044.md |
+| BUG-0044 | SPEC_ISSUE | FIXING | spec §6 补齐 atomicstore/atomicswap/atomiccompare 应答义务条款（SPEC-6.6/6.7/6.8），来源 axi_pkg.sv（RTL）；scoreboard oracle 扩展 + atop 约束放开 + 测试场景分版本落地中 | - | doc/bugs/BUG-0044.md |

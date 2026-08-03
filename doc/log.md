@@ -4,6 +4,35 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.10] 2026-08-03 BUG-0044 裁决 Step 1 — spec §6 补齐 ATOP 子类型条款
+
+**Done**
+- Spec §6 新增三条条款：SPEC-6.6（atomicstore 仅 B，无 R，`ATOP_R_RESP`=0）、
+  SPEC-6.7（atomicswap B+R，`ATOP_R_RESP`=1）、SPEC-6.8（atomiccompare B+R，
+  `ATOP_R_RESP`=1）。来源 `axi_pkg.sv` L381-447（标注"来源：RTL——上游文档
+  未载"，demux.md 仅显式提及 atomic load）。
+- §6.5 泛化：从"仅 atomic load"到"要求读响应的全部原子操作
+  （`ATOP_R_RESP`=1：load/swap/compare）"，标注泛化范围依据 §6.7/§6.8 的
+  RTL 来源条款推导。
+- BUG-0044 状态 OPEN → FIXING，bugs.md 摘要同步更新。
+- Rev 独立评审 PASS（F-1：clause 5 泛化来源标注已修；O-1：clauses 7/8
+  实现模块名替换为机制描述）。
+
+**Not done**
+- Step 2：scoreboard oracle 扩展（基于新 spec 条款）。
+- Step 3：atop 约束放开 + 测试场景。
+
+**Next**
+- Step 2（0.5.11）：scoreboard 对 atomicstore 只期望 B、对 swap/compare
+  登记 B+R pair；更新 fcov sampling。
+- Step 3（0.5.12）：放开 atop rand 约束到全子类型、注册 testplan 行、写
+  test class、跑仿真、make evidence。
+
+**How verified**
+- `make check` 绿。
+- Rev 独立评审 PASS（事实核对 axi_pkg.sv/axi_demux_simple.sv/demux.md、
+  来源标注检查、红线检查——无 RTL 实现体值泄漏为期望值）。
+
 ## [0.5.9] 2026-08-03 M5 全 6 行翻绿（Slice 2-4 交付）
 
 **Done**

@@ -375,16 +375,45 @@
 4. 环境约束（AXI5 协议要求，mux.md/demux.md 同述）：master 必须保证 ATOP
    事务的 ID 与当前**所有**（读+写）在飞事务的 ID 不同；ATOP 亦因此在读写
    通道间引入 AXI4 中不存在的依赖。验证侧激励必须满足此约束。
-5. **原子读对读方向的跨方向假冲突 stall（派生条款，BUG-0012 裁决，REV-005
-   §3）**：原子读（atomic load）从不发出 AR，故 AR 方向的 §5.2/§5.4 计数/
-   比较机制若对其读响应（R beat）一无所知就会下溢；为防止这一下溢，AW 发起
-   要求读响应的原子操作时，其 ID 被同时注入 AR 方向的该计数/比较机制（demux.md
+5. **要求读响应的原子操作对读方向的跨方向假冲突 stall（派生条款，BUG-0012
+   裁决，REV-005 §3；泛化 BUG-0044 裁决——泛化范围超出 demux.md 字面
+   "atomic load"，依据 §6.7/§6.8 的 RTL 来源条款推导）**：要求读响应的原子操作
+   （`aw.atop[ATOP_R_RESP]`=1：atomic load §6.3、atomicswap §6.7、
+   atomiccompare §6.8）从不发出 AR，故 AR 方向的 §5.2/§5.4 计数/比较机制若
+   对其读响应（R beat）一无所知就会下溢；为防止这一下溢，AW 发起要求读响应
+   的原子操作时，其 ID 被同时注入 AR 方向的该计数/比较机制（demux.md
    §Atomic Transactions→Implementation L83-87）。该机制仍只比较 ID 的低
-   `AxiIdUsedSlvPorts` 位，故一笔原子读可能使同一 slave 端口上另一笔低位
+   `AxiIdUsedSlvPorts` 位，故该原子操作可能使同一 slave 端口上另一笔低位
    ID 相同、目标不同 master 端口的**普通读**依 §5.2.1 被 stall——这是一次
    由 ATOP 写事件引发的读方向 stall（交叉引用 §5.2.5），超出 §5.2.1 字面
    "仅同方向配对"框架，但属正常设计行为，非退化。验证侧：该交互只影响是否
    被 stall（性能/时序），不影响功能正确性。
+6. **原子存储（atomicstore）应答义务（BUG-0044 裁决）
+   （来源：RTL——上游文档未载）**：`aw.atop[5:4]` = `ATOP_ATOMICSTORE`
+   （`2'b01`）的原子事务仅返回**单拍 B 响应，无 R 响应**
+   （`axi_pkg.sv` L401-407："A single response is given without data"）。
+   `aw.atop[ATOP_R_RESP]`（bit 5）= 0，DUT 不向 AR 方向注入 ID，§6.5 的
+   跨方向假冲突 stall 不适用。§6.4 的 ID 唯一约束（ATOP ID 与所有在飞事务
+   ID 不同）仍适用（`aw.atop != '0`）。**本条与 §4 decode-error 应答形态的
+   交集——ATOP 落在译码未命中地址——许可来源未定义，承 §6.3 同款环境约束
+   （§4 clause 7，BUG-0032）。**
+7. **原子交换（atomicswap）应答义务（BUG-0044 裁决）
+   （来源：RTL——上游文档未载）**：`aw.atop` = `ATOP_ATOMICSWAP`
+   （`6'b110000`）的原子事务要求 **B 与 R 两个通道都返回响应**——原值读回
+   （`axi_pkg.sv` L381-387："The original data value at the addressed
+   location is returned"）。`aw.atop[ATOP_R_RESP]`（bit 5）= 1，与
+   atomic load（§6.3）共享 AR 方向 ID 注入机制（demux.md §Atomic
+   Transactions 所述，判据只看该 bit），§6.5 的跨方向假冲突 stall 同样
+   适用。§6.4 的 ID 唯一约束仍适用。**本条与 §4 decode-error 的交集承
+   §6.3 同款环境约束。**
+8. **原子比较交换（atomiccompare）应答义务（BUG-0044 裁决）
+   （来源：RTL——上游文档未载）**：`aw.atop` = `ATOP_ATOMICCMP`
+   （`6'b110001`）的原子事务要求 **B 与 R 两个通道都返回响应**——原值读回
+   （`axi_pkg.sv` L388-397："The original data value at the addressed
+   location is returned"）。`aw.atop[ATOP_R_RESP]`（bit 5）= 1，与
+   atomic load（§6.3）/ atomicswap（§6.7）共享 AR 方向 ID 注入机制，§6.5
+   的跨方向假冲突 stall 同样适用。§6.4 的 ID 唯一约束仍适用。**本条与 §4
+   decode-error 的交集承 §6.3 同款环境约束。**
 
 ## 7. Latency 模式（`LatencyMode` / `xbar_latency_e`）
 
