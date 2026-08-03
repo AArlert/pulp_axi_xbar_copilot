@@ -14,6 +14,10 @@
 - M6 准备（0.5.15 已落）：§M6 步 0（测量基线：`make regress COV=1` 合并
   测量 →（模块,类型）格现状表 → 对照 M4 UNOWNED 清单标注归属）写入
   milestone.md；xcov 在位、COV=1 流程、pre-reset 缺口清单指针均已验证。
+- rev 收口独立评审 **PASS with observations**（判决中立性/文档一致性/
+  工作流/红线四路核查零阻塞）；两条观察项即行收口：testplan M5-AT03 行
+  "三阶段"措辞跟进 Phase D；RN02 边界探针按"失败无条件登记"惯例补登
+  BUG-0079（TB_BUG，与 0077/0078 同型，CLOSED，复验证据 v0.6.0）。
 
 **Not done**
 - M6 全部工作（步 0 起）。
