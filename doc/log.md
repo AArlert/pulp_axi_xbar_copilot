@@ -4,6 +4,29 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.5] 2026-08-03 M5 步 0：VM 内 make regress 确认接手基线绿
+
+**Done**
+- VM 内（icarray-virtual-machine，VCS O-2018.09-SP2 + xverif 均在）跑
+  `make regress`：30/30 PASS（M0 1 + M1 2 + M2 8 + M3 11 + M4 8），无
+  `--wipe`，复用既有 `sim/out/` 增量构建；summary 见
+  `sim/result_summary.txt`。确认前任留下的基线在接手环境下活着，M5 步 0
+  完成，可以开始写 M5 代码。
+- 顺手修 `milestone.md` 步 0 一处笔误："24 场景"→"30 场景"（与 testplan
+  实际行数对齐，无独立登记）。
+
+**Not done**
+- M5 五条 exit criteria 均未动：失败可追溯机制（第一张活）、约束随机层、
+  多种子回归、soak、BUG-0044 裁决。
+
+**Next**
+- M5 第一张活：失败可追溯机制——评估现 scoreboard/SVA 报错形态，改造为
+  失败自包含（seed+轨迹+DUT/期望/spec 三方文本），见 `milestone.md` M5
+  exit criteria 第一条。
+
+**How verified**
+- `make regress` 退出码 0，`sim/result_summary.txt` 30 行全 PASS。
+
 ## [0.5.4] 2026-08-03 大重置：拆除仪式层，以接手者姿态进入 M5
 
 **Done**
