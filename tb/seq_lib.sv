@@ -846,6 +846,12 @@ endclass
 //   (atop=ATOP_ATOMICSWAP=6'b110000, ATOP_R_RESP=1) — expects B+R.
 // Phase C (atomiccompare, §6.8): each slave port sends one atomiccompare
 //   (atop=ATOP_ATOMICCMP=6'b110001, ATOP_R_RESP=1) — expects B+R.
+// Phase D (atomicload, §6.3): each slave port sends one atomicload
+//   (ATOP[5:4]=ATOP_ATOMICLOAD, ATOP_R_RESP=1) — expects B+R. BUG-0076:
+//   the testplan row requires cp_atop_subtype's FOUR bins to all hit within
+//   this test's own run; the first delivery only had Phases A-C, leaving the
+//   atomicload bin structurally empty (masked by FCOV_SUMMARY not printing
+//   that coverpoint — also fixed, functional_coverage.sv).
 //
 // All addresses hit the rule table (§4.7 env constraint). Blocking driver
 // makes each transaction standalone, so §6.4 ID-uniqueness holds trivially.
@@ -914,6 +920,24 @@ class slvport_at03_atop_subtypes_seq extends uvm_sequence #(axi_seq_item);
       item.id       = xbar_types_pkg::id_slv_t'(slv_port_idx + 16);
       item.addr     = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
                       + 32'h0000_0C00
+                      + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+      item.len      = axi_pkg::len_t'(0);
+      fill_wr_payload(item, item.len);
+      finish_item(item);
+    end
+
+    // ---- Phase D: atomicload (spec §6.3, B+R) — BUG-0076 ----
+    begin
+      axi_seq_item item;
+      item = axi_seq_item::type_id::create(
+          $sformatf("at03_load_%0d", slv_port_idx));
+      start_item(item);
+      item.is_write = 1'b1;
+      item.atop     = {axi_pkg::ATOP_ATOMICLOAD, axi_pkg::ATOP_LITTLE_END,
+                        axi_pkg::ATOP_ADD};
+      item.id       = xbar_types_pkg::id_slv_t'(slv_port_idx + 24);
+      item.addr     = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
+                      + 32'h0000_0D00
                       + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
       item.len      = axi_pkg::len_t'(0);
       fill_wr_payload(item, item.len);
@@ -2901,6 +2925,16 @@ class xbar_soak_seq extends uvm_sequence #(axi_seq_item);
   // matching, repeated 3 rounds) pathological case, not just on average.
   int unsigned num_rounds = 4;
 
+  // cfgE overlap knob (testplan M5-RN03, BUG-0078): when set, WRITE rounds are
+  // presented through drive_burst's AW/W-decoupled fork (the proven M4-EB01
+  // shape, WITHOUT its b_ready hold — see axi_burst_item.aw_w_decoupled), so
+  // aw_valid&&aw_ready can genuinely coincide with w_valid&&w_ready at the
+  // port boundary. The default AW-then-W-per-item presentation structurally
+  // never offers that coincidence (w_valid only rises after aw_valid dropped)
+  // — the root cause of cg_fallthrough staying 0 in both M4-FT01 and the
+  // first M5-RN03 delivery. 0 everywhere except xbar_soak_cfge_seq.
+  bit aw_w_decoupled = 1'b0;
+
   function new(string name = "xbar_soak_seq");
     super.new(name);
   endfunction
@@ -2924,6 +2958,7 @@ class xbar_soak_seq extends uvm_sequence #(axi_seq_item);
                                  1'b1, bucket_ids[i]);
       foreach (tmp.items[k]) burst.items.push_back(tmp.items[k]);
     end
+    if (aw_w_decoupled && is_write) burst.aw_w_decoupled = 1'b1;
     start_item(burst);
     finish_item(burst);
   endtask
@@ -2953,6 +2988,22 @@ class xbar_soak_seq extends uvm_sequence #(axi_seq_item);
                  32'h0040_0000 + xbar_types_pkg::addr_t'(m) * 32'h4000,
                  $sformatf("xsoak_%0d_sweep_m%0d", slv_port_idx, m));
     end
+
+    // ---- decode-miss leg (testplan M5-SK03 must-reach "命中与未命中均
+    // 覆盖"; BUG-0077 — the first M5 delivery produced zero err_slv traffic
+    // in every soak row; milestone.md M5 设计要点 declares a 未命中权重 knob
+    // this layer never had): one single-item write + read to region index
+    // NO_ADDR_RULES (base 0x8000_0000 — outside every rule window of every
+    // generated table, xbar_types_pkg gen_* functions all stay below it).
+    // atop stays '0 (build_txlimit_burst, spec §4 clause 7 wide reading:
+    // never an ATOP to an unmapped address). en_default_mst_port is '0 in
+    // every generic-soak test ⇒ the port's own err_slv answers DECERR,
+    // judged by the config-independent M3-DE01 SB_DECERR family — no new
+    // judgement dimension, only the miss leg's reach. ----
+    fire_round(1'b1, xbar_types_pkg::NO_ADDR_RULES, '{0}, '{1}, 32'h0050_0000,
+               $sformatf("xsoak_%0d_miss_w", slv_port_idx));
+    fire_round(1'b0, xbar_types_pkg::NO_ADDR_RULES, '{0}, '{1}, 32'h0058_0000,
+               $sformatf("xsoak_%0d_miss_r", slv_port_idx));
 
     // ---- remaining rounds: randomized bucket set/depth/target/direction ----
     for (int unsigned r = 1; r < num_rounds; r++) begin
@@ -3044,6 +3095,22 @@ class xbar_soak_cfgd_seq extends xbar_soak_seq;
                  $sformatf("xsoak_%0d_sweep_m%0d", slv_port_idx, connected[i]));
     end
 
+    // ---- connectivity-domain boundary probes (testplan M5-RN02 must-reach
+    // "随机地址角落分布须真正探及连通域边界"; deterministic every seed, the
+    // same 构造性保证 convention as round 0's peak — the random rounds' fixed
+    // addr_base offsets only ever probe region interiors): for each
+    // rule-reachable connected port, one single-item write at its region's
+    // low edge (start_addr, inclusive — spec §3.2 含起址) and one at the last
+    // aligned beat before the exclusive end (end_addr-8 — §3.2 不含终址).
+    // Both decode inside the connected domain by construction (§8.3). ----
+    for (int unsigned m = 0; m < xbar_types_pkg::CFG_RULE_MST_MOD; m++) begin
+      fire_round(1'b1, cfgd_region(m), '{0}, '{1}, 32'h0,
+                 $sformatf("xsoak_%0d_lo_m%0d", slv_port_idx, m));
+      fire_round(1'b1, cfgd_region(m), '{0}, '{1},
+                 xbar_types_pkg::REGION_SIZE - 32'h8,
+                 $sformatf("xsoak_%0d_hi_m%0d", slv_port_idx, m));
+    end
+
     // ---- random rounds: target constrained to connected ports ----
     for (int unsigned r = 1; r < num_rounds; r++) begin
       int unsigned buckets[$];
@@ -3084,5 +3151,29 @@ class xbar_soak_cfgd_vseq extends uvm_sequence #(uvm_sequence_item);
     cfg_vif.default_mst_port    <= xbar_types_pkg::DEFAULT_MST_CFGD;
     repeat (3) @(posedge cfg_vif.clk_i);
     fanout_per_slv#(xbar_soak_cfgd_seq)::run(p_sequencer, "xsoak_cfgd_seq");
+  endtask
+endclass
+
+// xbar_soak_cfge_seq (testplan M5-RN03, cfgE FallThrough=1, BUG-0078): the
+// generic soak shape with WRITE rounds presented AW/W-decoupled (see
+// xbar_soak_seq.aw_w_decoupled) so the port boundary can actually witness an
+// aw&&w same-cycle acceptance — the only §7.4-legal external image through
+// which cfgE's fall-through W path shows up (asserting the latency difference
+// itself is the SPEC-7.4.3 red line). Peak round, target sweep, miss leg and
+// random rounds all inherit unchanged.
+class xbar_soak_cfge_seq extends xbar_soak_seq;
+  `uvm_object_utils(xbar_soak_cfge_seq)
+  function new(string name = "xbar_soak_cfge_seq");
+    super.new(name);
+    aw_w_decoupled = 1'b1;
+  endfunction
+endclass
+
+class xbar_soak_cfge_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(xbar_soak_cfge_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "xbar_soak_cfge_vseq"); super.new(name); endfunction
+  task body();
+    fanout_per_slv#(xbar_soak_cfge_seq)::run(p_sequencer, "xsoak_cfge_seq");
   endtask
 endclass

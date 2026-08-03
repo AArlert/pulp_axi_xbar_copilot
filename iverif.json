@@ -2,5 +2,6 @@
   "project_name": "pulp_axi_xbar_copilot",
   "columns_preset": "en",
   "sim_log": "sim/out/{test}_{seed}.log",
-  "sva_enforce": true
+  "sva_enforce": true,
+  "key_line_extra": ["SB_UNIQUEIDS_SUMMARY"]
 }

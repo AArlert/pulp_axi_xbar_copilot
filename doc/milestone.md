@@ -95,6 +95,13 @@ soak 行顺带承担、长随机是随机 vseq 的超集）已注册进 `doc/tes
 工作原则 = random-first, directed-fallback：先跑 M5 随机层测量，只对随机
 未命中的 bin 写定向场景（避免"定向刷宽总线 Toggle"的坏配对）。
 
+**步 0（测量基线）**：`make regress COV=1` 全量合并测量一次，按 spec §0#4
+例化闭包口径出（模块,类型）格现状表落 `doc/evidence/<ver>/`，对照 M4 移交
+的 UNOWNED 缺口清单标注每格归属（随机已收 / 待定向 / Kind-A 豁免候选），
+然后才动代码。工具：xcov（`$XVERIF_ROOT/tools/`，已探测在位）核对 urg 数字，
+期望值仍只从 spec 推导（红线 2）。另：BUG-0075（休眠 TB_BUG，译码 oracle
+`end_addr=='0` 哨兵语义）在本里程碑二选一处置，见 doc/bugs/BUG-0075.md。
+
 ### Exit criteria
 
 - [ ] 六类覆盖 ≥90%（line+cond+fsm+tgl+branch+assert，spec §0#4 例化闭包

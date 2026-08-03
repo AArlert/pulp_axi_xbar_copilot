@@ -1,8 +1,11 @@
-# CI hard gate: doc structure + evidence chain + canon selftest.
+# CI hard gate: doc structure + evidence chain consistency.
 # Simulation gating stays in the local VM (no EDA licenses here).
-# 0.8.0: the fw-check step retired with fwsync — upstream files are no longer
-# hash-pinned, so there is no drift state to fail on. selftest replaces it as
-# the "the machinery still works on this repo's data" gate.
+# 0.5.15: the selftest step retired — its target (scripts/tests, 60 unit
+# tests) was deleted in the 0.5.4 reset with the process layer it fused, and
+# the stale step made every run fail regardless of the commit's content
+# (BUG-0077 audit, workflow finding #5). --check itself carries the
+# machinery-still-works role: it parses every table/file the scripts own and
+# hard-fails on any inconsistency.
 name: ci
 on:
   push:
@@ -11,10 +14,13 @@ jobs:
   docs-check:
     runs-on: ubuntu-latest
     steps:
+      # full history + tags: --check verifies pre-reset evidence paths
+      # against the v0.5.3-pre-reset tag (a shallow, tagless checkout would
+      # false-fail every archived-evidence row).
       - uses: actions/checkout@v4
-      - name: check (docs + chain audit)
+        with:
+          fetch-depth: 0
+      - name: check (docs + consistency gates)
         run: python3 scripts/docs.py --check
       - name: handoff smoke (guard scripts parse all paths without crashing)
         run: python3 scripts/docs.py --handoff
-      - name: selftest (canon scripts + contract fuses)
-        run: cd scripts/tests && python3 -m unittest discover

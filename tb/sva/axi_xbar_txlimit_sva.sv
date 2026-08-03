@@ -41,7 +41,7 @@
 //    is a spec §5.4.3 upstream-confirmation item and is NOT asserted here (the
 //    card's hard red line for M2-TL02).
 //
-// ## Judgement demoted to non-decisional under BUG-0016 (OPEN)
+// ## Judgement demoted to non-decisional under BUG-0016 (SPEC_CHANGED, REV-007 final)
 //
 // A first draft ASSERTED "master-port in-flight ≤ MaxMstTrans / ≤ MaxSlvTrans"
 // (the spec §5.4.1/§5.4.2 delay-insensitive image of "上限最终被守"). Both fire
@@ -54,13 +54,14 @@
 // delay-insensitive COUNT itself exceeds the documented ceiling. The scoreboard
 // routing/data/response-route/completion checks pass with zero mismatch in the
 // same runs, so the DUT is functionally correct — only the documented numeric
-// ceiling is not honored. Filed as BUG-0016. Per the BUG-0013 lesson (do not
-// assert a bound the baseline DUT contradicts while it is under rev dispute),
-// the ceiling readings are kept ONLY as non-decisional witnesses:
+// ceiling is not honored. Filed as BUG-0016; REV-007 later ruled it
+// SPEC_CHANGED (terminal — the effective ceiling formula
+// 2**ceil(log2(MaxMstTrans))-1 is now spec §5.4.1/§5.4.2/§7.4.5 text and the
+// witnesses stay non-decisional for good, no promotion pending):
 //   - a cover + one-shot uvm_info when a group REACHES the documented ceiling
 //     (non-vacuity, sva_bind.md C3.4's required cover);
-//   - a cover + one-shot uvm_info when a group EXCEEDS it (the BUG-0016 symptom,
-//     reproducible and promotable to an assert the moment rev arbitrates).
+//   - a cover + one-shot uvm_info when a group EXCEEDS it (the BUG-0016
+//     symptom, kept as a reproducible witness per the REV-007 final ruling).
 // The decisional gate for M2-TL01/TL02 is the scoreboard's correctness under
 // sustained same-bucket/same-id pressure (spec §1/§3/§5.1/§5.5) plus the
 // "reached ceiling" non-vacuity covers.
@@ -199,7 +200,7 @@ module axi_xbar_txlimit_sva
       begin
         reported_maxmst_over <= 1'b1;
         `uvm_info("SVA_TXLIMIT_OVER",
-          $sformatf("BUG-0016 witness: master-port in-flight for a (source,bucket) group EXCEEDED MaxMstTrans=%0d (spec §5.4.1 / xbar.md L46 say '<= MaxMstTrans'; RTL demux counter is idx_width(MaxTrans)-bit, full only at all-ones=2**ceil(log2(MaxMstTrans))-1). Non-decisional (BUG-0016 OPEN).",
+          $sformatf("BUG-0016 witness: master-port in-flight for a (source,bucket) group EXCEEDED MaxMstTrans=%0d (spec §5.4.1 / xbar.md L46 say '<= MaxMstTrans'; RTL demux counter is idx_width(MaxTrans)-bit, full only at all-ones=2**ceil(log2(MaxMstTrans))-1). Non-decisional (BUG-0016 SPEC_CHANGED, REV-007; effective ceiling now spec §5.4.1).",
                      MAXMST), UVM_LOW)
       end
       if (!reported_maxslv
@@ -217,13 +218,13 @@ module axi_xbar_txlimit_sva
       begin
         reported_maxslv_over <= 1'b1;
         `uvm_info("SVA_TXLIMIT_OVER",
-          $sformatf("BUG-0016 witness: master-port in-flight for a (full-id,direction) group EXCEEDED MaxSlvTrans=%0d (REV-005 unlocked a '<= MaxSlvTrans, never false-red' observable monitor; empirically it is NOT an upper bound — mux has no per-id counter, cf. BUG-0011). Non-decisional (BUG-0016 OPEN).",
+          $sformatf("BUG-0016 witness: master-port in-flight for a (full-id,direction) group EXCEEDED MaxSlvTrans=%0d (REV-005 unlocked a '<= MaxSlvTrans, never false-red' observable monitor; empirically it is NOT an upper bound — mux has no per-id counter, cf. BUG-0011). Non-decisional (BUG-0016 SPEC_CHANGED, REV-007; effective ceiling now spec §5.4.2).",
                      MAXSLV), UVM_LOW)
       end
     end
   end
 
-  // ==== judgement note (BUG-0016, OPEN, pending rev arbitration) ============
+  // ==== judgement note (BUG-0016, SPEC_CHANGED — REV-007 final) =============
   // A first draft asserted "master-port in-flight <= MaxMstTrans / <=
   // MaxSlvTrans" — the spec §5.4.1/§5.4.2 (from xbar.md L46/L47 "at most this
   // many ... in flight", demux.md L72 "each counter can count up to and
@@ -241,12 +242,12 @@ module axi_xbar_txlimit_sva
   // width rounding). Crucially the scoreboard's routing / data / response-
   // route / completion checks pass with zero mismatch in the same runs — every
   // transaction is correctly routed, data-correct and completes; only the
-  // documented numeric ceiling is not honored. Filed as BUG-0016 (OPEN,
-  // suspect DUT vs vendor doc; rev may instead refine the spec's MaxTrans
-  // semantics). Until rev arbitrates, the ceiling readings are NOT asserted
-  // (asserting a bound the baseline DUT contradicts under dispute would be the
-  // BUG-0013 mistake); they are kept as non-decisional cover/uvm_info witnesses
-  // so the exact symptom is reproducible and promotable the moment rev rules.
+  // documented numeric ceiling is not honored. Filed as BUG-0016; REV-007
+  // ruled it SPEC_CHANGED (terminal): the counter-width effective ceiling
+  // 2**ceil(log2(MaxTrans))-1 is now spec §5.4.1/§5.4.2/§7.4.5 text, and the
+  // ceiling readings stay non-decisional cover/uvm_info witnesses for good —
+  // no assert promotion is pending (asserting the documented literal bound
+  // the baseline DUT contradicts would be the BUG-0013 mistake).
   // The decisional gate for M2-TL01/TL02 is therefore the scoreboard's
   // correctness-under-sustained-pressure (spec §1/§3/§5.1/§5.5) plus the
   // non-vacuity "reached ceiling" covers below.

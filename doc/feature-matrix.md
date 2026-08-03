@@ -1,6 +1,6 @@
 # Feature matrix
 
-feature → deliverable → testplan scenarios. Delivery/verification are computed live by the scripts, never stored. Every feature maps to ≥1 existing scenario id (ghost references fail docs-check).
+feature → deliverable → testplan scenarios. Delivery/verification are computed live by the scripts, never stored. Two-way mapping enforced by `make check`: every feature maps to ≥1 existing scenario id (ghost references fail), and every testplan scenario must be claimed by ≥1 feature row (a stale matrix fails).
 
 | id | milestone | feature | module | scenes |
 | --- | --- | --- | --- | --- |
@@ -18,7 +18,7 @@ feature → deliverable → testplan scenarios. Delivery/verification are comput
 | F-M2-07 | M2 | 协议/时序 SVA M2 激活集（design-prompt sva_bind.md C3.1-C3.5）：配置稳定性(C3.1) / 保序 stall(C3.2) / W 次序(C3.3，cover-only、不新增独立断言) / 事务上限(C3.4) / ATOP 成对+ID 唯一(C3.5)，各配一条非判决性 cover property 佐证非空转 | sva_bind | M2-CFG01, M2-OR01, M2-OR02, M2-TL01, M2-TL02, M2-WO01, M2-AT01, M2-OR03 |
 | F-M2-08 | M2 | functional + assert 功能覆盖采集基建：六类覆盖口径（SPEC-0 行4）中 functional（covergroup）与 assert（cover property）两维度在 M2 场景落地 | functional_coverage | M2-CFG01, M2-OR01, M2-OR02, M2-TL01, M2-TL02, M2-WO01, M2-AT01 |
 | F-M3-01 | M3 | `MaxMstTrans` 跨（低位 ID 桶×方向）聚合在飞规模合法性确认：≥2 个不同 ID 桶同时压满、单 slave 端口合计在飞数远超扁平上限仍被合法接受，将 demux.md 分桶口径由文档信任升级为波形经验确认（SPEC-5.4.1，BUG-0010 裁决守卫） | uvm_env+scoreboard_refmodel | M3-TL01 |
-| F-M3-02 | M3 | decode error slave 应答参考模型判据：`RESP_DECERR` + 读出齐 `AxLEN+1` beats 且末拍 `RLAST` + 写单拍 B + 读数据 `32'hBADCAB1E` 零扩展（SPEC-4.1/4.2/4.3/4.4/4.5） | scoreboard_refmodel | M3-DE01, M3-CF01, M3-CF02 |
+| F-M3-02 | M3 | decode error slave 应答参考模型判据：`RESP_DECERR` + 读出齐 `AxLEN+1` beats 且末拍 `RLAST` + 写单拍 B + 读数据 = err_slv 默认 `RespData=64'hCA11AB1EBADCAB1E` 按 `AxiDataWidth` 取值（SPEC-4.1/4.2/4.3/4.4/4.5，SPEC-4.4 经 REV-014/BUG-0033 校正） | scoreboard_refmodel | M3-DE01, M3-CF01, M3-CF02 |
 | F-M3-03 | M3 | default master port 路由：逐 slave 端口独立使能，未命中地址改走 default 而非 err_slv，与命中路由/ID 前缀/响应回送共存（SPEC-3.3/4.2/5.1） | uvm_env+scoreboard_refmodel | M3-DE02, M3-CF04 |
 | F-M3-04 | M3 | 译码未命中事务的保序地位落地（SPEC-5.2.6）：default port 半边纳入跟踪表、完整 ID 维度纳入完成序判决、低位桶维度显式引条款排除并配非判决 cover（BUG-0025 三层守卫） | sva_bind+scoreboard_refmodel | M3-DE02, M3-OR04 |
 | F-M3-05 | M3 | SVA 判决路径的运行时配置可见性：地址表/`en_default`/`default_mst_port` 取运行时活值而非编译期常量，与 scoreboard 共用同一份活值译码（SPEC-3.4/3.1，BUG-0031 守卫） | sva_bind | M3-CFG02 |
@@ -35,3 +35,8 @@ feature → deliverable → testplan scenarios. Delivery/verification are comput
 | F-M4-06 | M4 | 多层压力叠加：W burst 通道饱和（≥3 个）+ AW 锁定-重试 + 同桶事务上限聚合、路由/数据/wstrb/wlast/响应/完成序全部正确无饿死，结构覆盖动机、无内部 FSM 状态/计数具体值断言（SPEC-5.3/5.4.1/5.5.1/5.5.3、BUG-0016/REV-007 守卫） | uvm_env+scoreboard_refmodel | M4-BP02 |
 | F-M4-07 | M4 | 多层压力叠加：R burst 通道拖延（有界）+ AR 锁定-重试 + 同桶事务上限聚合、路由/数据/响应/完成序全部正确无饿死，结构覆盖动机、延迟不敏感判据、无内部 FSM 状态/计数具体值断言（SPEC-5.3/5.4.1/5.5.3、BUG-0016/REV-007 守卫） | uvm_env+scoreboard_refmodel | M4-BP03 |
 | F-M4-08 | M4 | err_slv 读响应背压传导与接收侧稳定性（M4-EB01 的读方向镜像）：R 响应缓冲堆积至结构容量上界、反压 ar_ready，释放后 `AxLEN+1` 拍 R(DECERR) 无丢失重复、响应回送正确（SPEC-4.2/4.3/5.1、BUG-0025 守卫） | uvm_env+scoreboard_refmodel | M4-EB02 |
+| F-M5-01 | M5 | 失败可追溯性：全局 report catcher 给每条 UVM_ERROR/FATAL 追加 `[seed=N]`，比对类报错带 `accept_time` 操作轨迹（发起/触发/比对点）+ DUT/期望三方文本，悬挂计数逐记录打印——`make run TEST=<t> SEED=<n>` 单跑稳定复现（milestone §M5 第一张活，故意注伤两类现场证伪后还原） | report_seed_catcher+scoreboard_refmodel | M5-SK01, M5-SK02, M5-SK03, M5-RN01, M5-RN02, M5-RN03, M5-AT03 |
+| F-M5-02 | M5 | 约束随机/soak 激励层：`xbar_soak_seq/vseq` 同桶在飞深度构造（`resp_hold` 有界拖延）+ 确定性目标扫掠 + 撞车/未命中/汇聚旋钮，配置无关、端口范围由生效配置点推导，跨 baseline/cfgA/cfgB/cfgE 复用（SPEC-5.4.1 有效上限 15 must-reach、SPEC-5.5.3 无饿死 liveness） | seq_lib | M5-SK01, M5-SK02, M5-SK03, M5-RN03 |
+| F-M5-03 | M5 | cfgC `UniqueIds=1` 随机层前置条件结构性维持：burst 内同目标 + `drive_burst` 逐笔等齐完成故跨 round 无在飞重叠，SPEC-5.3.1 分支 b 合法堆积被真实覆盖；`SB_UNIQUEIDS_SUMMARY` env 侧兜底监视（违反报 TB_BUG） | seq_lib+scoreboard_refmodel | M5-RN01 |
+| F-M5-04 | M5 | cfgD 稀疏 `Connectivity` 随机约束收紧：`atop` 恒 `'0`（SPEC-6.2）+ 地址角落加权不越出连通域、未命中走 default 同落连通域（SPEC-8.3 编码进 constraint 而非侥幸），零非连通译码（违反即 CONSTRAINT_BUG） | seq_lib | M5-RN02 |
+| F-M5-05 | M5 | ATOP 全子类型应答 oracle 泛化：按 `atop[ATOP_R_RESP]` 位判定应答通道数——atomicstore 仅 B、atomicload/swap/compare B+R（SPEC-6.6/6.7/6.8，BUG-0044 裁决），`cg_atop` 子类型四 bins 全命中 | scoreboard_refmodel | M5-AT03, M2-AT01 |

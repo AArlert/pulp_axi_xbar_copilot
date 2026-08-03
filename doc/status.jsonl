@@ -1,3 +1,4 @@
+{"date": "2026-08-04", "version": "0.5.15", "summary": "M5收口审计:3处must-reach未兑现修复(BUG-0076 AT03缺atomicload/BUG-0077 soak无未命中/BUG-0078 fall-through cover结构恒0)+RN02边界探针,七行证据重生成v0.5.15;多种子按出口条件字面达标regress.list 51→241行,241/241 PASS;登记BUG-0075(休眠,M6处置);工作流加固(check三组新检查/CI死步骤/矩阵补M5行);next=M5簿记收口+转0.6.0"}
 {"date": "2026-08-03", "version": "0.5.14", "summary": "M5多种子回归51/51 PASS:regress.list M5全7测试扩充seed{1,2,3}(+14行),M0-M4维持seed1;约束随机层3种子下稳定无flaky;next=M6覆盖率收敛"}
 {"date": "2026-08-03", "version": "0.5.13", "summary": "BUG-0044 CLOSED:M5-AT03仿真PASS(route 18/0,resp 30/0,atop pairs 12/0,zero UVM_ERROR);make evidence翻绿testplan M5-AT03;BUG-0044 FIXING→CLOSED;next=M5多种子回归+M6覆盖率收敛"}
 {"date": "2026-08-03", "version": "0.5.12", "summary": "BUG-0044 Step3:M5-AT03定向测试场景落地(atomicstore/atomicswap/atomiccompare三阶段seq+vseq+test class);testplan行注册(🔲);AT01 stale注释更新;BUG-0044维持FIXING(三步代码全落地,待VM跑PASS后evidence关闭);regress.list+1;next=VM编译跑AT03→make evidence翻绿+BUG-0044关闭+M5多种子回归+M6"}

@@ -418,7 +418,7 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
         vif.r_ready <= 1'b1;
       end
     join_none
-    if (item.b_backpressure && is_w) begin
+    if ((item.b_backpressure || item.aw_w_decoupled) && is_w) begin
       // M4-EB01: present all AWs decoupled from (running ahead of) their W
       // bursts. With b_ready held low the err_slv b_fifo fills after two
       // collected writes → its w_ready drops (W stalls), and the AWs still
@@ -428,6 +428,14 @@ class slvport_driver extends uvm_driver #(axi_seq_item);
       // routing, and err_slv raises w_ready only once the matching AW is in its
       // w_fifo), so the slv monitor's FIFO AW/W pairing never sees a W with no
       // AW (no MON_WNOAW).
+      // M5-RN03 (aw_w_decoupled, BUG-0078): the same two-thread fork reused as
+      // a pure AW/W-overlap presenter — b_ready untouched (stays high unless
+      // b_backpressure also set). No self-deadlock: the W thread is always
+      // draining, and the AW thread's position is always >= the W thread's, so
+      // any aw_ready stall (w_fifo full) is freed by the concurrent W drain —
+      // unlike drive_burst_wopen()'s single-threaded alternation, which is why
+      // that task has a LEAD bound and this fork does not (M4-EB01 precedent,
+      // validated there under the harsher b_ready-held regime).
       fork
         foreach (item.items[i]) drive_aw(item.items[i]);
         foreach (item.items[i]) drive_w_burst(item.items[i]);

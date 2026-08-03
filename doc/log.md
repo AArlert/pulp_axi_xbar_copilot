@@ -4,6 +4,50 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.5.15] 2026-08-04 M5 收口审计修复 + 多种子出口达标 241/241 PASS
+
+**Done**
+- **收口审计**（红线 2 rev 全量评审 PASS + 证据链反稀释核查）暴露 M5 三行
+  must-reach 未兑现即翻绿，全部修复并复验：
+  - BUG-0076 AT03 缺 atomicload 阶段（cp_atop_subtype 实为 3/4 bins，
+    FCOV_SUMMARY 恰不印该项掩盖缺口）→ seq Phase D + 补印，修后 100%。
+  - BUG-0077 soak 层无未命中激励（SK03"命中与未命中均覆盖"实为 decerr
+    resp=0）→ xbar_soak_seq 增 decode-miss leg（region NO_ADDR_RULES，
+    atop='0，§4.7 宽读），修后 cfgA resp=2 / baseline resp=12。
+  - BUG-0078 fall-through cover 结构性恒 0（RN03 与基准 M4-FT01 均
+    samples=0；驱动器串行 AW→W 呈现使四信号同拍不可达）→
+    axi_burst_item.aw_w_decoupled 复用 EB01 解耦 fork（不动 b_ready），
+    cfgE 专属 xbar_soak_cfge_seq 启用，修后 samples=139。
+  - RN02 增连通域边界确定性探针（region 低/高边界地址，构造性保证惯例）。
+  - 七行 M5 证据经 make evidence 重生成于 doc/evidence/v0.5.15/。
+- **多种子回归按出口条件字面达标**：regress.list 51→241 行（定向 16 测试
+  ×5 种子 + 时序/保序子集 14 测试 ×10 + M5 7 测试 ×3），修复后代码态整轮
+  `make regress` 241/241 PASS，无 flaky。
+- 登记 BUG-0075（共享译码 oracle 缺 §3.2.3 end_addr=='0 哨兵语义，休眠
+  非阻塞，M6 二选一处置）。
+- **工作流加固**：make check 新增三组机械检查（feature-matrix 双向映射、
+  milestone Abstract/复选框/version 三方一致、证据路径存在性——工作树或
+  pre-reset tag），均注伤自证能红后还原；CI 死 selftest 步骤移除（引用
+  0.5.4 已删的 scripts/tests，此前每次必红）+ checkout 补 fetch-depth:0；
+  feature-matrix 补 F-M5-01..05 五行并校正 F-M3-02 旧 DECERR 常量；
+  txlimit_sva/scoreboard 过时注释订正（BUG-0016 终态、uid 监视器现活）；
+  iverif.json key_line_extra 捕获 SB_UNIQUEIDS_SUMMARY 数值进摘录；
+  孤儿证据 v0.5.7/M5-SK01.log 删除（无引用，v0.5.8 重跑版在案）。
+
+**Not done**
+- M5 里程碑簿记收口（milestone.md 勾选/Abstract ✅/bump minor）——紧接的
+  下一 commit（新 milestone 一致性检查强制其与 bump 原子落地）。
+- BUG-0075 修复（M6 处置，见 doc/bugs/BUG-0075.md fix plan）。
+
+**Next**
+- M5 簿记收口 + 转 0.6.0（M6），随后 M6 步 0 测量基线（milestone.md §M6）。
+
+**How verified**
+- `make regress` 241/241 PASS（sim/result_summary.txt，2026-08-04，修复后
+  代码态整轮重跑）；三个修复各自的角落数据如上（修前/修后对照见各 bug 页）；
+  `make check` 全绿（含三组新检查注伤自证：ghost scene / 全勾未✅ / 幽灵
+  证据路径各注入一次均报错）。
+
 ## [0.5.14] 2026-08-03 M5 多种子回归 51/51 PASS
 
 **Done**

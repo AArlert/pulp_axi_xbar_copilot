@@ -646,7 +646,7 @@ class xbar_functional_coverage extends uvm_component;
                  cg_live_addr_map.cp_live_tgt.get_inst_coverage()),
       UVM_LOW)
     `uvm_info("FCOV_SUMMARY",
-      $sformatf("cg_stall coverpoints: cp_stall_state=%0.2f%% cp_dir=%0.2f%% x_state_dir=%0.2f%% | cg_tx_limit cp_inflight=%0.2f%% | cg_addr_reconfig cp_table_version=%0.2f%% cp_src_port=%0.2f%% x_version_src=%0.2f%% | cg_w_order cp_w_contention=%0.2f%% | cg_atop cp_src=%0.2f%% cp_r_resp=%0.2f%% x_src_rresp=%0.2f%% | cg_atop_read_interaction cp=%0.2f%%",
+      $sformatf("cg_stall coverpoints: cp_stall_state=%0.2f%% cp_dir=%0.2f%% x_state_dir=%0.2f%% | cg_tx_limit cp_inflight=%0.2f%% | cg_addr_reconfig cp_table_version=%0.2f%% cp_src_port=%0.2f%% x_version_src=%0.2f%% | cg_w_order cp_w_contention=%0.2f%% | cg_atop cp_src=%0.2f%% cp_r_resp=%0.2f%% cp_subtype=%0.2f%% x_src_rresp=%0.2f%% | cg_atop_read_interaction cp=%0.2f%%",
                  cg_stall.cp_stall_state.get_inst_coverage(),
                  cg_stall.cp_dir.get_inst_coverage(),
                  cg_stall.x_state_dir.get_inst_coverage(),
@@ -657,6 +657,10 @@ class xbar_functional_coverage extends uvm_component;
                  cg_w_order.cp_w_contention.get_inst_coverage(),
                  cg_atop.cp_atop_src_port.get_inst_coverage(),
                  cg_atop.cp_atop_r_resp.get_inst_coverage(),
+                 // BUG-0076: cp_atop_subtype was the ONE cg_atop member this
+                 // summary line did not print — exactly the coverpoint whose
+                 // empty atomicload bin the M5-AT03 row's claim rested on.
+                 cg_atop.cp_atop_subtype.get_inst_coverage(),
                  cg_atop.x_src_rresp.get_inst_coverage(),
                  cg_atop_read_interaction.cp_atop_read_collision.get_inst_coverage()),
       UVM_LOW)

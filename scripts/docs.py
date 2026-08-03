@@ -7,6 +7,10 @@
 #   --handoff    session-start snapshot of status/testplan/bugs
 #   --next       mechanically derived next-action list
 #   --check      table sanity + green-needs-repro + unfilled-TODO gate
+#                + feature-matrix two-way scene mapping
+#                + milestone Abstract/exit-criteria/version consistency
+#                + evidence-path existence (worktree, or the pre-reset tag
+#                  for rows whose archive died in the 0.5.4 reset)
 #   --archive    roll old log blocks / status lines / terminal bug rows
 #   --bump ARG   version bump (patch | minor | 0.M.P) + skeleton insertion
 #   evidence:    --scen/--bug + --test/--seed (sim) or --cmd/--expect (non-sim)
@@ -260,6 +264,34 @@ def next_actions():
 
 # ----------------------------------------------------------------- check
 
+PRERESET_TAG = "v0.5.3-pre-reset"
+
+
+def _exists_at_prereset(rel_path):
+    """True if rel_path exists at the pre-reset tag — the documented home of
+    every evidence file the 0.5.4 reset removed from the worktree."""
+    try:
+        return subprocess.run(
+            ["git", "cat-file", "-e", "%s:%s" % (PRERESET_TAG, rel_path)],
+            cwd=str(CFG.root), stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL).returncode == 0
+    except OSError:
+        return False
+
+
+def _check_evidence_path(cell, owner, errors):
+    """A doc/-prefixed evidence cell must point at a real file: in the
+    worktree, or (reset-archived rows) at the pre-reset tag. A cell that is
+    neither is a dangling reference — exactly what a hand-edited status
+    column would leave behind."""
+    ev = cell.strip().strip("`")
+    if not ev.startswith("doc/"):
+        return
+    if not (CFG.root / ev).exists() and not _exists_at_prereset(ev):
+        errors.append("%s evidence path %s exists neither in the worktree "
+                      "nor at %s" % (owner, ev, PRERESET_TAG))
+
+
 def check():
     errors = []
     for p in (CFG.version_json, CFG.status, CFG.log, CFG.testplan,
@@ -291,6 +323,11 @@ def check():
                 errors.append("testplan %s is ✅ but evidence cell is empty "
                               "— only `make evidence` may turn rows green"
                               % rid)
+            else:
+                _check_evidence_path(r.get(CFG.C["tp_evidence"], ""),
+                                     "testplan %s" % rid, errors)
+
+    tp_ids = set(seen)
 
     seen = set()
     for r in parse_table(CFG.bugs):
@@ -304,10 +341,13 @@ def check():
         if st not in BUG_STATES:
             errors.append("bugs.md %s has unknown status %r (valid: %s)"
                           % (bid, st, "/".join(BUG_STATES)))
-        if st in BUG_DONE_STATES and st == "CLOSED" \
-                and not r.get(CFG.C["bug_evidence"], "").strip("- "):
-            errors.append("bugs.md %s is CLOSED without re-verification "
-                          "evidence" % bid)
+        if st in BUG_DONE_STATES and st == "CLOSED":
+            if not r.get(CFG.C["bug_evidence"], "").strip("- "):
+                errors.append("bugs.md %s is CLOSED without re-verification "
+                              "evidence" % bid)
+            else:
+                _check_evidence_path(r.get(CFG.C["bug_evidence"], ""),
+                                     "bugs.md %s" % bid, errors)
 
     try:
         first = CFG.status.read_text(encoding="utf-8").splitlines()[0]
@@ -319,6 +359,63 @@ def check():
     _, blocks = split_log_blocks(CFG.log.read_text(encoding="utf-8"))
     if blocks and TODO_RE.search(blocks[0]):
         errors.append("log.md first block has unfilled TODO skeleton")
+
+    # Feature matrix: scenes cells and testplan ids must map both ways.
+    # (The one-way ghost check died in the 0.5.4 reset; the matrix then
+    # silently went stale through all of M5 — hence two-way now.)
+    fm = CFG.doc / "feature-matrix.md"
+    if fm.exists():
+        check_table_structure(fm, errors)
+        claimed = set()
+        for r in parse_table(fm):
+            fid = r.get("id", "").strip()
+            if not fid.startswith("F-"):
+                continue
+            scenes = [s.strip() for s in r.get("scenes", "").split(",")
+                      if s.strip()]
+            if not scenes:
+                errors.append("feature-matrix %s has an empty scenes cell"
+                              % fid)
+            for s in scenes:
+                if s not in tp_ids:
+                    errors.append("feature-matrix %s references ghost "
+                                  "scenario %s" % (fid, s))
+            claimed.update(scenes)
+        for rid in sorted(tp_ids - claimed):
+            errors.append("testplan %s is not claimed by any feature-matrix "
+                          "row" % rid)
+
+    # Milestone bookkeeping: Abstract status, exit-criteria boxes and
+    # version.json must agree — a milestone cannot be delivered in log/status
+    # while milestone.md still shows it open (the M5 close-out drift).
+    ms_path = CFG.doc / "milestone.md"
+    if ms_path.exists():
+        ms_text = ms_path.read_text(encoding="utf-8")
+        abstract = {}
+        for mo in re.finditer(r"^\|\s*(M\d+)\s*\|[^\n]*\|\s*([^|\n]*)\|\s*$",
+                              ms_text, flags=re.M):
+            abstract[mo.group(1)] = "✅" in mo.group(2)
+        for mo in re.finditer(r"^## (M\d+)\b.*?\n(.*?)(?=^## |\Z)",
+                              ms_text, flags=re.M | re.S):
+            mid, body = mo.group(1), mo.group(2)
+            boxes = re.findall(r"^\s*- \[([ xX])\]", body, flags=re.M)
+            if not boxes or mid not in abstract:
+                continue
+            done = all(b in "xX" for b in boxes)
+            if abstract[mid] and not done:
+                errors.append("milestone.md %s is ✅ in Abstract but its "
+                              "exit criteria have unchecked boxes" % mid)
+            if done and not abstract[mid]:
+                errors.append("milestone.md %s exit criteria are all [x] "
+                              "but Abstract does not say ✅" % mid)
+        cur_ms = json.loads(
+            CFG.version_json.read_text(encoding="utf-8")).get("milestone")
+        pending = [m for m in sorted(abstract, key=lambda k: int(k[1:]))
+                   if not abstract[m]]
+        if pending and cur_ms != pending[0]:
+            errors.append("version.json milestone %s != first open milestone "
+                          "%s in milestone.md Abstract (close out or bump)"
+                          % (cur_ms, pending[0]))
 
     report(errors)
 

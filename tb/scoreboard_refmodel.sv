@@ -145,9 +145,12 @@ class xbar_scoreboard extends uvm_scoreboard;
   // in-flight one BREAKS the precondition — and since §5.3.3 makes the DUT
   // undefined then, this must be reported as a TB_BUG (env violated its own
   // constructive guarantee), never pre-judged a DUT_BUG. Decode-miss legs carry
-  // a sentinel target (NO_MST_PORTS) so same-id misses stay consistent. Under the
-  // single-outstanding-per-port cfgC env the count is always 0/1, so this can
-  // never fire — it is a falsifiable safety net, not a routine check.
+  // a sentinel target (NO_MST_PORTS) so same-id misses stay consistent. Under
+  // the original M3-CF03 single-outstanding-per-port env the count stayed 0/1;
+  // since M5-RN01 (xbar_soak_vseq on cfgC) same-key groups legally stack >1 in
+  // flight on one target (§5.3.1 branch b), so the count/target comparison is
+  // exercised non-trivially there — a live precondition monitor, not just a
+  // falsifiable safety net.
   local int unsigned uid_cnt[int unsigned];
   local int unsigned uid_tgt[int unsigned];
   int unsigned uid_violation_cnt;

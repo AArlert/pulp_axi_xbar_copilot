@@ -874,7 +874,10 @@ class m5_rn02_soak_test extends base_test;
 endclass
 
 // M5-RN03 cfgE (FallThrough=1) constrained random soak (testplan.md M5-RN03).
-// Same topology as baseline (6×8); no cfgE-specific constraint tightening.
+// Same topology as baseline (6×8); no cfgE-specific constraint tightening,
+// but write rounds are presented AW/W-decoupled (xbar_soak_cfge_seq /
+// BUG-0078) so the fall-through W path's only external image — an aw&&w
+// same-cycle acceptance at the port — is genuinely offered to the DUT.
 class m5_rn03_soak_test extends base_test;
   `uvm_component_utils(m5_rn03_soak_test)
 
@@ -888,11 +891,11 @@ class m5_rn03_soak_test extends base_test;
   endfunction
 
   virtual task run_phase(uvm_phase phase);
-    xbar_soak_vseq vseq;
-    phase.raise_objection(this, "xbar_soak_vseq running");
-    vseq = xbar_soak_vseq::type_id::create("vseq");
+    xbar_soak_cfge_vseq vseq;
+    phase.raise_objection(this, "xbar_soak_cfge_vseq running");
+    vseq = xbar_soak_cfge_vseq::type_id::create("vseq");
     vseq.start(env.vseqr);
-    phase.drop_objection(this, "xbar_soak_vseq done");
+    phase.drop_objection(this, "xbar_soak_cfge_vseq done");
   endtask
 endclass
 

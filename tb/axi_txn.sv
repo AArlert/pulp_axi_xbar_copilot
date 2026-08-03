@@ -140,6 +140,20 @@ class axi_burst_item extends axi_seq_item;
   // may delay b_ready arbitrarily, legal AXI4, spec §1).
   bit b_backpressure;
 
+  // M5-RN03 cfgE AW/W-overlap selector (testplan M5-RN03, BUG-0078): when set
+  // on a WRITE burst, the driver presents the burst's AWs decoupled from
+  // (running ahead of) their W bursts — the exact fork drive_burst already
+  // uses for b_backpressure above — WITHOUT touching b_ready. That is the
+  // only presentation shape under which aw_valid&&aw_ready and
+  // w_valid&&w_ready can coincide on one cycle at the port (the default
+  // AW-then-W-per-item path never raises w_valid until aw_valid has dropped),
+  // i.e. the only way cg_fallthrough (functional_coverage.sv, non-decisional)
+  // can ever fire. '0 (default) for every other burst — presentation
+  // byte-for-byte unchanged. Pure stimulus timing; never changes payload/id/
+  // completion order (a master may present W relative to AW freely within
+  // AXI4 rules, spec §1).
+  bit aw_w_decoupled;
+
   // M4-EB02 response-side backpressure selector (testplan M4-EB02, spec
   // §4.3/§7.4.5, doc/review/REV-030.md §3 DV-D) — read-direction mirror of
   // `b_backpressure` above. When set on a READ burst, the driver
