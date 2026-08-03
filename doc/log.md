@@ -4,6 +4,29 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.6.1] 2026-08-04 M6 闭环 1：BUG-0075 处置 + testplan 注册
+
+**Done**
+- BUG-0075 处置 CLOSED（option 2：env 约束路线）：spec §3.2 clause 4
+  追加环境约束——DV 地址表构造不产生 `end_addr=='0` rule（四表
+  `end_addr` 最大 `32'h8000_0000`，构造性不触发 clause 3 哨兵），
+  `decode_mst_port()` 维持现状。rev 评审 PASS（红线 2 / 文档一致性 /
+  已有证据有效性 / 先例一致性四维度零阻塞）。§8.3 先例。
+- M6 初始 testplan 行 M6-BL01（覆盖率基线测量，步 0）注册进
+  testplan.md + feature-matrix.md F-M6-01。
+- milestone.md M6 步 0 说明中 BUG-0075 状态更新为已关闭。
+
+**Not done**
+- M6 步 0 执行（`make regress COV=1` + xcov + 现状表 + UNOWNED 归属）。
+- M6 exit criteria 1-4 全部待启。
+
+**Next**
+- M6 步 0：`make regress COV=1` 测量基线 + 现状表落 doc/evidence/。
+
+**How verified**
+- `make check` 全绿；BUG-0075 复验为静态（spec env 约束在位 + 四表
+  end_addr 非零，见 bug 详细记录 repro 节）。
+
 ## [0.6.0] 2026-08-04 M5 收口 → M6 开启
 
 **Done**

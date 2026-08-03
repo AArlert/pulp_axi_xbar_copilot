@@ -108,8 +108,9 @@ testplan.md 为准，本页不重复维护该表**，避免两处漂移。下面
 例化闭包口径出（模块,类型）格现状表落 `doc/evidence/<ver>/`，对照 M4 移交
 的 UNOWNED 缺口清单标注每格归属（随机已收 / 待定向 / Kind-A 豁免候选），
 然后才动代码。工具：xcov（`$XVERIF_ROOT/tools/`，已探测在位）核对 urg 数字，
-期望值仍只从 spec 推导（红线 2）。另：BUG-0075（休眠 TB_BUG，译码 oracle
-`end_addr=='0` 哨兵语义）在本里程碑二选一处置，见 doc/bugs/BUG-0075.md。
+期望值仍只从 spec 推导（红线 2）。BUG-0075（休眠 TB_BUG，译码 oracle
+`end_addr=='0` 哨兵语义）已处置 CLOSED（option 2：§3.2 clause 4 env 约束，
+rev 评审 PASS，0.6.1）。
 
 ### Exit criteria
 

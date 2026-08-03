@@ -1,3 +1,4 @@
+{"date": "2026-08-04", "version": "0.6.1", "summary": "M6闭环1:BUG-0075 CLOSED(option2 env约束,§3.2 clause4追加end_addr!='0构造性约束,rev PASS,§8.3先例)+M6-BL01基线测量testplan行注册+F-M6-01 feature-matrix;next=M6步0 make regress COV=1基线测量"}
 {"date": "2026-08-04", "version": "0.6.0", "summary": "M5收口:milestone四条exit criteria全[x]+Abstract✅(兑现注记指向241/241回归与v0.5.15证据),M6转进行中;收口由新milestone一致性检查机械看护,与bump minor原子落地;next=M6步0测量基线(make regress COV=1合并测量+现状表+对照M4 UNOWNED清单)"}
 {"date": "2026-08-04", "version": "0.5.15", "summary": "M5收口审计:3处must-reach未兑现修复(BUG-0076 AT03缺atomicload/BUG-0077 soak无未命中/BUG-0078 fall-through cover结构恒0)+RN02边界探针,七行证据重生成v0.5.15;多种子按出口条件字面达标regress.list 51→241行,241/241 PASS;登记BUG-0075(休眠,M6处置);工作流加固(check三组新检查/CI死步骤/矩阵补M5行);next=M5簿记收口+转0.6.0"}
 {"date": "2026-08-03", "version": "0.5.14", "summary": "M5多种子回归51/51 PASS:regress.list M5全7测试扩充seed{1,2,3}(+14行),M0-M4维持seed1;约束随机层3种子下稳定无flaky;next=M6覆盖率收敛"}

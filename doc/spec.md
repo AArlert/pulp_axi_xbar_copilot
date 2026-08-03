@@ -131,7 +131,12 @@
    `start_addr == end_addr != '0` 是空区间，匹配不到任何地址，且会触发实现侧的
    地址表合法性断言报告。**环境约束**：DV 地址表构造（含 M5 起的随机化）一律
    取 `start_addr < effective_end`，使该分歧构造性不可触发；解除本约束须先补齐
-   空区间 rule 的许可来源。
+   空区间 rule 的许可来源。**环境约束（追加，BUG-0075 处置）**：DV 地址表构造
+   不产生 `end_addr == '0` 的 rule（四张地址表——`ADDR_MAP`/`ADDR_MAP_V1`/
+   `ADDR_MAP_OV1`/cfgD 表——的 `end_addr` 最大值为 `32'h8000_0000`，构造性
+   不触发 clause 3 哨兵语义）；`decode_mst_port()` 在该约束下按 clause 1 字面
+   判据运行即为正确，无需实现哨兵分支。解除本约束须先在 oracle 中实现
+   clause 3 的 `effective_end` 判据。§8.3 先例。
 
 ### 3.3 default master port
 

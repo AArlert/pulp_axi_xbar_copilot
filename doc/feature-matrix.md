@@ -40,3 +40,4 @@ feature → deliverable → testplan scenarios. Delivery/verification are comput
 | F-M5-03 | M5 | cfgC `UniqueIds=1` 随机层前置条件结构性维持：burst 内同目标 + `drive_burst` 逐笔等齐完成故跨 round 无在飞重叠，SPEC-5.3.1 分支 b 合法堆积被真实覆盖；`SB_UNIQUEIDS_SUMMARY` env 侧兜底监视（违反报 TB_BUG） | seq_lib+scoreboard_refmodel | M5-RN01 |
 | F-M5-04 | M5 | cfgD 稀疏 `Connectivity` 随机约束收紧：`atop` 恒 `'0`（SPEC-6.2）+ 地址角落加权不越出连通域、未命中走 default 同落连通域（SPEC-8.3 编码进 constraint 而非侥幸），零非连通译码（违反即 CONSTRAINT_BUG） | seq_lib | M5-RN02 |
 | F-M5-05 | M5 | ATOP 全子类型应答 oracle 泛化：按 `atop[ATOP_R_RESP]` 位判定应答通道数——atomicstore 仅 B、atomicload/swap/compare B+R（SPEC-6.6/6.7/6.8，BUG-0044 裁决），`cg_atop` 子类型四 bins 全命中 | scoreboard_refmodel | M5-AT03, M2-AT01 |
+| F-M6-01 | M6 | 覆盖率基线测量：全量 `COV=1` 合并后按 spec §0#4 例化闭包口径出（模块,类型）格现状表 + 对照 M4 UNOWNED 缺口清单标注每格归属（随机已收 / 待定向 / Kind-A 豁免候选），xcov 工具交叉验证 urg 数字 | coverage_measurement | M6-BL01 |
