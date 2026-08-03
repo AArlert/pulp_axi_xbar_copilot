@@ -5,17 +5,16 @@ Agent 驱动的全自动 IC 验证仓库。DUT 为 PULP 官方
 （AXI4+ATOP 全连接 crossbar），以只读快照 vendor 于本仓库（v0.39.9，
 SHA 锁定见 `vendor/VENDOR.md`）。
 
-工作流采用 [iverif-workflow](https://github.com/AArlert/iverif-workflow)
-（copilot profile：orch 主会话纯调度，arch/de/dv/rev 子 agent 产出，
-证据链即运行时接口）。本仓库是该工作流的首次实战应用，过程中发现的
-框架摩擦记录于 `doc/fw-feedback.md` 并回流框架仓库。
+工作流源自 [iverif-workflow](https://github.com/AArlert/iverif-workflow)，
+0.5.4 起独立演化：原重流程仪式已整体拆除（现场锁在 tag
+`v0.5.3-pre-reset`），只保留证据链两条红线与少量机械脚本，见 `CLAUDE.md`。
 
 本仓库的验证成果（spec 蒸馏、testplan、UVM 环境、覆盖率收敛过程）供
 隔壁人工学习仓库 `pulp_axi_xbar` 参考。
 
 - 不熟 AXI：先读 [`doc/axi.md`](doc/axi.md)（从零讲到本 DUT 的入门读物）
 - 不熟本仓库的验证环境搭法：先读 [`doc/uvm.md`](doc/uvm.md)（讲 UVM TB 怎么搭、一笔事务怎么被验证）
-- 上手：`make handover && make next`
+- 上手：`make handoff && make next`
 - 仿真（VM 内）：`make smoke` / `make run TEST=<t> SEED=<n>` / `make regress`
 - 文档约定：表头/机制英文（columns_preset=en），正文中文
 
@@ -95,7 +94,7 @@ master 端口（M0..M7）上接收请求。一笔事务从某个 slave 端口进
    `Cfg.PipelineStages` 插几级流水线切割，只加延迟不改数据；`Connectivity[i][j]=0`
    时该格改例化 `axi_err_slv`，并把 `mst_ports_req_o[j][i]` 恒接 `'0`。**注意**该
    格的应答行为在许可来源中未定义（spec §8.2），验证侧按 spec §8.3 的环境约束构造
-   地址表，使"地址译码到非连通 master 端口"根本不可发生——M3/M4 的稀疏
+   地址表，使"地址译码到非连通 master 端口"根本不可发生——稀疏
    `Connectivity` 只在"地址表与连通矩阵一致"的合法子集上测，不去踩这一格。
 4. **`axi_mux` 出口合流**：矩阵的第 `j` 列（`NoSlvPorts` 个格子的输出）汇进第
    `j` 个 `axi_mux`——即格 `[i][j]` 接到 `axi_mux j` 的第 `i` 路输入。`axi_mux`

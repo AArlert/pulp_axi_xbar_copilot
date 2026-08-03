@@ -9,8 +9,8 @@
 > 怎么验它，或反过来都行。
 >
 > **它不是什么**：**不是规格，不得作为 checker 期望值的来源。** 期望值只有
-> 一个来源——sha256 钉住的 `doc/spec.md`（`CLAUDE.md` 不变量 4）。本文凡涉及
-> 判据处一律给 spec 章节号，以 spec 为准。
+> 一个来源——`doc/spec.md`（CLAUDE.md 红线 2）。本文凡涉及判据处一律给
+> spec 章节号，以 spec 为准。
 >
 > **每节末尾/文中有 `📎 对照代码`**，给出 `tb/` 里的确切文件与行号（行号对应
 > 当前代码状态，重构后会漂移；以文件为准）。
@@ -279,10 +279,14 @@ DUT），`bind` 的"非侵入挂载"好处在这里并不适用，直接例化�
 
 - `doc/axi.md` —— 讲**被测对象**（AXI 协议 + DUT `axi_xbar`）；本文讲**验证它
   的环境**，两者互补。
-- `doc/spec.md` —— **判据的唯一来源**（sha256 钉住）。本文所有 spec 章节号都指
-  向它；checker 期望值只准从这里推导。
+- `doc/spec.md` —— **判据的唯一来源**。本文所有 spec 章节号都指向它；
+  checker 期望值只准从这里推导。
 - `doc/testplan.md` —— 场景真值表：每个场景的判据锚点、状态、重放命令。
-- `doc/bugs.md` —— 缺陷台账与五类判据（本文提到的 BUG-0018 拆分等）。
-- `doc/design-prompt/sva_bind.md` / `doc/design-prompt/uvm_env.md` —— TB 结构与
-  SVA 挂载机制的设计说明（含 VCS-2018 `bind` 限制的来龙去脉）。
-- `workflow/` —— 验证流程文档（纪律、证据契约、bug 分诊、签核 rubric）。
+- `doc/bugs.md` —— 缺陷总表与五类分诊速查（本文提到的 BUG-0018 拆分等历史
+  缺陷记录见 `git show v0.5.3-pre-reset:doc/bugs.md` 及其归档）。
+- 前任团队的详细设计说明（TB 结构约束、SVA 挂载机制、判决红线的推导过程）
+  已随 0.5.4 重置移出工作树，查阅用
+  `git show v0.5.3-pre-reset:doc/design-prompt/<file>.md`
+  （`sva_bind.md` / `uvm_env.md` / `scoreboard_refmodel.md` 等）。其中仍然
+  有效的判决红线两条已并入 spec：延迟不敏感（§7.4，不断言固定拍数）、禁
+  断言 round-robin 具体仲裁序（§5.5.4，只准从性质推导期望）。
