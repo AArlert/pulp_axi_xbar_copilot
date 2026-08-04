@@ -20,15 +20,19 @@
   期望值来源全量审计零渗漏 + ERR_RDATA 合规（BUG-0033/REV-014 升格）+
   import 零 DUT 行为 RTL 引用 + BUG-0075 静态关闭 SOUND（gen_addr_map
   32 位算术不可回绕、无 rand 旁路、5 配置点共用同一公式）
+- `doc/M7-methodology-review.md`（闭环 D）：工业方法学对标评估——11 维度
+  39 项逐项三态评级（30 达标 / 1 不适用 / 8 缺口），无致命项；8 缺口
+  均为深度/精度层面（G1 vPlan 无 checker 列 / G2 功能覆盖非 spec 驱动 /
+  G8 无 assertion coverage 报告等），每项附新仓库具体对策
 
 **Not done**
-- 闭环 D–F 待做
+- 闭环 E–F 待做
 
 **Next**
-- 闭环 D：工业方法学对标评估（`doc/M7-methodology-review.md`）
+- 闭环 E：知识沉淀（`doc/coverage.md` + `doc/glossary.md`）
 
 **How verified**
-- `make check` 通过 + rev 评审 PASS（闭环 A + B + C 三次）
+- `make check` 通过 + rev 评审 PASS（闭环 A–D 四次）
 
 ## [1.0.0] 2026-08-04 M6 收口：覆盖率收敛完成
 
