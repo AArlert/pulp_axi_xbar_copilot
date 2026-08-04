@@ -41,3 +41,8 @@ feature → deliverable → testplan scenarios. Delivery/verification are comput
 | F-M5-04 | M5 | cfgD 稀疏 `Connectivity` 随机约束收紧：`atop` 恒 `'0`（SPEC-6.2）+ 地址角落加权不越出连通域、未命中走 default 同落连通域（SPEC-8.3 编码进 constraint 而非侥幸），零非连通译码（违反即 CONSTRAINT_BUG） | seq_lib | M5-RN02 |
 | F-M5-05 | M5 | ATOP 全子类型应答 oracle 泛化：按 `atop[ATOP_R_RESP]` 位判定应答通道数——atomicstore 仅 B、atomicload/swap/compare B+R（SPEC-6.6/6.7/6.8，BUG-0044 裁决），`cg_atop` 子类型四 bins 全命中 | scoreboard_refmodel | M5-AT03, M2-AT01 |
 | F-M6-01 | M6 | 覆盖率基线测量：全量 `COV=1` 合并后按 spec §0#4 例化闭包口径出（模块,类型）格现状表 + 对照 M4 UNOWNED 缺口清单标注每格归属（随机已收 / 待定向 / Kind-A 豁免候选），xcov 工具交叉验证 urg 数字 | coverage_measurement | M6-BL01 |
+| F-M6-02 | M6 | 覆盖率定向闭合（DV-A/B/J）：长 decode-miss burst（len≥16）+ 非对齐低地址位（addr[2:0]）+ size 变化（1→0 方向），闭合 axi_err_slv/stream_register/fifo_v3/axi_cut/multicut/spill_register/axi_mux 的 Toggle len/addr/size 透传位 | coverage_closure | M6-CV01 |
+| F-M6-03 | M6 | 覆盖率定向闭合（DV-D）：slave 非 OKAY 响应码 + 非零 user，闭合 axi_mux/axi_cut/spill_register 的 resp/user Toggle | coverage_closure | M6-CV02 |
+| F-M6-04 | M6 | 覆盖率定向闭合（DV-C）：B/R 通道 backpressure 多样化，闭合 axi_mux b_ready/slv_b_readies/slv_r_readies + axi_id_prepend b_readies | coverage_closure | M6-CV03 |
+| F-M6-05 | M6 | 覆盖率定向闭合（DV-E/F/G）：AR ID 计数器饱和 + ATOP inject（同周期 push+inject case 3'b110/3'b111），闭合 axi_demux_simple Cond DV-E + axi_demux_id_counters Line/Branch/Toggle + delta_counter in_flight 高位 | coverage_closure | M6-CV04 |
+| F-M6-06 | M6 | 覆盖率定向闭合（DV-H/I）：err_slv FIFO 容量填满（w/b/r_fifo pointer-wrap）+ 多样 AXI ID（全 5 位遍历），闭合 fifo_v3 Branch pointer-wrap + Toggle mem cell 位翻转 | coverage_closure | M6-CV05 |

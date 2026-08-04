@@ -4,6 +4,34 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [0.6.3] 2026-08-04 M6 闭环 3：覆盖率缺口分析（步 1）
+
+**Done**
+- 30 cells <90% 逐格分诊完成：urg modinfo.txt bin 级核查 + RTL 例化点/tie-off
+  交叉验证，产出 `doc/M6-cov-triage.md`
+- 分诊结果：8 格纯 CW 已关闭 + 3 格 bin-scoped CW 已关闭 + 4 格 CW 使 raw%
+  永久 <90%（waiver 即解决方案）+ 4 格 CW+DV 混合 + 11 格 UNOWNED 需新 CW+DV
+- 识别 7 个新 CW 候选（CW-015..019 + CW-006ext/007ext），每条附 RTL 行号 +
+  urg bin 判据摘要，待 rev 签核
+- 关键发现：`axi_err_slv` Toggle 需 CW-015（`err_req.aw.atop[5:0]` 12 bit，
+  `axi_atop_filter.sv:252` 硬清零）才能跨 90% 门槛（89.71% → 90.74%）
+- 5 个 DV 定向闭合场景登记进 testplan（M6-CV01..05）：长 burst + 地址/size
+  多样化、slave 响应多样化、B/R backpressure、ID 饱和 + ATOP inject、
+  err_slv FIFO 容量 + 多样 ID
+
+**Not done**
+- CW-015..019 + CW-006ext/007ext 未经 rev 签核（候选，非正式条目）
+- DV 测试代码未实现（本闭环只做分析+登记，不写 tb）
+
+**Next**
+- 闭环 4：rev 评审新 CW 候选 → 签核后登记 `doc/coverage-waivers.md`
+- 闭环 5+：实现 M6-CV01..05 测试代码 → `make regress COV=1` 重测
+
+**How verified**
+- `doc/M6-cov-triage.md` 完整分诊表（30 格 × 5 组）
+- `doc/testplan.md` M6-CV01..05 五行新增（状态 🔲）
+- `make check` OK
+
 ## [0.6.2] 2026-08-04 M6 闭环 2：覆盖率基线测量（步 0）
 
 **Done**
