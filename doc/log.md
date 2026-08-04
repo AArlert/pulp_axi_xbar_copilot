@@ -12,15 +12,19 @@
 - Abstract 表追加 M7 行；M6 章节标题 🔲→✅ 笔误修正
 - version.json 1.0.0→1.1.0（M7）手动 bump——`make bump` 的 SEMVER_RE 只
   接受 `0.M.P` 格式，1.0.0 不兼容；M7 为最后里程碑不值得改脚本
+- `doc/M7-traceability.md`（闭环 B）：spec↔checker 追溯矩阵——逐条
+  §0–§8 全部条款 × scoreboard 22 判决点 + SVA 14 断言 + testplan 43 行
+  交叉引用；结论：无真实无人认领条款（三类弱覆盖均有充分理由：§5.4
+  BUG-0016 降级 / §5.5 cl.3 spec 自禁 / §6.5 正常行为）
 
 **Not done**
-- 闭环 B–F 全部待做
+- 闭环 C–F 待做
 
 **Next**
-- 闭环 B：spec↔checker 可追溯性矩阵（`doc/M7-traceability.md`）
+- 闭环 C：红线 2 渗漏抽查（`doc/M7-redline2-audit.md`）
 
 **How verified**
-- `make check` 通过 + rev 评审 PASS
+- `make check` 通过 + rev 评审 PASS（闭环 A + B 两次）
 
 ## [1.0.0] 2026-08-04 M6 收口：覆盖率收敛完成
 
