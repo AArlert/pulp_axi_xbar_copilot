@@ -16,15 +16,19 @@
   §0–§8 全部条款 × scoreboard 22 判决点 + SVA 14 断言 + testplan 43 行
   交叉引用；结论：无真实无人认领条款（三类弱覆盖均有充分理由：§5.4
   BUG-0016 降级 / §5.5 cl.3 spec 自禁 / §6.5 正常行为）
+- `doc/M7-redline2-audit.md`（闭环 C）：红线 2 渗漏抽查——SB 22 判决点
+  期望值来源全量审计零渗漏 + ERR_RDATA 合规（BUG-0033/REV-014 升格）+
+  import 零 DUT 行为 RTL 引用 + BUG-0075 静态关闭 SOUND（gen_addr_map
+  32 位算术不可回绕、无 rand 旁路、5 配置点共用同一公式）
 
 **Not done**
-- 闭环 C–F 待做
+- 闭环 D–F 待做
 
 **Next**
-- 闭环 C：红线 2 渗漏抽查（`doc/M7-redline2-audit.md`）
+- 闭环 D：工业方法学对标评估（`doc/M7-methodology-review.md`）
 
 **How verified**
-- `make check` 通过 + rev 评审 PASS（闭环 A + B 两次）
+- `make check` 通过 + rev 评审 PASS（闭环 A + B + C 三次）
 
 ## [1.0.0] 2026-08-04 M6 收口：覆盖率收敛完成
 
