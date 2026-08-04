@@ -31,15 +31,21 @@
   覆盖 vs 代码覆盖、M6 收敛工作流实录、常见误区——全部用本仓库真实例子
 - `doc/glossary.md`（闭环 E）：42 条术语一行白话释义（含 bin/urg/waiver/
   scoreboard/oracle/ABV/backpressure/注伤自证/格 cell 等），按首字母排序
+- `doc/migration-handbook.md`（闭环 F）：迁移手册 8 节——(1) 新仓库目录结构
+  (2) vplan schema（增 spec-clause + checker 列） (3) bug 五环模板（含"人的
+  假设"字段 + CLOSED-STATIC 标记） (4) 分工三区表 + 学习机制五条 (5) 签核级
+  完成定义（5 项） (6) 迁移资产清单（原样搬/复用/从零手写/agent 重写）(7) 文档-
+  问题对照表 (8) agent 工作流复盘（5 条教训含 M4 空转、orch 模式、单一事实源、
+  小闭环+rev 门禁、完备性核对两独立教训）
 
 **Not done**
-- 闭环 F 待做
+- M7 exit criteria 尚需勾选 → 做
 
 **Next**
-- 闭环 F：迁移手册（`doc/migration-handbook.md`）
+- M7 Phase 1 完成（闭环 B–F 全部交付）；Phase 2 新仓库 bootstrap 待用户启动
 
 **How verified**
-- `make check` 通过 + rev 评审 PASS（闭环 A–E 五次）
+- `make check` 通过 + rev 评审 PASS（闭环 A–E）+ CONDITIONAL PASS→fulfilled（闭环 F）
 
 ## [1.0.0] 2026-08-04 M6 收口：覆盖率收敛完成
 
