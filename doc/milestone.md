@@ -15,6 +15,7 @@ git tag `v0.5.3-pre-reset` 及更早历史）；0.5.4 起本仓库以"接手者"
 | M4 | 六类覆盖测量基建 + 全闭包三态扫描 + 每格具名归属 | ✅ |
 | M5 | 约束随机 + 多种子回归 + 压力/soak | ✅ |
 | M6 | 六类覆盖 ≥90% 收敛（含 Toggle） | ✅ |
+| M7 | 收口审计 + 知识沉淀 + 迁移手册 | 🔲 |
 
 M0–M4 的详细出口条件与逐条兑现记录不再在本页维护——git 历史即档案
 （`git show v0.5.3-pre-reset:doc/milestone.md`）。
@@ -98,7 +99,7 @@ testplan.md 为准，本页不重复维护该表**，避免两处漂移。下面
       按 `atop[ATOP_R_RESP]` 泛化 + M5-AT03 定向场景 PASS，BUG-0044
       CLOSED（0.5.13；0.5.15 补 atomicload 阶段使四子类型 bins 全命中）
 
-## M6 — 六类覆盖 ≥90% 收敛（含 Toggle）🔲
+## M6 — 六类覆盖 ≥90% 收敛（含 Toggle）✅
 
 **性质**：结构覆盖率百分比达标轴的收敛里程碑，承接 M4 移交的 ≥90% 数字门。
 工作原则 = random-first, directed-fallback：先跑 M5 随机层测量，只对随机
@@ -130,3 +131,26 @@ rev 评审 PASS，0.6.1）。
       残余缺口清单 `doc/M6-cov-triage.md` + 现状表 `cov_baseline.py` 齐备
 - [x] 完成后转 v1.0.0
       — rev close-out CONDITIONAL PASS → 兑现注记已补 → v1.0.0
+
+## M7 — 收口审计 + 知识沉淀 + 迁移手册 🔲
+
+**性质**：纯文档/审计里程碑，不写新 tb 代码。回应三个延迟债务：evidence 是否
+真的证明了 milestone 达成（checker 强度审计）、方法学是否工业级（对标评估）、
+agent 工作中的工业知识是否沉淀成人读文档（术语/覆盖率教学文档）。全部产出
+固化进迁移手册，为新仓库 bootstrap 准备输入。
+
+### Exit criteria
+
+- [ ] **spec↔checker 可追溯性矩阵**（闭环 B）：`doc/M7-traceability.md`——
+      逐条 `doc/spec.md` 条款标注由谁负责揪违反（scoreboard 判决 / SVA 断言 /
+      testplan 行判据 / 无人认领），无人认领条款单独成表
+- [ ] **红线 2 渗漏抽查**（闭环 C）：`doc/M7-redline2-audit.md`——
+      scoreboard 期望值推导路径无"抄 RTL 行为当期望"渗漏；BUG-0075 静态证据
+      关闭论证封死触发路径
+- [ ] **工业方法学对标评估**（闭环 D）：`doc/M7-methodology-review.md`——
+      逐项三态评级（达标 / 本 DUT 不适用 / 真实缺口须新仓库补）
+- [ ] **知识沉淀**（闭环 E）：`doc/coverage.md`（覆盖率教学，真实例子）+
+      `doc/glossary.md`（术语表白话一行释义）
+- [ ] **迁移手册**（闭环 F）：`doc/migration-handbook.md`——新仓库目录结构、
+      vplan schema、bug 页五环模板、分工三区表、学习机制五条、签核级完成定义、
+      迁移资产清单、agent 工作流复盘

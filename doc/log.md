@@ -4,6 +4,24 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [1.1.0] 2026-08-04 M7 开局：收口审计与知识沉淀
+
+**Done**
+- `doc/milestone.md` 登记 M7 里程碑——出口条件 = 五项交付物（追溯矩阵 /
+  红线 2 抽查 / 方法学对标 / 知识沉淀 / 迁移手册）
+- Abstract 表追加 M7 行；M6 章节标题 🔲→✅ 笔误修正
+- version.json 1.0.0→1.1.0（M7）手动 bump——`make bump` 的 SEMVER_RE 只
+  接受 `0.M.P` 格式，1.0.0 不兼容；M7 为最后里程碑不值得改脚本
+
+**Not done**
+- 闭环 B–F 全部待做
+
+**Next**
+- 闭环 B：spec↔checker 可追溯性矩阵（`doc/M7-traceability.md`）
+
+**How verified**
+- `make check` 通过 + rev 评审 PASS
+
 ## [1.0.0] 2026-08-04 M6 收口：覆盖率收敛完成
 
 **Done**
