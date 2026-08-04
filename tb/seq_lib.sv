@@ -3177,3 +3177,451 @@ class xbar_soak_cfge_vseq extends uvm_sequence #(uvm_sequence_item);
     fanout_per_slv#(xbar_soak_cfge_seq)::run(p_sequencer, "xsoak_cfge_seq");
   endtask
 endclass
+
+// ============================================================================
+// M6-CV01 — Long decode-miss burst + addr/size diversity (testplan M6-CV01,
+// spec §4 err_slv DECERR). Three coverage dimensions: (1) long AxLEN toggling
+// len[7:4]; (2) non-aligned addr[2:0]; (3) size[1:0] 1→0 direction transitions.
+// All miss addresses → err_slv DECERR response (scoreboard SB_DECERR_* family).
+// ============================================================================
+class slvport_cv01_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_cv01_seq)
+  int unsigned slv_port_idx;
+  function new(string name = "slvport_cv01_seq"); super.new(name); endfunction
+
+  task automatic send(input bit is_write, input xbar_types_pkg::addr_t addr,
+                      input xbar_types_pkg::id_slv_t id, input axi_pkg::len_t len,
+                      input axi_pkg::size_t sz);
+    axi_seq_item it;
+    it = axi_seq_item::type_id::create(
+        $sformatf("cv01_%0d_%s_L%0d", slv_port_idx, is_write ? "w" : "r", len));
+    start_item(it);
+    it.is_write = is_write; it.addr = addr; it.len = len; it.size = sz;
+    it.id = id; it.atop = '0;
+    if (is_write) fill_wr_payload(it, len);
+    finish_item(it);
+  endtask
+
+  task body();
+    xbar_types_pkg::addr_t base;
+    base = M3_UNMAPPED_BASE + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h1_0000;
+    // (1) Long bursts with AxLEN > 15 — toggle len[7:4]
+    send(1'b1, base + 32'h001, xbar_types_pkg::id_slv_t'(0),  axi_pkg::len_t'(16),  xbar_types_pkg::BEAT_SIZE);
+    send(1'b0, base + 32'h002, xbar_types_pkg::id_slv_t'(1),  axi_pkg::len_t'(32),  xbar_types_pkg::BEAT_SIZE);
+    send(1'b1, base + 32'h003, xbar_types_pkg::id_slv_t'(2),  axi_pkg::len_t'(64),  xbar_types_pkg::BEAT_SIZE);
+    send(1'b0, base + 32'h004, xbar_types_pkg::id_slv_t'(3),  axi_pkg::len_t'(128), xbar_types_pkg::BEAT_SIZE);
+    send(1'b1, base + 32'h005, xbar_types_pkg::id_slv_t'(4),  axi_pkg::len_t'(255), xbar_types_pkg::BEAT_SIZE);
+    send(1'b0, base + 32'h006, xbar_types_pkg::id_slv_t'(5),  axi_pkg::len_t'(255), xbar_types_pkg::BEAT_SIZE);
+    send(1'b1, base + 32'h007, xbar_types_pkg::id_slv_t'(6),  axi_pkg::len_t'(128), xbar_types_pkg::BEAT_SIZE);
+    // (2) Size diversity — toggle size[1:0] 1→0 direction
+    send(1'b1, base + 32'h100, xbar_types_pkg::id_slv_t'(7),  axi_pkg::len_t'(3), axi_pkg::size_t'(3));
+    send(1'b1, base + 32'h101, xbar_types_pkg::id_slv_t'(8),  axi_pkg::len_t'(3), axi_pkg::size_t'(0));
+    send(1'b0, base + 32'h102, xbar_types_pkg::id_slv_t'(9),  axi_pkg::len_t'(3), axi_pkg::size_t'(2));
+    send(1'b0, base + 32'h103, xbar_types_pkg::id_slv_t'(10), axi_pkg::len_t'(3), axi_pkg::size_t'(1));
+  endtask
+endclass
+
+class m6_cv01_longburst_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m6_cv01_longburst_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m6_cv01_longburst_vseq"); super.new(name); endfunction
+  task body();
+    fanout_per_slv#(slvport_cv01_seq)::run(p_sequencer, "cv01_seq");
+  endtask
+endclass
+
+// ============================================================================
+// M6-CV02 — Slave response diversity (testplan M6-CV02, spec §1 transparent
+// passthrough). mstport_responder returns non-OKAY resp codes and non-zero user
+// (resp_diverse=1 config_db). Each slave port sends hit-address reads/writes to
+// multiple master ports. Scoreboard resp check is relaxed (resp_diverse flag);
+// routing + data integrity still fully judged.
+// ============================================================================
+class slvport_cv02_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_cv02_seq)
+  int unsigned slv_port_idx;
+  function new(string name = "slvport_cv02_seq"); super.new(name); endfunction
+
+  task body();
+    for (int unsigned m = 0; m < xbar_types_pkg::NO_MST_PORTS; m++) begin
+      xbar_types_pkg::addr_t addr_base;
+      addr_base = xbar_types_pkg::addr_t'(m) * xbar_types_pkg::REGION_SIZE
+                  + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h40;
+      // Write + read per master port, single-beat
+      begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv02_w_%0d_m%0d", slv_port_idx, m));
+        start_item(it);
+        it.is_write = 1'b1;
+        it.addr     = addr_base;
+        it.len      = axi_pkg::len_t'(0);
+        it.id       = xbar_types_pkg::id_slv_t'(m);
+        fill_wr_payload(it, it.len);
+        finish_item(it);
+      end
+      begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv02_r_%0d_m%0d", slv_port_idx, m));
+        start_item(it);
+        it.is_write = 1'b0;
+        it.addr     = addr_base;
+        it.len      = axi_pkg::len_t'(0);
+        it.id       = xbar_types_pkg::id_slv_t'(m + 8);
+        finish_item(it);
+      end
+    end
+  endtask
+endclass
+
+class m6_cv02_slvresp_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m6_cv02_slvresp_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m6_cv02_slvresp_vseq"); super.new(name); endfunction
+  task body();
+    fanout_per_slv#(slvport_cv02_seq)::run(p_sequencer, "cv02_seq");
+  endtask
+endclass
+
+// ============================================================================
+// M6-CV03 — B/R channel backpressure (testplan M6-CV03, spec §7.4 delay-
+// insensitive). All slave ports converge on master port 0 with b_backpressure
+// and r_backpressure, creating ≥3-source convergence at the axi_mux. Toggle
+// targets: mst_req_o.b_ready, gen_mux.slv_b_readies[5:0],
+// gen_mux.slv_r_readies[5:1].
+// ============================================================================
+class slvport_cv03_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_cv03_seq)
+  int unsigned slv_port_idx;
+  int unsigned num_wr = 6;
+  int unsigned num_rd = 6;
+  function new(string name = "slvport_cv03_seq"); super.new(name); endfunction
+
+  task body();
+    xbar_types_pkg::addr_t addr_base;
+    addr_base = xbar_types_pkg::addr_t'(0) * xbar_types_pkg::REGION_SIZE
+                + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h100;
+    // Phase 1: write burst with b_backpressure, targeting master port 0
+    begin
+      axi_burst_item wb;
+      wb = axi_burst_item::type_id::create($sformatf("cv03_w_%0d", slv_port_idx));
+      wb.b_backpressure = 1'b1;
+      for (int unsigned k = 0; k < num_wr; k++) begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv03_w_%0d_%0d", slv_port_idx, k));
+        it.is_write = 1'b1;
+        it.addr     = addr_base + xbar_types_pkg::addr_t'(k) * 32'h40;
+        it.len      = axi_pkg::len_t'(0);
+        it.id       = xbar_types_pkg::id_slv_t'(k);
+        fill_wr_payload(it, it.len);
+        wb.items.push_back(it);
+      end
+      start_item(wb);
+      finish_item(wb);
+    end
+    // Phase 2: read burst with r_backpressure, targeting master port 0
+    begin
+      axi_burst_item rb;
+      rb = axi_burst_item::type_id::create($sformatf("cv03_r_%0d", slv_port_idx));
+      rb.r_backpressure = 1'b1;
+      for (int unsigned k = 0; k < num_rd; k++) begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv03_r_%0d_%0d", slv_port_idx, k));
+        it.is_write = 1'b0;
+        it.addr     = addr_base + xbar_types_pkg::addr_t'(k) * 32'h40;
+        it.len      = axi_pkg::len_t'(0);
+        it.id       = xbar_types_pkg::id_slv_t'(k + 8);
+        rb.items.push_back(it);
+      end
+      start_item(rb);
+      finish_item(rb);
+    end
+  endtask
+endclass
+
+class m6_cv03_bpress_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m6_cv03_bpress_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m6_cv03_bpress_vseq"); super.new(name); endfunction
+  task body();
+    fanout_per_slv#(slvport_cv03_seq)::run(p_sequencer, "cv03_seq");
+  endtask
+endclass
+
+// ============================================================================
+// M6-CV04 — ID saturation + ATOP inject (testplan M6-CV04, spec §5.4/§6.3/§6.4).
+// Three phases per slave port:
+//   A (DV-G): read burst saturating one ID bucket's in-flight counter → toggle
+//     delta_counter high bits, cnt_full.
+//   B (DV-F): mixed read+ATOP burst → inject_en fires while ARs in-flight.
+//   C (DV-E): read burst saturating to ar_id_cnt_full, then ATOP → DV-E Cond bins.
+// Uses resp_hold=150 (test class) to keep in-flight counts high.
+// ============================================================================
+class slvport_cv04_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_cv04_seq)
+  int unsigned slv_port_idx;
+  function new(string name = "slvport_cv04_seq"); super.new(name); endfunction
+
+  task body();
+    int unsigned tgt;
+    xbar_types_pkg::addr_t addr_base;
+    tgt = slv_port_idx % xbar_types_pkg::NO_MST_PORTS;
+    addr_base = xbar_types_pkg::addr_t'(tgt) * xbar_types_pkg::REGION_SIZE
+                + 32'h0000_2000
+                + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h200;
+
+    // ---- Phase A (DV-G): saturate read in-flight for bucket 0 ----
+    begin
+      axi_burst_item rb;
+      rb = axi_burst_item::type_id::create($sformatf("cv04_a_%0d", slv_port_idx));
+      for (int unsigned k = 0; k < 12; k++) begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv04_ar_%0d_%0d", slv_port_idx, k));
+        it.is_write = 1'b0;
+        it.addr     = addr_base + xbar_types_pkg::addr_t'(k) * 32'h40;
+        it.len      = axi_pkg::len_t'(0);
+        // Bucket 0 (id[2:0]=0), cycle siblings 0,1,2 (id[4:3])
+        it.id       = xbar_types_pkg::id_slv_t'((k % 3) << 3);
+        rb.items.push_back(it);
+      end
+      start_item(rb);
+      finish_item(rb);
+    end
+
+    // ---- Phase B (DV-F): mixed read + ATOP burst → inject_en ----
+    // 12 reads fill bucket 0 in-flight; ATOP (sibling 3, same bucket) triggers
+    // inject_en while ARs are outstanding (resp_hold keeps them pending).
+    begin
+      axi_burst_item mb;
+      mb = axi_burst_item::type_id::create($sformatf("cv04_b_%0d", slv_port_idx));
+      for (int unsigned k = 0; k < 12; k++) begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv04_br_%0d_%0d", slv_port_idx, k));
+        it.is_write = 1'b0;
+        it.addr     = addr_base + 32'h80 + xbar_types_pkg::addr_t'(k) * 32'h40;
+        it.len      = axi_pkg::len_t'(0);
+        it.id       = xbar_types_pkg::id_slv_t'((k % 3) << 3); // bucket 0, siblings 0-2
+        mb.items.push_back(it);
+      end
+      // ATOP atomicload — bucket 0, sibling 3 (id=24, differs from in-flight 0/8/16)
+      begin
+        axi_seq_item atop_it;
+        atop_it = axi_seq_item::type_id::create(
+            $sformatf("cv04_atop_%0d", slv_port_idx));
+        atop_it.is_write = 1'b1;
+        atop_it.atop     = {axi_pkg::ATOP_ATOMICLOAD, axi_pkg::ATOP_LITTLE_END,
+                             axi_pkg::ATOP_ADD};
+        atop_it.id       = xbar_types_pkg::id_slv_t'(24); // sibling 3 of bucket 0
+        atop_it.addr     = addr_base + 32'h100;
+        atop_it.len      = axi_pkg::len_t'(0);
+        fill_wr_payload(atop_it, atop_it.len);
+        mb.items.push_back(atop_it);
+      end
+      start_item(mb);
+      finish_item(mb);
+    end
+
+    // ---- Phase C (DV-E): ar_id_cnt_full saturation + ATOP ----
+    // Fill multiple buckets to push ar_id_cnt_full=1, then ATOP (last item in
+    // the burst) evaluates the Cond bins at axi_demux_simple:168.
+    begin
+      axi_burst_item sb;
+      sb = axi_burst_item::type_id::create($sformatf("cv04_c_%0d", slv_port_idx));
+      // 15 reads to bucket 1 (id[2:0]=1) — saturate to cnt_full
+      for (int unsigned k = 0; k < 15; k++) begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv04_cr_%0d_%0d", slv_port_idx, k));
+        it.is_write = 1'b0;
+        it.addr     = addr_base + 32'h140 + xbar_types_pkg::addr_t'(k) * 32'h40;
+        it.len      = axi_pkg::len_t'(0);
+        // Bucket 1 (id[2:0]=1), cycle siblings 0-3
+        it.id       = xbar_types_pkg::id_slv_t'(((k % 4) << 3) | 1);
+        sb.items.push_back(it);
+      end
+      // ATOP atomicload — bucket 1, sibling not used above (all 4 used, pick 0
+      // which has 4 in-flight so is at MaxSlvTrans=6 headroom — SPEC-6.4 is
+      // still satisfied because the blocking driver ensures each prior item's
+      // AR has been accepted but no ID is re-used until its R completes).
+      // Actually sibling 0 has ~4 in-flight, but blocking driver sends items
+      // sequentially so each AR is accepted before the next. SPEC-6.4 requires
+      // ATOP ID differs from all in-flight IDs. With 4 siblings used
+      // (0/8/16/24 ORed with bucket 1 → ids 1,9,17,25), pick a bucket-1 ID
+      // not currently in use. Use id=1 only if <MaxSlvTrans in-flight.
+      // Safest: use a different bucket for the ATOP (bucket 2, id=2).
+      begin
+        axi_seq_item atop_it;
+        atop_it = axi_seq_item::type_id::create(
+            $sformatf("cv04_catop_%0d", slv_port_idx));
+        atop_it.is_write = 1'b1;
+        atop_it.atop     = {axi_pkg::ATOP_ATOMICLOAD, axi_pkg::ATOP_LITTLE_END,
+                             axi_pkg::ATOP_ADD};
+        atop_it.id       = xbar_types_pkg::id_slv_t'(2); // bucket 2, avoids SPEC-6.4 conflict
+        atop_it.addr     = addr_base + 32'h180;
+        atop_it.len      = axi_pkg::len_t'(0);
+        fill_wr_payload(atop_it, atop_it.len);
+        sb.items.push_back(atop_it);
+      end
+      start_item(sb);
+      finish_item(sb);
+    end
+
+    // Drain: one plain read to ensure the ATOP B completes before test ends
+    begin
+      axi_seq_item drain;
+      drain = axi_seq_item::type_id::create(
+          $sformatf("cv04_drain_%0d", slv_port_idx));
+      start_item(drain);
+      drain.is_write = 1'b0;
+      drain.addr     = addr_base;
+      drain.len      = axi_pkg::len_t'(0);
+      drain.id       = xbar_types_pkg::id_slv_t'(31);
+      finish_item(drain);
+    end
+
+    // ---- Write-direction burst for cnt_full write toggle (DV-G) ----
+    begin
+      axi_burst_item wb;
+      wb = axi_burst_item::type_id::create($sformatf("cv04_wd_%0d", slv_port_idx));
+      for (int unsigned k = 0; k < 12; k++) begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv04_aw_%0d_%0d", slv_port_idx, k));
+        it.is_write = 1'b1;
+        it.addr     = addr_base + 32'h200 + xbar_types_pkg::addr_t'(k) * 32'h40;
+        it.len      = axi_pkg::len_t'(0);
+        it.id       = xbar_types_pkg::id_slv_t'((k % 3) << 3); // bucket 0, siblings 0-2
+        fill_wr_payload(it, it.len);
+        wb.items.push_back(it);
+      end
+      start_item(wb);
+      finish_item(wb);
+    end
+  endtask
+endclass
+
+class m6_cv04_idsat_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m6_cv04_idsat_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m6_cv04_idsat_vseq"); super.new(name); endfunction
+  task body();
+    fanout_per_slv#(slvport_cv04_seq)::run(p_sequencer, "cv04_seq");
+  endtask
+endclass
+
+// ============================================================================
+// M6-CV05 — err_slv FIFO capacity + diverse ID (testplan M6-CV05, spec §4).
+// Three FIFO fill rounds per slave port (w_fifo DEPTH=4, b_fifo DEPTH=2,
+// r_fifo DEPTH=4): b_backpressure/r_backpressure stalls the consumer,
+// causing pointer-wrap (fifo_v3 Branch IF-73/IF-88). ID sweep 0→31 across
+// rounds toggles FIFO memory cell bits.
+// ============================================================================
+class slvport_cv05_seq extends uvm_sequence #(axi_seq_item);
+  `uvm_object_utils(slvport_cv05_seq)
+  int unsigned slv_port_idx;
+  function new(string name = "slvport_cv05_seq"); super.new(name); endfunction
+
+  task body();
+    xbar_types_pkg::addr_t base;
+    int unsigned id_cursor;
+    base = M3_UNMAPPED_BASE + xbar_types_pkg::addr_t'(slv_port_idx) * 32'h2000;
+    id_cursor = 0;
+
+    // Round 1: w_fifo fill (DEPTH=4, FALL_THROUGH=1) + b_fifo fill (DEPTH=2)
+    // 6 writes with b_backpressure — fills w_fifo(4) then b_fifo(2), pointer wraps
+    begin
+      axi_burst_item wb;
+      wb = axi_burst_item::type_id::create($sformatf("cv05_w_%0d", slv_port_idx));
+      wb.b_backpressure = 1'b1;
+      for (int unsigned k = 0; k < 6; k++) begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv05_w_%0d_%0d", slv_port_idx, k));
+        it.is_write = 1'b1;
+        it.addr     = base + xbar_types_pkg::addr_t'(k) * 32'h40;
+        it.len      = axi_pkg::len_t'(0);
+        it.id       = xbar_types_pkg::id_slv_t'(id_cursor % 32);
+        it.atop     = '0;
+        fill_wr_payload(it, it.len);
+        wb.items.push_back(it);
+        id_cursor++;
+      end
+      start_item(wb);
+      finish_item(wb);
+    end
+
+    // Round 2: r_fifo fill (DEPTH=4) — 6 reads with r_backpressure
+    begin
+      axi_burst_item rb;
+      rb = axi_burst_item::type_id::create($sformatf("cv05_r_%0d", slv_port_idx));
+      rb.r_backpressure = 1'b1;
+      for (int unsigned k = 0; k < 6; k++) begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv05_r_%0d_%0d", slv_port_idx, k));
+        it.is_write = 1'b0;
+        it.addr     = base + 32'h200 + xbar_types_pkg::addr_t'(k) * 32'h40;
+        it.len      = axi_pkg::len_t'(0);
+        it.id       = xbar_types_pkg::id_slv_t'(id_cursor % 32);
+        it.atop     = '0;
+        rb.items.push_back(it);
+        id_cursor++;
+      end
+      start_item(rb);
+      finish_item(rb);
+    end
+
+    // Round 3: repeat with inverted IDs (31→0 sweep) for FIFO memory bit toggle
+    begin
+      axi_burst_item wb2;
+      wb2 = axi_burst_item::type_id::create($sformatf("cv05_w2_%0d", slv_port_idx));
+      wb2.b_backpressure = 1'b1;
+      for (int unsigned k = 0; k < 6; k++) begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv05_w2_%0d_%0d", slv_port_idx, k));
+        it.is_write = 1'b1;
+        it.addr     = base + 32'h400 + xbar_types_pkg::addr_t'(k) * 32'h40;
+        it.len      = axi_pkg::len_t'(0);
+        it.id       = xbar_types_pkg::id_slv_t'(31 - (k % 32));
+        it.atop     = '0;
+        fill_wr_payload(it, it.len);
+        wb2.items.push_back(it);
+      end
+      start_item(wb2);
+      finish_item(wb2);
+    end
+    begin
+      axi_burst_item rb2;
+      rb2 = axi_burst_item::type_id::create($sformatf("cv05_r2_%0d", slv_port_idx));
+      rb2.r_backpressure = 1'b1;
+      for (int unsigned k = 0; k < 6; k++) begin
+        axi_seq_item it;
+        it = axi_seq_item::type_id::create(
+            $sformatf("cv05_r2_%0d_%0d", slv_port_idx, k));
+        it.is_write = 1'b0;
+        it.addr     = base + 32'h600 + xbar_types_pkg::addr_t'(k) * 32'h40;
+        it.len      = axi_pkg::len_t'(0);
+        it.id       = xbar_types_pkg::id_slv_t'(31 - (k % 32));
+        it.atop     = '0;
+        rb2.items.push_back(it);
+      end
+      start_item(rb2);
+      finish_item(rb2);
+    end
+  endtask
+endclass
+
+class m6_cv05_fifocap_vseq extends uvm_sequence #(uvm_sequence_item);
+  `uvm_object_utils(m6_cv05_fifocap_vseq)
+  `uvm_declare_p_sequencer(xbar_vseqr)
+  function new(string name = "m6_cv05_fifocap_vseq"); super.new(name); endfunction
+  task body();
+    fanout_per_slv#(slvport_cv05_seq)::run(p_sequencer, "cv05_seq");
+  endtask
+endclass

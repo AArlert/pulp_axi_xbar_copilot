@@ -82,6 +82,15 @@ class mstport_responder extends uvm_component;
   bit                    bp_enable_w = 1'b0;
   local int unsigned     bp_cnt_w;
 
+  // M6-CV02 (testplan M6-CV02, spec §1 resp/user transparent passthrough):
+  // when set, b_respond_loop and r_respond_loop cycle through non-OKAY resp
+  // codes {SLVERR, EXOKAY, DECERR} and drive user='1 instead of the default
+  // RESP_OKAY / user='0. Toggle-coverage motive only — the crossbar does not
+  // interpret resp or user (spec §1). Default 0 keeps every other test's
+  // response byte-identical.
+  bit                    resp_diverse = 1'b0;
+  local int unsigned     resp_div_cnt;
+
   typedef struct {
     xbar_types_pkg::id_mst_t id;
     xbar_types_pkg::addr_t   addr;
@@ -131,6 +140,7 @@ class mstport_responder extends uvm_component;
     void'(uvm_config_db#(bit)::get(this, "", "bp_enable_ar", bp_enable_ar));
     // Optional: absent config keeps the default 0 (no backpressure, REV-026 D-1).
     void'(uvm_config_db#(bit)::get(this, "", "bp_enable_w", bp_enable_w));
+    void'(uvm_config_db#(bit)::get(this, "", "resp_diverse", resp_diverse));
   endfunction
 
   task automatic drive_idle();
@@ -277,8 +287,18 @@ class mstport_responder extends uvm_component;
       cur = write_todo_q.pop_front();
       repeat (resp_hold) @(posedge vif.clk_i); // uvm_env.md C5.3 bounded hold
       vif.b_id    <= cur.id;
-      vif.b_resp  <= axi_pkg::RESP_OKAY;
-      vif.b_user  <= '0;
+      if (resp_diverse) begin
+        case (resp_div_cnt % 3)
+          0: vif.b_resp <= axi_pkg::RESP_SLVERR;
+          1: vif.b_resp <= axi_pkg::RESP_EXOKAY;
+          2: vif.b_resp <= axi_pkg::RESP_DECERR;
+        endcase
+        vif.b_user  <= '1;
+        resp_div_cnt++;
+      end else begin
+        vif.b_resp  <= axi_pkg::RESP_OKAY;
+        vif.b_user  <= '0;
+      end
       vif.b_valid <= 1'b1;
       do @(posedge vif.clk_i); while (!vif.b_ready);
       vif.b_valid <= 1'b0;
@@ -297,9 +317,19 @@ class mstport_responder extends uvm_component;
                                                         cur.len, cur.burst, k);
         vif.r_id    <= cur.id;
         vif.r_data  <= beat_data;
-        vif.r_resp  <= axi_pkg::RESP_OKAY;
+        if (resp_diverse) begin
+          case (resp_div_cnt % 3)
+            0: vif.r_resp <= axi_pkg::RESP_SLVERR;
+            1: vif.r_resp <= axi_pkg::RESP_EXOKAY;
+            2: vif.r_resp <= axi_pkg::RESP_DECERR;
+          endcase
+          vif.r_user  <= '1;
+          resp_div_cnt++;
+        end else begin
+          vif.r_resp  <= axi_pkg::RESP_OKAY;
+          vif.r_user  <= '0;
+        end
         vif.r_last  <= (k == cur.len);
-        vif.r_user  <= '0;
         vif.r_valid <= 1'b1;
         do @(posedge vif.clk_i); while (!vif.r_ready);
       end

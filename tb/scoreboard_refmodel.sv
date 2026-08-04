@@ -204,6 +204,11 @@ class xbar_scoreboard extends uvm_scoreboard;
   int unsigned resp_match_cnt;
   int unsigned resp_mismatch_cnt;
 
+  // M6-CV02: when set, skip the resp-code portion of SB_BRESP / SB_RDATA
+  // (the mstport_responder cycles through non-OKAY codes for toggle coverage;
+  // data integrity and routing are still fully checked).
+  bit resp_diverse = 1'b0;
+
   // key = {port, direction, slv-side id}; slv id is 5 bits (< 32), dir 1 bit.
   local function int unsigned resp_key(input int unsigned port,
                                        input bit is_write,
@@ -389,6 +394,7 @@ class xbar_scoreboard extends uvm_scoreboard;
     if (!uvm_config_db#(virtual xbar_cfg_if)::get(this, "", "cfg_vif", cfg_vif))
       `uvm_fatal("NOCFGVIF", "xbar_scoreboard: cfg_vif not set")
     fcov = xbar_functional_coverage::type_id::create("fcov", this);
+    void'(uvm_config_db#(bit)::get(this, "", "resp_diverse", resp_diverse));
   endfunction
 
   // Live-observe the config bus and append a timestamped snapshot whenever it
@@ -905,7 +911,7 @@ class xbar_scoreboard extends uvm_scoreboard;
         expected_is_err = err_order_q[rk].pop_front();
       else
         expected_is_err = observed_err; // no queued expectation (already flagged above)
-      if (expected_is_err != observed_err) begin
+      if (!resp_diverse && expected_is_err != observed_err) begin
         decerr_order_violation_cnt++;
         `uvm_error("SB_DECERR_ORDER",
           $sformatf("slv port %0d %s id 'h%0h completed as %s but accept order expected %s — same-full-ID responses out of order (spec §5.2.6 clause 2.a / §4)",
@@ -913,6 +919,7 @@ class xbar_scoreboard extends uvm_scoreboard;
                      observed_err ? "DECERR" : "OKAY",
                      expected_is_err ? "DECERR" : "OKAY"))
       end
+      if (resp_diverse) observed_err = expected_is_err;
       if (err_order_q.exists(rk) && err_order_q[rk].size() == 0) err_order_q.delete(rk);
     end
 
@@ -1048,7 +1055,7 @@ class xbar_scoreboard extends uvm_scoreboard;
     end
 
     if (ro.is_write) begin
-      if (ro.resp[0] !== axi_pkg::RESP_OKAY) begin
+      if (!resp_diverse && ro.resp[0] !== axi_pkg::RESP_OKAY) begin
         resp_mismatch_cnt++;
         `uvm_error("SB_BRESP",
           $sformatf("slv port %0d id 'h%0h B resp != OKAY ('b%0b) — happy-path smoke expects OKAY (testplan M1-01)",
@@ -1070,7 +1077,7 @@ class xbar_scoreboard extends uvm_scoreboard;
       xbar_types_pkg::data_t exp_data;
       exp_data = xbar_types_pkg::predict_beat_data(ro.addr, ro.size, ro.len,
                                                      ro.burst, k);
-      if (ro.rdata[k] !== exp_data || ro.resp[k] !== axi_pkg::RESP_OKAY) begin
+      if (ro.rdata[k] !== exp_data || (!resp_diverse && ro.resp[k] !== axi_pkg::RESP_OKAY)) begin
         resp_mismatch_cnt++;
         `uvm_error("SB_RDATA",
           $sformatf("slv port %0d id 'h%0h R beat %0d mismatch: got data='h%0h resp='b%0b expected data='h%0h resp=OKAY (spec §1/C4.2)",

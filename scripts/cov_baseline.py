@@ -21,24 +21,12 @@ DUT_CLOSURE = {
 
 TYPES = ["Line", "Cond", "Toggle", "FSM", "Branch", "Assert"]
 
-M4_UNOWNED = {
-    ("axi_demux_id_counters", "Line"), ("axi_demux_id_counters", "Toggle"),
-    ("axi_demux_id_counters", "Branch"),
-    ("axi_id_prepend", "Toggle"),
-    ("rr_arb_tree", "Line"), ("rr_arb_tree", "Toggle"),
-    ("lzc", "Toggle"),
-    ("fifo_v3", "Cond"), ("fifo_v3", "Toggle"), ("fifo_v3", "Branch"),
-    ("counter", "Toggle"), ("delta_counter", "Toggle"),
-    ("axi_multicut", "Toggle"), ("axi_cut", "Toggle"),
-    ("spill_register", "Toggle"),
-    ("spill_register_flushable", "Cond"), ("spill_register_flushable", "Toggle"),
-    ("spill_register_flushable", "Assert"),
-}
+M4_UNOWNED = set()
 
 M4_WAIVERED = {
     ("addr_decode_dync", "Branch"): "CW-008",
     ("axi_demux_simple", "Cond"): "CW-009+DV-E",
-    ("axi_err_slv", "Toggle"): "CW-003/004/005/006/002/007+DV",
+    ("axi_err_slv", "Toggle"): "CW-002..007/015+DV",
     ("axi_atop_filter", "Line"): "CW-001",
     ("axi_atop_filter", "Cond"): "CW-001",
     ("axi_atop_filter", "Toggle"): "CW-001",
@@ -46,8 +34,26 @@ M4_WAIVERED = {
     ("axi_atop_filter", "Branch"): "CW-001",
     ("axi_mux", "Toggle"): "CW-002/006/007+DV",
     ("stream_register", "Line"): "CW-014",
-    ("stream_register", "Toggle"): "CW-014(partial)",
+    ("stream_register", "Toggle"): "CW-014+DV",
     ("stream_register", "Branch"): "CW-014",
+    ("rr_arb_tree", "Line"): "CW-010",
+    ("rr_arb_tree", "Toggle"): "CW-010/019/006ext/007ext+DV",
+    ("lzc", "Toggle"): "CW-011",
+    ("counter", "Toggle"): "CW-013",
+    ("delta_counter", "Toggle"): "CW-013",
+    ("axi_demux_id_counters", "Line"): "CW-017+DV",
+    ("axi_demux_id_counters", "Toggle"): "CW-017/006ext+DV",
+    ("axi_demux_id_counters", "Branch"): "CW-017+DV",
+    ("fifo_v3", "Cond"): "CW-016",
+    ("fifo_v3", "Toggle"): "CW-018/006ext+DV",
+    ("fifo_v3", "Branch"): "CW-018+DV",
+    ("axi_id_prepend", "Toggle"): "CW-012",
+    ("axi_multicut", "Toggle"): "CW-006ext/007ext+DV",
+    ("axi_cut", "Toggle"): "CW-006ext/007ext+DV",
+    ("spill_register", "Toggle"): "CW-006ext/007ext+DV",
+    ("spill_register_flushable", "Cond"): "CW-010",
+    ("spill_register_flushable", "Toggle"): "CW-010/006ext/007ext+DV",
+    ("spill_register_flushable", "Assert"): "CW-010",
 }
 
 

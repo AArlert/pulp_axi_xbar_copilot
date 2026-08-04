@@ -169,11 +169,13 @@ DV 闭合可达部分提升 raw % 但非必须跨越 90% 门槛——格的解�
   - urg：Toggle Details `gen_counters[0..7].cnt_delta[3:1]` = 8×3×2 = 48 bit-dir
     Not Covered（其中 [1] 在 case 3'b110 delta=2 时可达，[3:2] 结构死）
 
-- **根因 3**：`overflow` 实际不可达
+- ~~**根因 3**：`overflow` 实际不可达~~ **rev 裁定排除**（AR 实例非结构不可达）
   - RTL：`delta_counter` overflow 需 in_flight + delta 发生无符号溢出；`cnt_full`
     在 in_flight=15 时 stall（delta=1 路径），唯一溢出路径 = delta=2（case 3'b110）+
     in_flight=14——依赖 case 3'b110 先被覆盖且恰在 in_flight=14 命中
   - urg：`gen_counters[0..7].overflow` 8×2 = 16 bit-dir 全 Not Covered
+  - **rev 认定**：AR 实例 case 3'b110 为活路径（inject_i=atop_inject），in_flight=14
+    时 delta=2 可触发溢出，16 bit-dir **非结构不可达**，排除出 CW-017，路由 DV-G（CV04 目标）
 
 ### CW-018：`fifo_v3` Branch+Toggle bin-scoped
 

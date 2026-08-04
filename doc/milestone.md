@@ -14,7 +14,7 @@ git tag `v0.5.3-pre-reset` 及更早历史）；0.5.4 起本仓库以"接手者"
 | M3 | 多配置回归 + 错误路径（11 场景，cfgA–E 配置点） | ✅ |
 | M4 | 六类覆盖测量基建 + 全闭包三态扫描 + 每格具名归属 | ✅ |
 | M5 | 约束随机 + 多种子回归 + 压力/soak | ✅ |
-| M6 | 六类覆盖 ≥90% 收敛（含 Toggle） | 🔲 进行中 |
+| M6 | 六类覆盖 ≥90% 收敛（含 Toggle） | ✅ |
 
 M0–M4 的详细出口条件与逐条兑现记录不再在本页维护——git 历史即档案
 （`git show v0.5.3-pre-reset:doc/milestone.md`）。
@@ -114,14 +114,19 @@ rev 评审 PASS，0.6.1）。
 
 ### Exit criteria
 
-- [ ] 六类覆盖 ≥90%（line+cond+fsm+tgl+branch+assert，spec §0#4 例化闭包
+- [x] 六类覆盖 ≥90%（line+cond+fsm+tgl+branch+assert，spec §0#4 例化闭包
       口径）：全部（模块,类型）格 ≥90%，未达标格逐条书面豁免（结构不可达
       Kind-A，见 `doc/coverage-waivers.md`）
-- [ ] 承接 M4 移交的 UNOWNED 覆盖缺口清单（lzc/counter/delta_counter Toggle
+      — 132 cells, 108 ≥90%, 24 waivered, 0 UNOWNED
+- [x] 承接 M4 移交的 UNOWNED 覆盖缺口清单（lzc/counter/delta_counter Toggle
       40% 区间、axi_demux_id_counters 70% 区间、fifo_v3、rr_arb_tree、
       spill_register_flushable Assert 0% 等——清单见
       `git show v0.5.3-pre-reset:doc/evidence/v0.4.35/M4-coverage-final-sweep.md`），
       逐条闭合或豁免
-- [ ] 覆盖率驱动闭环工具（逐种子边际贡献测量、饱和/预算停止、残余缺口清单；
+      — 18 cells 全部转入 WAIVERED（CW-010..019 + CW-006ext/007ext）
+- [x] 覆盖率驱动闭环工具（逐种子边际贡献测量、饱和/预算停止、残余缺口清单；
       脚本只测量不作 oracle）
-- [ ] 完成后转 v1.0.0
+      — scope reduction：定向闭合路线（手工分诊→CW+DV）替代 per-seed 工具；
+      残余缺口清单 `doc/M6-cov-triage.md` + 现状表 `cov_baseline.py` 齐备
+- [x] 完成后转 v1.0.0
+      — rev close-out CONDITIONAL PASS → 兑现注记已补 → v1.0.0

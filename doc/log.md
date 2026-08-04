@@ -4,6 +4,32 @@
 每块回答四问：done / not done / next / how verified。0.5.4 之前的历史
 见 `git show v0.5.3-pre-reset:doc/log.md` 及其归档。
 
+## [1.0.0] 2026-08-04 M6 收口：覆盖率收敛完成
+
+**Done**
+- rev 签核新 CW 候选（CW-015..019 + CW-006ext/007ext），全部 PASS 登记进
+  `doc/coverage-waivers.md`
+- 5 个定向闭合测试 M6-CV01..05 实现落地（seq_lib/test_lib），266/266 PASS
+  + 5 条 evidence 收集完毕
+- `make regress COV=1` 全量 266 测试绿（default config），urg 重测覆盖率
+- `cov_baseline.py` 更新（M4_WAIVERED 扩充 31 条，M4_UNOWNED 清空）
+- 覆盖率现状表：132 cells, 108 ≥90%, 24 waivered, 0 gap
+- rev M6 close-out CONDITIONAL PASS — EC-3 scope reduction 已兑现注记
+- milestone.md 四条 exit criteria 全 [x]，Abstract M6 行 ✅
+- 转 v1.0.0
+
+**Not done**
+- （无）
+
+**Next**
+- 项目验证完成（M0–M6 全里程碑 ✅）
+
+**How verified**
+- `sim/result_summary.txt` passed=266/266 (COV=1)
+- `doc/evidence/v0.6.3/M6-closeout.md` 完整证据（覆盖率网格 + 退出条件评估）
+- rev milestone close-out CONDITIONAL PASS（EC-3 scope reduction acknowledged）
+- `make check` OK
+
 ## [0.6.3] 2026-08-04 M6 闭环 3：覆盖率缺口分析（步 1）
 
 **Done**

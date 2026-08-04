@@ -915,3 +915,106 @@ class m5_at03_atop_subtypes_test extends base_test;
     phase.drop_objection(this, "m5_at03_atop_subtypes_vseq done");
   endtask
 endclass
+
+// ============================================================================
+// M6-CV01 — long decode-miss burst + addr/size diversity (testplan M6-CV01)
+// ============================================================================
+class m6_cv01_longburst_test extends base_test;
+  `uvm_component_utils(m6_cv01_longburst_test)
+  function new(string name = "m6_cv01_longburst_test",
+               uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+  virtual task run_phase(uvm_phase phase);
+    m6_cv01_longburst_vseq vseq;
+    phase.raise_objection(this, "m6_cv01_longburst_vseq running");
+    vseq = m6_cv01_longburst_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m6_cv01_longburst_vseq done");
+  endtask
+endclass
+
+// ============================================================================
+// M6-CV02 — slave response diversity (testplan M6-CV02)
+// ============================================================================
+class m6_cv02_slvresp_test extends base_test;
+  `uvm_component_utils(m6_cv02_slvresp_test)
+  function new(string name = "m6_cv02_slvresp_test",
+               uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+  virtual function void build_phase(uvm_phase phase);
+    uvm_config_db#(bit)::set(this, "env.mst_agent*", "resp_diverse", 1'b1);
+    uvm_config_db#(bit)::set(this, "env.sb", "resp_diverse", 1'b1);
+    super.build_phase(phase);
+  endfunction
+  virtual task run_phase(uvm_phase phase);
+    m6_cv02_slvresp_vseq vseq;
+    phase.raise_objection(this, "m6_cv02_slvresp_vseq running");
+    vseq = m6_cv02_slvresp_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m6_cv02_slvresp_vseq done");
+  endtask
+endclass
+
+// ============================================================================
+// M6-CV03 — B/R channel backpressure (testplan M6-CV03)
+// ============================================================================
+class m6_cv03_bpress_test extends base_test;
+  `uvm_component_utils(m6_cv03_bpress_test)
+  function new(string name = "m6_cv03_bpress_test",
+               uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+  virtual function void build_phase(uvm_phase phase);
+    uvm_config_db#(int)::set(this, "env.mst_agent*", "resp_hold", 5);
+    super.build_phase(phase);
+  endfunction
+  virtual task run_phase(uvm_phase phase);
+    m6_cv03_bpress_vseq vseq;
+    phase.raise_objection(this, "m6_cv03_bpress_vseq running");
+    vseq = m6_cv03_bpress_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m6_cv03_bpress_vseq done");
+  endtask
+endclass
+
+// ============================================================================
+// M6-CV04 — ID saturation + ATOP inject (testplan M6-CV04)
+// ============================================================================
+class m6_cv04_idsat_test extends base_test;
+  `uvm_component_utils(m6_cv04_idsat_test)
+  function new(string name = "m6_cv04_idsat_test",
+               uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+  virtual function void build_phase(uvm_phase phase);
+    uvm_config_db#(int)::set(this, "env.mst_agent*", "resp_hold", 150);
+    super.build_phase(phase);
+  endfunction
+  virtual task run_phase(uvm_phase phase);
+    m6_cv04_idsat_vseq vseq;
+    phase.raise_objection(this, "m6_cv04_idsat_vseq running");
+    vseq = m6_cv04_idsat_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m6_cv04_idsat_vseq done");
+  endtask
+endclass
+
+// ============================================================================
+// M6-CV05 — err_slv FIFO capacity + diverse ID (testplan M6-CV05)
+// ============================================================================
+class m6_cv05_fifocap_test extends base_test;
+  `uvm_component_utils(m6_cv05_fifocap_test)
+  function new(string name = "m6_cv05_fifocap_test",
+               uvm_component parent = null);
+    super.new(name, parent);
+  endfunction
+  virtual task run_phase(uvm_phase phase);
+    m6_cv05_fifocap_vseq vseq;
+    phase.raise_objection(this, "m6_cv05_fifocap_vseq running");
+    vseq = m6_cv05_fifocap_vseq::type_id::create("vseq");
+    vseq.start(env.vseqr);
+    phase.drop_objection(this, "m6_cv05_fifocap_vseq done");
+  endtask
+endclass

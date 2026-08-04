@@ -1,4 +1,4 @@
-pulp_axi_xbar_copilot regression  date=2026-08-04  passed=241/241
+pulp_axi_xbar_copilot regression  date=2026-08-04  passed=266/266
 PASS   upstream_sanity SEED=1
 PASS   upstream_sanity SEED=2
 PASS   upstream_sanity SEED=3
@@ -240,3 +240,28 @@ PASS   m5_rn03_soak_test SEED=3
 PASS   m5_at03_atop_subtypes_test SEED=1
 PASS   m5_at03_atop_subtypes_test SEED=2
 PASS   m5_at03_atop_subtypes_test SEED=3
+PASS   m6_cv01_longburst_test SEED=1
+PASS   m6_cv01_longburst_test SEED=2
+PASS   m6_cv01_longburst_test SEED=3
+PASS   m6_cv01_longburst_test SEED=4
+PASS   m6_cv01_longburst_test SEED=5
+PASS   m6_cv02_slvresp_test SEED=1
+PASS   m6_cv02_slvresp_test SEED=2
+PASS   m6_cv02_slvresp_test SEED=3
+PASS   m6_cv02_slvresp_test SEED=4
+PASS   m6_cv02_slvresp_test SEED=5
+PASS   m6_cv03_bpress_test SEED=1
+PASS   m6_cv03_bpress_test SEED=2
+PASS   m6_cv03_bpress_test SEED=3
+PASS   m6_cv03_bpress_test SEED=4
+PASS   m6_cv03_bpress_test SEED=5
+PASS   m6_cv04_idsat_test SEED=1
+PASS   m6_cv04_idsat_test SEED=2
+PASS   m6_cv04_idsat_test SEED=3
+PASS   m6_cv04_idsat_test SEED=4
+PASS   m6_cv04_idsat_test SEED=5
+PASS   m6_cv05_fifocap_test SEED=1
+PASS   m6_cv05_fifocap_test SEED=2
+PASS   m6_cv05_fifocap_test SEED=3
+PASS   m6_cv05_fifocap_test SEED=4
+PASS   m6_cv05_fifocap_test SEED=5
