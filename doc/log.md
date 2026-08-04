@@ -25,14 +25,21 @@
   均为深度/精度层面（G1 vPlan 无 checker 列 / G2 功能覆盖非 spec 驱动 /
   G8 无 assertion coverage 报告等），每项附新仓库具体对策
 
+- `doc/coverage.md`（闭环 E）：覆盖率教学文档——白话讲六类覆盖（Line/Cond/
+  FSM/Toggle/Branch/Assert）、urg 报告结构、bin 长什么样、格与三态判定、
+  waiver 构成（以 CW-015 为例）、定向闭合 vs 种子饱和两条收敛路线、功能
+  覆盖 vs 代码覆盖、M6 收敛工作流实录、常见误区——全部用本仓库真实例子
+- `doc/glossary.md`（闭环 E）：42 条术语一行白话释义（含 bin/urg/waiver/
+  scoreboard/oracle/ABV/backpressure/注伤自证/格 cell 等），按首字母排序
+
 **Not done**
-- 闭环 E–F 待做
+- 闭环 F 待做
 
 **Next**
-- 闭环 E：知识沉淀（`doc/coverage.md` + `doc/glossary.md`）
+- 闭环 F：迁移手册（`doc/migration-handbook.md`）
 
 **How verified**
-- `make check` 通过 + rev 评审 PASS（闭环 A–D 四次）
+- `make check` 通过 + rev 评审 PASS（闭环 A–E 五次）
 
 ## [1.0.0] 2026-08-04 M6 收口：覆盖率收敛完成
 
